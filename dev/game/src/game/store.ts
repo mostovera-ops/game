@@ -51,6 +51,39 @@ export const RECIPES: Record<
   taco: { needs: { carrot: 1, tomato: 1, greens: 1 }, price: 14 },
 }
 
+export const RECIPE_IDS = Object.keys(RECIPES) as RecipeId[]
+
+export interface Customer {
+  want: RecipeId
+  patience: number
+  maxPatience: number
+}
+
+/** Состояние дня фудтрака (день 7). null в фазе фермы. */
+export interface TruckState {
+  timeLeft: number
+  queue: Customer[]
+  served: number
+  spawnTimer: number
+  nextSpawnIn: number
+  ended: boolean
+}
+
+const TRUCK_SECONDS = 60
+const MAX_QUEUE = 4
+const PATIENCE = 16
+
+function initialTruck(): TruckState {
+  return {
+    timeLeft: TRUCK_SECONDS,
+    queue: [],
+    served: 0,
+    spawnTimer: 0,
+    nextSpawnIn: 2.5,
+    ended: false,
+  }
+}
+
 function emptySlots(): Slot[] {
   return SLOT_IDS.map((id) => ({ id, crop: null, stage: 0, watered: false }))
 }
@@ -59,6 +92,9 @@ function emptyInventory(): Inventory {
   return { carrot: 0, greens: 0, tomato: 0 }
 }
 
+/** Результат подачи блюда клиенту. */
+export type ServeResult = 'ok' | 'no-customer' | 'wrong-dish' | 'no-ingredients'
+
 interface GameData {
   day: number
   phase: Phase
@@ -66,6 +102,7 @@ interface GameData {
   slots: Slot[]
   inventory: Inventory
   selectedSeed: CropId
+  truck: TruckState | null
 }
 
 interface GameActions {
@@ -80,6 +117,12 @@ interface GameActions {
   endDay: () => void
   /** Приготовить блюдо, если хватает ингредиентов. Возвращает успех. */
   serve: (recipeId: RecipeId) => boolean
+  /** Тик дня фудтрака (спавн клиентов, терпение, таймер). */
+  tickTruck: (dt: number) => void
+  /** Подать блюдо первому клиенту очереди. */
+  serveCustomer: (recipeId: RecipeId) => ServeResult
+  /** Начать новую неделю (день 1, чистые грядки; деньги/инвентарь остаются). */
+  nextWeek: () => void
   /** Полный сброс к первому дню. */
   resetGame: () => void
 }
@@ -94,6 +137,7 @@ function initialData(): GameData {
     slots: emptySlots(),
     inventory: emptyInventory(),
     selectedSeed: 'carrot',
+    truck: null,
   }
 }
 
@@ -172,7 +216,9 @@ export const useGameStore = create<GameState>()(
           })
           const day = s.day + 1
           const phase: Phase = day > 6 ? 'truck' : 'farm'
-          return { slots, day, phase }
+          // На дне 7 открываем фудтрек — заводим очередь и таймер.
+          const truck = phase === 'truck' ? initialTruck() : s.truck
+          return { slots, day, phase, truck }
         }),
 
       serve: (recipeId) => {
@@ -189,6 +235,58 @@ export const useGameStore = create<GameState>()(
         return true
       },
 
+      tickTruck: (dt) =>
+        set((s) => {
+          const t = s.truck
+          if (!t || t.ended) return {}
+          const timeLeft = t.timeLeft - dt
+          if (timeLeft <= 0) {
+            return { truck: { ...t, timeLeft: 0, ended: true } }
+          }
+          // Терпение убывает, ушедших клиентов убираем.
+          let queue = t.queue
+            .map((c) => ({ ...c, patience: c.patience - dt }))
+            .filter((c) => c.patience > 0)
+          let spawnTimer = t.spawnTimer + dt
+          let nextSpawnIn = t.nextSpawnIn
+          if (spawnTimer >= nextSpawnIn && queue.length < MAX_QUEUE) {
+            spawnTimer = 0
+            nextSpawnIn = 3 + Math.random() * 3
+            const want = RECIPE_IDS[Math.floor(Math.random() * RECIPE_IDS.length)]
+            queue = [...queue, { want, patience: PATIENCE, maxPatience: PATIENCE }]
+          }
+          return { truck: { ...t, timeLeft, queue, spawnTimer, nextSpawnIn } }
+        }),
+
+      serveCustomer: (recipeId) => {
+        const s = get()
+        const t = s.truck
+        if (!t || t.ended || t.queue.length === 0) return 'no-customer'
+        const front = t.queue[0]
+        if (front.want !== recipeId) return 'wrong-dish'
+        const recipe = RECIPES[recipeId]
+        const needs = Object.keys(recipe.needs) as CropId[]
+        if (needs.some((crop) => s.inventory[crop] < (recipe.needs[crop] ?? 0))) {
+          return 'no-ingredients'
+        }
+        const inventory = { ...s.inventory }
+        for (const crop of needs) inventory[crop] -= recipe.needs[crop] ?? 0
+        set({
+          inventory,
+          money: s.money + recipe.price,
+          truck: { ...t, served: t.served + 1, queue: t.queue.slice(1) },
+        })
+        return 'ok'
+      },
+
+      nextWeek: () =>
+        set(() => ({
+          day: 1,
+          phase: 'farm',
+          slots: emptySlots(),
+          truck: null,
+        })),
+
       resetGame: () => set(initialData()),
     }),
     {
@@ -202,6 +300,7 @@ export const useGameStore = create<GameState>()(
         slots: s.slots,
         inventory: s.inventory,
         selectedSeed: s.selectedSeed,
+        truck: s.truck,
       }),
     },
   ),

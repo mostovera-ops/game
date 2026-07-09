@@ -25,21 +25,32 @@ function RenderStats() {
   return null
 }
 
-const SHOW_PERF =
-  typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('perf')
+const params =
+  typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
+const SHOW_PERF = params.has('perf')
+
+// Дефолтный кадр фермы (подобран под референс). Переопределяется из URL:
+//   ?cam=x,y,z&tgt=x,y,z&zoom=N — чтобы искать ракурс без пересборки.
+const num3 = (v: string | null, fallback: [number, number, number]): [number, number, number] => {
+  const p = v?.split(',').map(Number)
+  return p && p.length === 3 && p.every((n) => !Number.isNaN(n)) ? [p[0], p[1], p[2]] : fallback
+}
+const CAM_POS = num3(params.get('cam'), [9, 7, 11])
+const CAM_TARGET = num3(params.get('tgt'), [0.5, 0.6, -1.8])
+const CAM_ZOOM = params.get('zoom') ? Number(params.get('zoom')) : 90
 
 export default function App() {
   return (
     <div className="relative h-full w-full">
       <Canvas flat shadows dpr={[1, 2]}>
         <color attach="background" args={['#cfe1ee']} />
-        <OrthographicCamera makeDefault position={[10, 8, 13]} zoom={46} near={0.1} far={200} />
+        <OrthographicCamera makeDefault position={CAM_POS} zoom={CAM_ZOOM} near={0.1} far={200} />
         {SHOW_PERF && <Perf position="top-left" />}
         <Suspense fallback={null}>
           <Farm />
           <RenderStats />
         </Suspense>
-        <OrbitControls makeDefault target={[1.5, 0.4, -0.5]} />
+        <OrbitControls makeDefault target={CAM_TARGET} />
       </Canvas>
       <HUD />
     </div>
