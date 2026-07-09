@@ -2,9 +2,9 @@
  * <Farm /> — читает scene-layout.json и раскладывает пропсы. Только рендер.
  * Растения и грядки в Task 1 не рисуем, покачивания нет.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, Instances, Instance } from '@react-three/drei'
 import {
   useJSON,
@@ -13,10 +13,18 @@ import {
   type SceneLayout,
   type Palette,
   type PropInstance,
+  type Vec3,
 } from '../assets/scene'
+import { useGameStore } from '../game/store'
 import { swayUniforms } from './sway'
 import { Beds } from './Beds'
 import { Slot } from './Slot'
+
+export interface CamView {
+  pos: Vec3
+  target: Vec3
+  zoom: number
+}
 
 const propUrl = (asset: string) => `/assets/props/${asset}.glb`
 
@@ -46,6 +54,76 @@ for (const a of [...SINGLETON_ASSETS, ...INSTANCED_ASSETS, ...PLANT_ASSETS])
 function SwayClock() {
   useFrame((_, dt) => {
     swayUniforms.uTime.value += dt
+  })
+  return null
+}
+
+/** Гонит таймер/очередь дня фудтрека, пока идёт фаза truck. */
+function TruckTick() {
+  const tick = useGameStore((s) => s.tickTruck)
+  useFrame((_, dt) => {
+    const st = useGameStore.getState()
+    if (st.phase === 'truck' && st.truck && !st.truck.ended) tick(Math.min(dt, 0.1))
+  })
+  return null
+}
+
+type OrbitLike = { enabled: boolean; target: THREE.Vector3; update: () => void }
+
+/** На дне 7 плавно переводит камеру на фудтрек; обратно — на ферму. */
+function CameraRig({ truckPos, farm }: { truckPos: Vec3; farm: CamView }) {
+  const phase = useGameStore((s) => s.phase)
+  const camera = useThree((s) => s.camera) as THREE.OrthographicCamera
+  const controls = useThree((s) => s.controls) as OrbitLike | null
+
+  const views = useMemo(() => {
+    const tp = new THREE.Vector3(...truckPos)
+    return {
+      truck: {
+        pos: tp.clone().add(new THREE.Vector3(5, 4.5, 6.5)),
+        target: tp.clone().add(new THREE.Vector3(0, 0.9, 0)),
+        zoom: 95,
+      },
+      farm: {
+        pos: new THREE.Vector3(...farm.pos),
+        target: new THREE.Vector3(...farm.target),
+        zoom: farm.zoom,
+      },
+    }
+  }, [truckPos, farm])
+
+  const anim = useRef<{
+    t: number
+    from: { pos: THREE.Vector3; target: THREE.Vector3; zoom: number }
+    to: { pos: THREE.Vector3; target: THREE.Vector3; zoom: number }
+  } | null>(null)
+  const prevPhase = useRef(phase)
+
+  useEffect(() => {
+    if (phase === prevPhase.current) return
+    prevPhase.current = phase
+    const to = phase === 'truck' ? views.truck : views.farm
+    const target = controls?.target.clone() ?? new THREE.Vector3(...farm.target)
+    anim.current = { t: 0, from: { pos: camera.position.clone(), target, zoom: camera.zoom }, to }
+    if (controls) controls.enabled = false
+  }, [phase, camera, controls, views, farm.target])
+
+  useFrame((_, dt) => {
+    const a = anim.current
+    if (!a) return
+    a.t = Math.min(1, a.t + dt / 1.1)
+    const e = a.t < 0.5 ? 2 * a.t * a.t : 1 - Math.pow(-2 * a.t + 2, 2) / 2 // easeInOutQuad
+    camera.position.lerpVectors(a.from.pos, a.to.pos, e)
+    camera.zoom = THREE.MathUtils.lerp(a.from.zoom, a.to.zoom, e)
+    camera.updateProjectionMatrix()
+    if (controls) {
+      controls.target.lerpVectors(a.from.target, a.to.target, e)
+      controls.update()
+    }
+    if (a.t >= 1) {
+      anim.current = null
+      if (controls) controls.enabled = true
+    }
   })
   return null
 }
@@ -124,7 +202,7 @@ function Ground({ size, color }: { size: number; color: string }) {
   )
 }
 
-export function Farm() {
+export function Farm({ farmCam }: { farmCam: CamView }) {
   const layout = useJSON<SceneLayout>('/assets/scene-layout.json')
   const palette = useJSON<Palette>('/assets/palette.json')
 
@@ -133,6 +211,8 @@ export function Farm() {
     for (const p of layout.props) (map[p.asset] ??= []).push(p)
     return map
   }, [layout])
+
+  const truckPos: Vec3 = byAsset.food_truck?.[0]?.position ?? [0, 0, 0]
 
   // slotId (`${bed}:${slot}`) → мировая позиция из plots[].
   const slotPositions = useMemo(() => {
@@ -200,6 +280,8 @@ export function Farm() {
         <Slot key={s.id} slotId={s.id} position={s.position} palette={palette} />
       ))}
       <SwayClock />
+      <TruckTick />
+      <CameraRig truckPos={truckPos} farm={farmCam} />
     </>
   )
 }

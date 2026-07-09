@@ -48,6 +48,32 @@ const OUT = process.argv[3] || 'farm.png'
     })
   }
 
+  if (process.argv[4] === 'truck') {
+    await page.waitForFunction(() => !!window.__game, { timeout: 10000 })
+    await page.evaluate(() => {
+      const store = window.__game
+      store.setState({
+        day: 7,
+        phase: 'truck',
+        money: 22,
+        inventory: { carrot: 4, greens: 3, tomato: 3 },
+        truck: {
+          timeLeft: 45,
+          queue: [
+            { want: 'taco', patience: 13, maxPatience: 16 },
+            { want: 'soup', patience: 8, maxPatience: 16 },
+            { want: 'salad', patience: 4, maxPatience: 16 },
+          ],
+          served: 2,
+          spawnTimer: 0,
+          nextSpawnIn: 3,
+          ended: false,
+        },
+      })
+    })
+    await page.waitForTimeout(2200) // дать камере доехать до фудтрека
+  }
+
   await page.waitForTimeout(2500)
 
   const stats = await page.evaluate(() => window.__render || null)

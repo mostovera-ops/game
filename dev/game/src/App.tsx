@@ -103,7 +103,7 @@ export default function App() {
         <OrthographicCamera makeDefault position={CAM_POS} zoom={CAM_ZOOM} near={0.1} far={200} />
         {SHOW_PERF && <Perf position="top-left" />}
         <Suspense fallback={null}>
-          <Farm />
+          <Farm farmCam={{ pos: CAM_POS, target: CAM_TARGET, zoom: CAM_ZOOM }} />
           <RenderStats />
         </Suspense>
         <OrbitControls makeDefault target={CAM_TARGET} minZoom={20} maxZoom={300} />
