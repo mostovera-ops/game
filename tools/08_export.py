@@ -35,11 +35,31 @@ from mathutils import Vector
 
 # __file__ указывает на этот скрипт (tools/08_export.py) при запуске
 # через `blender --python`. Корень репозитория — на уровень выше tools/.
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+def find_repo_root():
+    """Работает и из CLI (`blender --python tools/08_export.py`), и из
+    текстового редактора Blender (Scripting → Run)."""
+    # 1) CLI: у скрипта есть __file__ → корень на уровень выше tools/.
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        return os.path.dirname(here) if os.path.basename(here) == "tools" else here
+    except NameError:
+        pass
+    # 2) GUI: __file__ нет — берём путь открытого .blend.
+    blend = bpy.data.filepath
+    if blend:
+        d = os.path.dirname(blend)
+        # scene.blend лежит в reference/ → корень уровнем выше.
+        return os.path.dirname(d) if os.path.basename(d) == "reference" else d
+    # 3) Фолбэк — текущая папка.
+    return os.getcwd()
+
+
+REPO_ROOT = find_repo_root()
 ASSETS_DIR = os.path.join(REPO_ROOT, "public", "assets")
 PROPS_DIR = os.path.join(ASSETS_DIR, "props")
 os.makedirs(PROPS_DIR, exist_ok=True)
+print("[08_export] корень проекта:", REPO_ROOT)
+print("[08_export] пишу ассеты в:", ASSETS_DIR)
 
 
 # --------------------------------------------------------------------------
