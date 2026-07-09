@@ -1,0 +1,1085 @@
+<title>Sunnyside — концепт игры</title>
+<style>
+  :root{
+    --paper:#F5EDDD; --card:#FCF6E8; --board:#1F2B37; --board-ink:#F2E9D8;
+    --ink:#26313B; --muted:#63707A; --line:rgba(38,49,59,.16); --shadow:rgba(38,49,59,.14);
+    --cherry:#C63F33; --teal:#0B9077; --mustard:#D89A2B; --mustard-deep:#AE7212;
+    --chrome:#B9C4CC;
+    --glow-cherry:none; --glow-teal:none; --glow-cream:none;
+    --bulb:#E9A83C; --bulb-dim:#D8C9A8;
+    --disp:"Futura","Avenir Next","Century Gothic","Trebuchet MS",sans-serif;
+    --script:"Snell Roundhand","Savoye LET","Brush Script MT","Segoe Script",cursive;
+    --body:"Avenir Next","Avenir","Futura","Century Gothic","Trebuchet MS",sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0F1B24; --card:#16242F; --board:#1B2938; --board-ink:#F2E9D8;
+      --ink:#F2E9D8; --muted:#A3AFB8; --line:rgba(242,233,216,.16); --shadow:rgba(0,0,0,.5);
+      --cherry:#F0594A; --teal:#2FA995; --mustard:#E9AE4B; --mustard-deep:#B87A16;
+      --chrome:#5A6B78;
+      --glow-cherry:0 0 10px rgba(240,89,74,.55),0 0 32px rgba(240,89,74,.30);
+      --glow-teal:0 0 10px rgba(47,169,149,.55),0 0 30px rgba(47,169,149,.30);
+      --glow-cream:0 0 12px rgba(242,233,216,.35);
+      --bulb:#FFC862; --bulb-dim:#3A4B58;
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#F5EDDD; --card:#FCF6E8; --board:#1F2B37; --board-ink:#F2E9D8;
+    --ink:#26313B; --muted:#63707A; --line:rgba(38,49,59,.16); --shadow:rgba(38,49,59,.14);
+    --cherry:#C63F33; --teal:#0B9077; --mustard:#D89A2B; --mustard-deep:#AE7212;
+    --chrome:#B9C4CC;
+    --glow-cherry:none; --glow-teal:none; --glow-cream:none;
+    --bulb:#E9A83C; --bulb-dim:#D8C9A8;
+  }
+  :root[data-theme="dark"]{
+    --paper:#0F1B24; --card:#16242F; --board:#1B2938; --board-ink:#F2E9D8;
+    --ink:#F2E9D8; --muted:#A3AFB8; --line:rgba(242,233,216,.16); --shadow:rgba(0,0,0,.5);
+    --cherry:#F0594A; --teal:#2FA995; --mustard:#E9AE4B; --mustard-deep:#B87A16;
+    --chrome:#5A6B78;
+    --glow-cherry:0 0 10px rgba(240,89,74,.55),0 0 32px rgba(240,89,74,.30);
+    --glow-teal:0 0 10px rgba(47,169,149,.55),0 0 30px rgba(47,169,149,.30);
+    --glow-cream:0 0 12px rgba(242,233,216,.35);
+    --bulb:#FFC862; --bulb-dim:#3A4B58;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--body); font-size:16px; line-height:1.55;
+    background-image:radial-gradient(rgba(38,49,59,.045) 1px, transparent 1.2px);
+    background-size:26px 26px;
+  }
+  :root[data-theme="dark"] body{background-image:radial-gradient(rgba(242,233,216,.04) 1px, transparent 1.2px)}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) body{background-image:radial-gradient(rgba(242,233,216,.04) 1px, transparent 1.2px)} }
+
+  .wrap{max-width:1120px; margin:0 auto; padding:0 24px}
+  a{color:var(--teal)}
+  a:focus-visible,button:focus-visible{outline:2.5px solid var(--cherry); outline-offset:2px; border-radius:6px}
+
+  /* ── marquee nav ─────────────────────────── */
+  .marquee{
+    position:sticky; top:0; z-index:60; background:var(--board); color:var(--board-ink);
+    border-bottom:3px solid var(--cherry); box-shadow:0 4px 18px var(--shadow);
+  }
+  .marquee .row{display:flex; align-items:center; gap:18px; padding:10px 24px; max-width:1120px; margin:0 auto}
+  .marquee .logo{font-family:var(--script); font-size:26px; color:var(--mustard); white-space:nowrap; text-shadow:var(--glow-cream); line-height:1}
+  .marquee nav{display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .marquee nav::-webkit-scrollbar{display:none}
+  .marquee nav a{
+    color:var(--board-ink); text-decoration:none; font-family:var(--disp); font-size:11.5px;
+    letter-spacing:.14em; text-transform:uppercase; padding:6px 10px; border-radius:999px; white-space:nowrap; opacity:.85;
+  }
+  .marquee nav a:hover{background:rgba(242,233,216,.12); opacity:1}
+
+  /* ── slides ──────────────────────────────── */
+  .slide{padding:76px 0 70px; border-top:1px solid var(--line); scroll-margin-top:58px}
+  .slide:first-of-type{border-top:none}
+  .checks{
+    height:16px; margin:0;
+    background:conic-gradient(var(--ink) 25%, transparent 0 50%, var(--ink) 0 75%, transparent 0);
+    background-size:22px 22px; opacity:.5;
+  }
+  .kicker{
+    display:inline-flex; align-items:center; gap:10px;
+    font-family:var(--disp); font-size:11.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted);
+    border:1.6px dashed var(--line); border-radius:999px; padding:7px 16px; margin-bottom:18px; background:var(--card);
+  }
+  .kicker b{color:var(--cherry); font-weight:800; letter-spacing:.1em}
+  h2.title{
+    font-family:var(--disp); font-weight:800; text-transform:uppercase; letter-spacing:.015em;
+    font-size:clamp(30px,4.6vw,50px); line-height:1.04; margin:0 0 8px; text-wrap:balance;
+  }
+  h2 .fl{font-family:var(--script); text-transform:none; letter-spacing:0; color:var(--cherry); font-weight:400;
+    font-size:1.18em; vertical-align:-6%; text-shadow:var(--glow-cherry); padding-right:.12em}
+  .lede{max-width:66ch; font-size:17.5px; color:var(--muted); margin:6px 0 30px}
+  .lede b{color:var(--ink)}
+
+  h3.sub{font-family:var(--disp); font-weight:800; text-transform:uppercase; letter-spacing:.1em; font-size:14px;
+    margin:34px 0 14px; display:flex; align-items:center; gap:10px}
+  h3.sub::after{content:""; flex:1; border-top:2px dotted var(--line)}
+  h3.sub .st{color:var(--mustard-deep)}
+
+  /* ── cards & grids ───────────────────────── */
+  .grid{display:grid; gap:16px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .g5{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+  .card{
+    position:relative; background:var(--card); border:1.6px solid var(--line); border-radius:14px;
+    padding:18px 20px; box-shadow:4px 4px 0 var(--shadow);
+  }
+  .card h4{margin:0 0 6px; font-family:var(--disp); font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:14.5px}
+  .card p{margin:0; font-size:14.5px; color:var(--muted)}
+  .card p b, .card li b{color:var(--ink)}
+  .card .tag{font-family:var(--disp); font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--teal); display:block; margin-bottom:6px}
+  .card ul{margin:8px 0 0; padding-left:18px; font-size:14.5px; color:var(--muted)}
+  .card li{margin:3px 0}
+  .card li::marker{color:var(--cherry)}
+
+  .opt .letter{
+    position:absolute; top:-13px; left:16px; background:var(--board); color:var(--board-ink);
+    font-family:var(--disp); font-weight:800; font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    padding:4px 12px; border-radius:999px;
+  }
+  .opt{padding-top:24px}
+  .reco{outline:2.5px solid var(--mustard); outline-offset:0; border-color:transparent}
+  .reco::after{
+    content:"✶ рекомендуем"; position:absolute; top:-13px; right:12px; transform:rotate(2.5deg);
+    background:var(--mustard); color:#26313B; font-family:var(--disp); font-weight:800; font-size:11px;
+    letter-spacing:.12em; text-transform:uppercase; padding:4px 12px; border-radius:999px; box-shadow:2px 2px 0 var(--shadow);
+  }
+  .risk{font-size:13px; color:var(--muted); margin-top:8px; border-top:1.6px dashed var(--line); padding-top:8px}
+  .risk b{color:var(--cherry)}
+
+  .why{
+    display:flex; gap:12px; align-items:flex-start; background:var(--card); border-left:5px solid var(--cherry);
+    border-radius:0 12px 12px 0; padding:14px 18px; margin-top:22px; box-shadow:4px 4px 0 var(--shadow);
+  }
+  .why .wt{font-family:var(--disp); font-weight:800; text-transform:uppercase; letter-spacing:.1em; font-size:11.5px; color:var(--cherry); white-space:nowrap; padding-top:2px}
+  .why p{margin:0; font-size:14.5px}
+
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{
+    font-family:var(--disp); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+    border:1.6px solid var(--line); background:var(--card); border-radius:999px; padding:6px 14px; color:var(--ink);
+  }
+  .chip.hot{border-color:var(--cherry); color:var(--cherry)}
+  .chip.cool{border-color:var(--teal); color:var(--teal)}
+
+  .tile{
+    background:var(--card); border:1.6px solid var(--line); border-radius:12px; padding:12px 12px 10px; text-align:center;
+  }
+  .tile .em{font-size:26px; line-height:1; display:block; margin-bottom:6px}
+  .tile .nm{font-family:var(--disp); font-weight:700; font-size:12px; letter-spacing:.08em; text-transform:uppercase; display:block}
+  .tile .nt{font-size:11.5px; color:var(--muted)}
+
+  /* ── letterboard (diner menu board) ──────── */
+  .boardbox{
+    background:var(--board); color:var(--board-ink); border-radius:14px; padding:20px 22px;
+    box-shadow:4px 4px 0 var(--shadow); border:1.6px solid rgba(0,0,0,.25);
+  }
+  .boardbox .bt{font-family:var(--disp); font-weight:800; letter-spacing:.2em; text-transform:uppercase; font-size:12.5px;
+    color:var(--mustard); text-align:center; margin:0 0 12px; text-shadow:var(--glow-cream)}
+  .brow{display:flex; align-items:baseline; gap:10px; font-family:var(--disp); font-size:14px; letter-spacing:.06em; text-transform:uppercase; padding:5px 0}
+  .brow .dots{flex:1; border-bottom:2.5px dotted rgba(242,233,216,.35); transform:translateY(-4px)}
+  .brow .val{font-variant-numeric:tabular-nums; font-weight:800}
+  .up{color:#5FD0BC} .dn{color:#FF8A7B}
+  .brow .ic{width:20px; text-align:center}
+
+  /* ── tables ──────────────────────────────── */
+  .scroll-x{overflow-x:auto}
+  table{border-collapse:collapse; width:100%; background:var(--card); border:1.6px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:4px 4px 0 var(--shadow)}
+  th{font-family:var(--disp); font-size:11px; letter-spacing:.16em; text-transform:uppercase; text-align:left; color:var(--muted);
+    padding:12px 16px; border-bottom:2px solid var(--line); background:color-mix(in srgb, var(--card) 60%, var(--paper))}
+  td{padding:12px 16px; border-bottom:1.6px solid var(--line); font-size:14.5px; vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td b{font-family:var(--disp); letter-spacing:.03em}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ── hero ────────────────────────────────── */
+  .hero{padding:64px 0 70px; text-align:center; position:relative; overflow:hidden}
+  .hero .sign{width:min(860px,100%); height:auto; display:block; margin:0 auto}
+  .hero .tag{
+    font-family:var(--script); font-size:clamp(26px,4vw,38px); color:var(--ink); margin:20px 0 8px; text-shadow:var(--glow-cream);
+  }
+  .hero .sub{max-width:62ch; margin:0 auto 26px; color:var(--muted); font-size:17px}
+  .hero .meta{justify-content:center; margin-bottom:26px}
+  .names{display:flex; justify-content:center; gap:10px; flex-wrap:wrap; align-items:center}
+  .names .lbl{font-family:var(--disp); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted)}
+
+  .sign text{user-select:none}
+  .sign .script-txt{font-family:var(--script); font-size:118px; fill:var(--cherry)}
+  .sign .cap-txt{font-family:var(--disp); font-weight:800; letter-spacing:.42em; font-size:21px; fill:var(--ink)}
+  .sign .cap-sm{font-family:var(--disp); font-weight:700; letter-spacing:.3em; font-size:13px; fill:var(--paper)}
+  .neon-c{text-shadow:var(--glow-cherry); filter:drop-shadow(0 0 0 transparent)}
+  :root[data-theme="dark"] .sign .script-txt{filter:drop-shadow(0 0 9px rgba(240,89,74,.6)) drop-shadow(0 0 28px rgba(240,89,74,.35))}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .sign .script-txt{filter:drop-shadow(0 0 9px rgba(240,89,74,.6)) drop-shadow(0 0 28px rgba(240,89,74,.35))} }
+  .bulb{fill:var(--bulb)}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  .b1{animation:blink 1.6s infinite}
+  .b2{animation:blink 1.6s .8s infinite}
+  @media (prefers-reduced-motion: reduce){ .b1,.b2{animation:none} }
+
+  /* ── diagrams ────────────────────────────── */
+  .diagram{width:100%; height:auto; display:block; margin:10px auto}
+  .dg-node{fill:var(--card); stroke:var(--line); stroke-width:1.6}
+  .dg-node.hot{stroke:var(--cherry); stroke-width:2.4}
+  .dg-node.cool{stroke:var(--teal); stroke-width:2.4}
+  .dg-lab{font-family:var(--disp); font-weight:800; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; fill:var(--ink)}
+  .dg-sm{font-family:var(--body); font-size:11px; fill:var(--muted)}
+  .dg-dash{stroke:var(--line); stroke-width:2.4; stroke-dasharray:2 7; fill:none; stroke-linecap:round}
+  .dg-arrow{fill:var(--cherry)}
+  .dg-ink{fill:var(--ink)} .dg-mut{fill:var(--muted)} .dg-cher{fill:var(--cherry)} .dg-teal{fill:var(--teal)} .dg-must{fill:var(--mustard)}
+  .dg-paper{fill:var(--paper)} .dg-card{fill:var(--card)}
+  .dg-cap{font-family:var(--disp); font-weight:800; font-size:11px; letter-spacing:.18em; text-transform:uppercase; fill:var(--muted)}
+
+  /* ── calendar ────────────────────────────── */
+  .cal{display:grid; grid-template-columns:repeat(7,minmax(120px,1fr)); gap:10px}
+  .day{background:var(--card); border:1.6px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:3px 3px 0 var(--shadow)}
+  .day .dh{font-family:var(--disp); font-weight:800; font-size:12px; letter-spacing:.16em; text-transform:uppercase; text-align:center; padding:7px 4px; background:color-mix(in srgb, var(--card) 55%, var(--paper)); border-bottom:1.6px solid var(--line)}
+  .day.sat .dh{background:var(--cherry); color:#FFF6E8; border-color:var(--cherry)}
+  .day.sun .dh{background:var(--teal); color:#F2FFFB; border-color:var(--teal)}
+  .day .db{padding:9px 11px; font-size:12.5px; color:var(--muted); min-height:86px}
+  .day .db b{color:var(--ink); font-size:12.5px}
+
+  /* ── charts ──────────────────────────────── */
+  .chartrow{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); align-items:stretch}
+  .chart .bar rect{transition:filter .12s ease}
+  .chart .bar:hover rect{filter:brightness(1.12)}
+  .ax{font-family:var(--body); font-size:11px; fill:var(--muted)}
+  .axl{font-family:var(--disp); font-weight:800; font-size:11px; letter-spacing:.14em; text-transform:uppercase; fill:var(--muted)}
+  .blab{font-family:var(--disp); font-weight:800; font-size:12.5px; fill:var(--ink); font-variant-numeric:tabular-nums}
+  .bmul{font-family:var(--body); font-size:11px; fill:var(--muted)}
+  .gridln{stroke:var(--line); stroke-width:1}
+  #tip{
+    position:fixed; z-index:80; pointer-events:none; display:none; background:var(--board); color:var(--board-ink);
+    font-family:var(--body); font-size:12.5px; padding:7px 11px; border-radius:9px; box-shadow:0 6px 20px var(--shadow); max-width:240px;
+  }
+  .stat{display:flex; flex-direction:column; gap:2px; align-items:flex-start}
+  .stat .sv{font-family:var(--disp); font-weight:800; font-size:30px; letter-spacing:.02em; font-variant-numeric:tabular-nums; color:var(--cherry)}
+  .stat.tealv .sv{color:var(--teal)}
+  .stat .sk{font-family:var(--disp); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+
+  /* ── misc components ─────────────────────── */
+  .awn{
+    background:repeating-linear-gradient(90deg, var(--cherry) 0 26px, var(--card) 26px 52px);
+    border-radius:12px 12px 0 0; height:26px; position:relative; border:1.6px solid var(--line); border-bottom:none;
+  }
+  .awn::after{content:""; position:absolute; left:0; right:0; bottom:-8px; height:8px;
+    background:radial-gradient(circle at 13px -2px, transparent 12px, var(--cherry) 12.5px);
+    background-size:52px 8px; opacity:.92}
+  .stall{border:1.6px solid var(--line); border-top:none; border-radius:0 0 12px 12px; background:var(--card); padding:22px 20px 18px; box-shadow:4px 4px 0 var(--shadow)}
+  .orders{display:flex; gap:12px; flex-wrap:wrap; margin-top:12px}
+  .ticket{
+    background:var(--paper); border:1.6px dashed var(--line); border-radius:10px; padding:10px 14px; font-size:13px; min-width:150px;
+  }
+  .ticket .tt{font-family:var(--disp); font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:12px; display:block}
+  .meter{height:8px; border-radius:99px; background:var(--line); overflow:hidden; margin-top:8px}
+  .meter i{display:block; height:100%; background:var(--teal); border-radius:99px}
+
+  .rcard{
+    position:relative; background:var(--card); border:1.6px solid var(--line); border-radius:6px; padding:22px 22px 16px;
+    box-shadow:5px 5px 0 var(--shadow); max-width:420px;
+  }
+  .rcard::before,.rcard::after{
+    content:""; position:absolute; top:-9px; width:64px; height:20px; background:var(--mustard); opacity:.55; border-radius:2px;
+  }
+  .rcard::before{left:26px; transform:rotate(-5deg)}
+  .rcard::after{right:26px; transform:rotate(4deg)}
+  .rcard .rt{font-family:var(--script); font-size:30px; color:var(--cherry); text-shadow:var(--glow-cherry)}
+  .rcard .stars{color:var(--mustard-deep); letter-spacing:3px; font-size:15px}
+  .rcard .rmeta{display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin:6px 0 10px}
+  .rcard .rrow{display:flex; align-items:baseline; gap:8px; font-size:14px}
+  .rcard .rrow .dots{flex:1; border-bottom:2px dotted var(--line); transform:translateY(-3px)}
+
+  .flow{display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:10px; align-items:stretch}
+  .flow .fcol{display:flex; flex-direction:column; gap:10px}
+  .flow .farr{display:flex; align-items:center; font-size:22px; color:var(--cherry); font-weight:800}
+  .fbox{background:var(--card); border:1.6px solid var(--line); border-radius:12px; padding:10px 14px; font-size:13.5px}
+  .fbox b{font-family:var(--disp); text-transform:uppercase; letter-spacing:.06em; font-size:12px; display:block}
+  .fbox.money{border-color:var(--mustard-deep); box-shadow:3px 3px 0 var(--shadow)}
+
+  .road{display:flex; gap:0; align-items:stretch; margin-top:8px; overflow-x:auto; padding-bottom:6px}
+  .rstop{flex:1; min-width:150px; position:relative; padding:0 8px}
+  .rstop::before{content:""; position:absolute; top:26px; left:0; right:0; border-top:6px solid var(--ink); opacity:.8}
+  .rstop::after{content:""; position:absolute; top:28.5px; left:6px; right:6px; border-top:2.5px dashed var(--paper); z-index:1}
+  .rstop .pin{position:relative; z-index:2; width:22px; height:22px; border-radius:50%; background:var(--cherry); border:4px solid var(--paper); box-shadow:0 0 0 1.6px var(--line); margin:16px auto 10px}
+  .rstop.done .pin{background:var(--teal)}
+  .rstop .rl{text-align:center; font-family:var(--disp); font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase}
+  .rstop .rs{text-align:center; font-size:11.5px; color:var(--muted)}
+
+  .timeline{display:flex; gap:0; overflow-x:auto; padding:6px 0 10px}
+  .tl{flex:1; min-width:190px; position:relative; padding:0 10px}
+  .tl::before{content:""; position:absolute; top:13px; left:0; right:0; border-top:2.5px dotted var(--line)}
+  .tl .dot{position:relative; z-index:2; width:26px; height:26px; border-radius:50%; background:var(--card); border:2.4px solid var(--cherry); margin-bottom:10px;
+    display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-weight:800; font-size:10px}
+  .tl.now .dot{background:var(--cherry); color:#FFF6E8}
+  .tl h5{margin:0 0 4px; font-family:var(--disp); font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:13px}
+  .tl p{margin:0; font-size:12.5px; color:var(--muted)}
+
+  .decide{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .dec{display:flex; gap:12px; align-items:flex-start; background:var(--card); border:1.6px solid var(--line); border-radius:12px; padding:12px 14px; font-size:14px}
+  .dec .box{flex:none; width:18px; height:18px; border:2.4px solid var(--cherry); border-radius:4px; margin-top:2px}
+  .dec b{font-family:var(--disp); text-transform:uppercase; letter-spacing:.05em; font-size:12.5px; display:block}
+  .dec span{color:var(--muted); font-size:13px}
+
+  footer{padding:44px 0 64px; color:var(--muted); font-size:13.5px; text-align:center}
+  footer .fs{font-family:var(--script); font-size:30px; color:var(--cherry); text-shadow:var(--glow-cherry); display:block; margin-bottom:8px}
+
+  @media (max-width:760px){
+    .cal{grid-template-columns:repeat(2,1fr)}
+    .flow{grid-template-columns:1fr}
+    .flow .farr{transform:rotate(90deg); justify-content:center}
+    .hero{padding-top:40px}
+  }
+</style>
+
+<header class="marquee">
+  <div class="row">
+    <span class="logo">Sunnyside</span>
+    <nav aria-label="Разделы">
+      <a href="#concept">Концепт</a><a href="#style">Стиль</a><a href="#loop">Цикл</a><a href="#farm">Ферма</a><a href="#ing">Продукты</a><a href="#kitchen">Кухня</a><a href="#fair">Ярмарка</a><a href="#event">Ивент</a><a href="#town">Город</a><a href="#merge">Переезды</a><a href="#power">Прокачка</a><a href="#eco">Экономика</a><a href="#money">Монетизация</a><a href="#retention">Ритм</a><a href="#collect">Коллекции</a><a href="#roadmap">Роадмап</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ═══════════ HERO ═══════════ -->
+<section class="hero wrap">
+  <div class="kicker">Концепт-дек · <b>v0.1</b> · июль 2026 · для внутреннего обсуждения</div>
+
+  <svg class="sign" viewBox="0 0 900 330" role="img" aria-label="Неоновая вывеска Sunnyside — ферма, дайнер, окружная ярмарка">
+    <!-- starbursts -->
+    <g class="dg-must">
+      <path d="M96 58 l6 18 18 6 -18 6 -6 18 -6 -18 -18 -6 18 -6z"/>
+      <path d="M806 40 l5 14 14 5 -14 5 -5 14 -5 -14 -14 -5 14 -5z"/>
+      <path d="M760 208 l4 11 11 4 -11 4 -4 11 -4 -11 -11 -4 11 -4z"/>
+    </g>
+    <!-- sign panel -->
+    <g transform="rotate(-1.2 450 150)">
+      <rect x="150" y="34" width="600" height="192" rx="18" class="dg-card" stroke="var(--ink)" stroke-width="3"/>
+      <rect x="162" y="46" width="576" height="168" rx="12" fill="none" stroke="var(--line)" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round"/>
+      <text x="450" y="150" text-anchor="middle" class="script-txt">Sunnyside</text>
+      <text x="450" y="196" text-anchor="middle" class="cap-txt">FARM · DINER · FAIR</text>
+      <!-- bulbs on panel edge -->
+      <g>
+        <circle class="bulb b1" cx="186" cy="58" r="5"/><circle class="bulb b2" cx="230" cy="52" r="5"/><circle class="bulb b1" cx="274" cy="48" r="5"/>
+        <circle class="bulb b2" cx="626" cy="48" r="5"/><circle class="bulb b1" cx="670" cy="52" r="5"/><circle class="bulb b2" cx="714" cy="58" r="5"/>
+      </g>
+    </g>
+    <!-- googie arrow -->
+    <g transform="rotate(-1.2 450 150)">
+      <path d="M70 168 L150 130 L150 206 Z" class="dg-cher"/>
+      <circle class="bulb b2" cx="128" cy="168" r="4.5"/><circle class="bulb b1" cx="106" cy="168" r="4.5"/>
+    </g>
+    <!-- pole + road -->
+    <rect x="436" y="226" width="14" height="58" class="dg-ink" opacity=".85"/>
+    <rect x="410" y="282" width="66" height="10" rx="4" class="dg-ink" opacity=".85"/>
+    <rect x="0" y="304" width="900" height="8" class="dg-ink" opacity=".7"/>
+    <g stroke="var(--mustard)" stroke-width="4" stroke-dasharray="26 20"><line x1="0" y1="308" x2="900" y2="308"/></g>
+    <!-- little truck -->
+    <g transform="translate(700 268)">
+      <rect x="0" y="10" width="70" height="22" rx="5" class="dg-teal"/>
+      <rect x="52" y="-6" width="30" height="20" rx="5" class="dg-teal"/>
+      <rect x="58" y="-2" width="12" height="10" rx="2" class="dg-paper"/>
+      <circle cx="16" cy="34" r="7" class="dg-ink"/><circle cx="60" cy="34" r="7" class="dg-ink"/>
+      <circle cx="16" cy="34" r="2.6" class="dg-paper"/><circle cx="60" cy="34" r="2.6" class="dg-paper"/>
+    </g>
+  </svg>
+
+  <p class="tag">Вырасти. Приготовь. Накорми весь округ.</p>
+  <p class="sub">Браузерная кооперативная ферма-закусочная в придорожной Америке 1950-х.
+    Всю неделю город растит и готовит — а в выходные гуляет: ярмарка, конкурсы и общий котёл серверного ивента.</p>
+
+  <div class="chips meta">
+    <span class="chip">Браузер · low-poly 3D</span>
+    <span class="chip cool">Кооп-сервер «город»</span>
+    <span class="chip">Сессии 10–20 мин</span>
+    <span class="chip hot">Неделя = реальная неделя</span>
+  </div>
+  <div class="names">
+    <span class="lbl">Название:</span>
+    <span class="chip hot">Sunnyside ✶ рабочее</span>
+    <span class="chip">Blue Plate</span>
+    <span class="chip">Fair &amp; Square</span>
+    <span class="chip">Neon Harvest</span>
+  </div>
+</section>
+
+<div class="checks" role="presentation"></div>
+
+<!-- ═══════════ 01 CONCEPT ═══════════ -->
+<section class="slide" id="concept"><div class="wrap">
+  <div class="kicker"><b>01</b> High concept</div>
+  <h2 class="title">Формула: <span class="fl">уютная</span> ферма с недельным пульсом</h2>
+  <p class="lede">Игрок наследует придорожную ферму с закусочной. Будни — производство и взаимопомощь,
+    выходные — общий праздник сервера. <b>Каждый пирог работает дважды:</b> на твой карман и на общий счёт города.</p>
+
+  <div class="grid g4">
+    <div class="card"><span class="tag">Stardew Valley</span><h4>Владение и уют</h4><p>Своя земля, свой темп, привязанность к месту и персонажам.</p></div>
+    <div class="card"><span class="tag">Hay Day</span><h4>Асинхронная экономика</h4><p>Таймеры, цепочки производства, заказы — идеально для браузера и коротких сессий.</p></div>
+    <div class="card"><span class="tag">Overcooked</span><h4>Юмор еды и подача</h4><p>Комичные посетители и «запара» — но опциональная и без фейлов. Вайб, не стресс.</p></div>
+    <div class="card"><span class="tag">Last War</span><h4>Серверная жизнь</h4><p>Прокачка, ивенты, ощущение растущей мощи и общего дела — переведённые на мирный язык.</p></div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Четыре пилларса</h3>
+  <div class="grid g4">
+    <div class="card"><h4>Тёплая Америка 50-х</h4><p>Неон, хром, черри-пай и джукбокс. Ностальгия по миру, в котором никто не жил, — чистый уют.</p></div>
+    <div class="card"><h4>Неделя как ритуал</h4><p>Будни кормят субботу. У каждого дня — своя роль, у сервера — общий календарь и общее «завтра ярмарка!».</p></div>
+    <div class="card"><h4>Позитивный кооп</h4><p>Помогать выгоднее, чем мешать. Никакого рейдинга и краж — соревнование только опциональное и доброе.</p></div>
+    <div class="card"><h4>Коллекция = личность</h4><p>Рецепты, ленты, неоновая вывеска и полка игрушек рассказывают историю игрока лучше рейтинга.</p></div>
+  </div>
+
+  <div class="why"><span class="wt">Почему цепляет</span><p>Фарм-жанр перенасыщен «средневековыми деревнями». Дайнер 50-х даёт мгновенно считываемый стиль, богатую кухню (бургеры → пироги → лобстер-роллы) и готовый язык для UI: меню-борды, чеки, талоны, вымпелы.</p></div>
+</div></section>
+
+<!-- ═══════════ 02 STYLE ═══════════ -->
+<section class="slide" id="style"><div class="wrap">
+  <div class="kicker"><b>02</b> Сеттинг и стиль</div>
+  <h2 class="title">Придорожная Америка, <span class="fl">low-poly</span></h2>
+  <p class="lede">Норман Роквелл × гуги-архитектура: честные фермы, хромовые закусочные, неон над шоссе.
+    Тон — добрая ирония, ноль гримдарка. <b>Лоу-поли — не компромисс, а стиль:</b> 3-тоновые материалы, никакой грязи.</p>
+
+  <svg class="diagram" viewBox="0 0 960 290" role="img" aria-label="Сцена: ферма, дайнер и грузовик у шоссе">
+    <ellipse cx="120" cy="66" rx="34" ry="34" class="dg-must" opacity=".9"/>
+    <g class="dg-must" opacity=".9">
+      <path d="M120 14 l4 12 12 4 -12 4 -4 12 -4 -12 -12 -4 12 -4z" transform="translate(64 6)"/>
+    </g>
+    <rect x="0" y="212" width="960" height="4" class="dg-ink" opacity=".35"/>
+    <!-- farm beds -->
+    <g transform="translate(46 148)">
+      <rect x="0" y="30" width="96" height="34" rx="6" fill="var(--mustard-deep)" opacity=".55"/>
+      <rect x="108" y="30" width="96" height="34" rx="6" fill="var(--mustard-deep)" opacity=".55"/>
+      <g class="dg-teal">
+        <circle cx="20" cy="38" r="7"/><circle cx="48" cy="38" r="7"/><circle cx="76" cy="38" r="7"/>
+        <circle cx="128" cy="38" r="7"/><circle cx="156" cy="38" r="7"/><circle cx="184" cy="38" r="7"/>
+      </g>
+      <g class="dg-cher"><circle cx="20" cy="30" r="3.4"/><circle cx="48" cy="30" r="3.4"/><circle cx="76" cy="30" r="3.4"/></g>
+      <!-- barn -->
+      <rect x="228" y="6" width="86" height="58" rx="4" class="dg-cher"/>
+      <path d="M222 10 L271 -22 L320 10 Z" class="dg-cher"/>
+      <rect x="258" y="30" width="26" height="34" rx="3" class="dg-paper" opacity=".9"/>
+      <path d="M258 30 l26 34 M284 30 l-26 34" stroke="var(--cherry)" stroke-width="3"/>
+    </g>
+    <!-- diner -->
+    <g transform="translate(560 96)">
+      <rect x="0" y="42" width="250" height="76" rx="10" class="dg-card" stroke="var(--ink)" stroke-width="3"/>
+      <rect x="0" y="42" width="250" height="16" rx="8" class="dg-teal"/>
+      <rect x="18" y="70" width="42" height="34" rx="4" fill="var(--teal)" opacity=".35"/>
+      <rect x="72" y="70" width="42" height="34" rx="4" fill="var(--teal)" opacity=".35"/>
+      <rect x="126" y="70" width="42" height="34" rx="4" fill="var(--teal)" opacity=".35"/>
+      <rect x="188" y="66" width="40" height="52" rx="4" class="dg-cher"/>
+      <rect x="96" y="-10" width="10" height="52" class="dg-ink" opacity=".85"/>
+      <rect x="52" y="-34" width="118" height="34" rx="8" class="dg-cher"/>
+      <text x="111" y="-11" text-anchor="middle" class="cap-sm">D I N E R</text>
+      <circle class="bulb b1" cx="60" cy="-17" r="3.4"/><circle class="bulb b2" cx="162" cy="-17" r="3.4"/>
+    </g>
+    <!-- road -->
+    <rect x="0" y="236" width="960" height="40" class="dg-ink" opacity=".8"/>
+    <g stroke="var(--mustard)" stroke-width="5" stroke-dasharray="34 26"><line x1="0" y1="256" x2="960" y2="256"/></g>
+    <g transform="translate(360 218)">
+      <rect x="0" y="10" width="88" height="26" rx="6" class="dg-cher"/>
+      <rect x="66" y="-9" width="36" height="24" rx="6" class="dg-cher"/>
+      <rect x="73" y="-4" width="14" height="12" rx="2" class="dg-paper"/>
+      <circle cx="20" cy="38" r="8.5" class="dg-ink"/><circle cx="76" cy="38" r="8.5" class="dg-ink"/>
+      <circle cx="20" cy="38" r="3" class="dg-paper"/><circle cx="76" cy="38" r="3" class="dg-paper"/>
+    </g>
+  </svg>
+
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card"><h4>Палитра</h4>
+      <div class="chips" style="margin-top:8px">
+        <span class="chip" style="border-color:var(--cherry); color:var(--cherry)">■ Cherry</span>
+        <span class="chip" style="border-color:var(--teal); color:var(--teal)">■ Appliance Mint</span>
+        <span class="chip" style="border-color:var(--mustard-deep); color:var(--mustard-deep)">■ Mustard</span>
+        <span class="chip">■ Cream / Chrome</span>
+      </div>
+      <p style="margin-top:10px">День — выцветшее меню; ночь — неон над асфальтом. Смена суток на сервере = смена настроения карты.</p></div>
+    <div class="card"><h4>Типографика мира</h4><p>Плакатный гротеск (вывески, HUD) + рукописный неон-скрипт (названия ферм). Чеки, талоны и меню-борды — родной язык интерфейса.</p></div>
+    <div class="card"><h4>Правила low-poly</h4><p>Жёсткий бюджет полигонов, 2–3 тона на материал, без текстур. Стиль масштабируется на слабые машины — критично для браузера.</p></div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Каркас мира — опции</h3>
+  <div class="grid g3">
+    <div class="card opt reco"><span class="letter">Вариант A</span><h4>Городок у Route 66</h4><p>Фермы вдоль легендарного шоссе, ярмарочная площадь в центре. Дорога = экспедиции, мотель = гости-NPC, неон = кастомизация.</p></div>
+    <div class="card opt"><span class="letter">Вариант B</span><h4>Ярмарочный округ</h4><p>Мир вокруг постоянной state fair: колесо, палатки, конкурсы. Праздничнее, но «будни» проседают.</p><p class="risk"><b>Риск:</b> ярмарка перестаёт быть событием.</p></div>
+    <div class="card opt"><span class="letter">Вариант C</span><h4>Приморский бордуок</h4><p>Пирс, лодки, морская кухня. Свежо, но теряем фермерскую базу и дорожную романтику.</p><p class="risk"><b>Риск:</b> сложнее объяснить «ферму».</p></div>
+  </div>
+</div></section>
+
+<!-- ═══════════ 03 LOOP ═══════════ -->
+<section class="slide" id="loop"><div class="wrap">
+  <div class="kicker"><b>03</b> Ядро игры</div>
+  <h2 class="title">Неделя — <span class="fl">это</span> уровень</h2>
+  <p class="lede">Игровая неделя = реальная неделя, одна на весь сервер. Понедельник задаёт план, суббота собирает урожай славы.
+    <b>Внутри — ежедневный цикл на 10–15 минут.</b></p>
+
+  <svg class="diagram" viewBox="0 0 760 440" role="img" aria-label="Кольцевая диаграмма недельного цикла из шести шагов">
+    <ellipse cx="380" cy="220" rx="290" ry="158" class="dg-dash"/>
+    <!-- flow arrows on ring -->
+    <g class="dg-arrow">
+      <path d="M0,-7 L12,0 L0,7 Z" transform="translate(525 84) rotate(24)"/>
+      <path d="M0,-7 L12,0 L0,7 Z" transform="translate(670 220) rotate(90)"/>
+      <path d="M0,-7 L12,0 L0,7 Z" transform="translate(525 356) rotate(156)"/>
+      <path d="M0,-7 L12,0 L0,7 Z" transform="translate(235 356) rotate(204)"/>
+      <path d="M0,-7 L12,0 L0,7 Z" transform="translate(90 220) rotate(270)"/>
+      <path d="M0,-7 L12,0 L0,7 Z" transform="translate(235 84) rotate(-24)"/>
+    </g>
+    <!-- nodes -->
+    <g>
+      <circle cx="380" cy="62" r="30" class="dg-node cool"/>
+      <text x="380" y="55" text-anchor="middle" class="dg-lab" font-size="15">ПН</text>
+      <text x="380" y="72" text-anchor="middle" class="dg-sm">спрос</text>
+      <text x="380" y="18" text-anchor="middle" class="dg-lab">Город объявляет тренды</text>
+      <text x="380" y="34" text-anchor="middle" class="dg-sm">пироги +30% · бургеры −20% → план недели</text>
+    </g>
+    <g>
+      <circle cx="628" cy="132" r="30" class="dg-node"/>
+      <text x="628" y="138" text-anchor="middle" class="dg-lab" font-size="16">🌱</text>
+      <text x="752" y="72" text-anchor="end" class="dg-lab">Расти и добывай</text>
+      <text x="752" y="88" text-anchor="end" class="dg-sm">грядки · животные · экспедиции</text>
+    </g>
+    <g>
+      <circle cx="628" cy="308" r="30" class="dg-node"/>
+      <text x="628" y="314" text-anchor="middle" class="dg-lab" font-size="16">🥧</text>
+      <text x="752" y="356" text-anchor="end" class="dg-lab">Готовь и копи сток</text>
+      <text x="752" y="372" text-anchor="end" class="dg-sm">очереди станков · цепочки блюд</text>
+    </g>
+    <g>
+      <circle cx="380" cy="378" r="30" class="dg-node"/>
+      <text x="380" y="384" text-anchor="middle" class="dg-lab" font-size="16">🤝</text>
+      <text x="380" y="428" text-anchor="middle" class="dg-lab">Помогай стриту</text>
+    </g>
+    <g>
+      <circle cx="132" cy="308" r="30" class="dg-node hot"/>
+      <text x="132" y="303" text-anchor="middle" class="dg-lab" font-size="14">СБ</text>
+      <text x="132" y="318" text-anchor="middle" class="dg-sm">ярмарка</text>
+      <text x="8" y="356" text-anchor="start" class="dg-lab">Ярмарка + конкурсы</text>
+      <text x="8" y="372" text-anchor="start" class="dg-sm">прилавок · смена подачи · ленты</text>
+    </g>
+    <g>
+      <circle cx="132" cy="132" r="30" class="dg-node hot"/>
+      <text x="132" y="127" text-anchor="middle" class="dg-lab" font-size="14">ВС</text>
+      <text x="132" y="142" text-anchor="middle" class="dg-sm">ивент</text>
+      <text x="8" y="72" text-anchor="start" class="dg-lab">Финал ивента, награды</text>
+      <text x="8" y="88" text-anchor="start" class="dg-sm">общий котёл · лиги · сезон-тик</text>
+    </g>
+    <!-- center -->
+    <text x="380" y="208" text-anchor="middle" class="dg-lab" style="font-size:17px">FARM VALUE ↑</text>
+    <text x="380" y="230" text-anchor="middle" class="dg-sm">прокачка: стафф · know-how · постройки</text>
+    <text x="380" y="248" text-anchor="middle" class="dg-sm">новые тиры → новая неделя сложнее и богаче</text>
+  </svg>
+
+  <h3 class="sub"><span class="st">✶</span> Календарь сервера</h3>
+  <div class="cal">
+    <div class="day"><div class="dh">Пн</div><div class="db"><b>План.</b> Рынок объявил спрос; сеем под субботу, стрит делит категории.</div></div>
+    <div class="day"><div class="dh">Вт</div><div class="db"><b>Производство.</b> Цепочки крафта, кооп-заказы открываются.</div></div>
+    <div class="day"><div class="dh">Ср</div><div class="db"><b>Экспедиции.</b> Грузовики возвращаются с регионалкой.</div></div>
+    <div class="day"><div class="dh">Чт</div><div class="db"><b>Разгон.</b> Дедлайн кооп-заказов; potluck-стол стрита открыт.</div></div>
+    <div class="day"><div class="dh">Пт</div><div class="db"><b>Прожарка.</b> Финальный сток; пик бустов «перед ярмаркой».</div></div>
+    <div class="day sat"><div class="dh">Сб · Ярмарка</div><div class="db"><b>Окно 36 ч.</b> Прилавок, смена подачи, конкурсы: пирог недели, гигантский овощ, витрина.</div></div>
+    <div class="day sun"><div class="dh">Вс · Ивент</div><div class="db"><b>Финал.</b> Общий котёл закрывается: награды по вехам, лиги, сезонный тик паса.</div></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:22px">
+    <div class="card"><h4>Дневной мини-цикл · 10–15 мин</h4><ul>
+      <li>Собрать → пересадить → поставить крафт в очередь</li>
+      <li>3 задания «Daily Special» (ротация фокуса, как arms race)</li>
+      <li>Помочь троим соседям · проверить почту и каталог</li>
+      <li>Забрать бесплатную игрушку «крекер-джек» дня</li></ul></div>
+    <div class="card"><h4>Новичок не ждёт субботы</h4><p>Первая сессия — сжатая «мини-неделя»: за 20 минут туториала проживаешь посев → готовку → свою первую мини-ярмарку с NPC. Дальше вливаешься в реальный календарь города с бустом «Гранд-опенинг».</p></div>
+  </div>
+
+  <div class="why"><span class="wt">Почему цепляет</span><p>Реальная неделя превращает сервер в общину с общим ритмом: «до ярмарки два дня» — это разговор в чате, пуш-уведомление и причина зайти. FOMO мягкий: пропустил субботу — прилавок продал базово, но смену подачи и конкурс ждёшь уже к следующей.</p></div>
+</div></section>
+
+<!-- ═══════════ 04 FARM ═══════════ -->
+<section class="slide" id="farm"><div class="wrap">
+  <div class="kicker"><b>04</b> Производственная база</div>
+  <h2 class="title">Ферма: <span class="fl">грядки,</span> стойла и станки</h2>
+  <p class="lede">Четыре контура производства, все на реальных таймерах. Уход — короткие приятные интеракции
+    (полить, покормить, смахнуть ворон), позже автоматизируемые стаффом.</p>
+
+  <div class="grid g4">
+    <div class="card"><h4>Грядки</h4><p>Посев → таймер → сбор. Уход ускоряет и повышает качество. Слоты грядок — главный ранний sink.</p></div>
+    <div class="card"><h4>Животные</h4><p>Куры, коровы, свиньи, пчёлы. Цикл кормления → продукт (яйца, молоко, бекон, мёд). Питомцы с именами — привязанность.</p></div>
+    <div class="card"><h4>Станки</h4><p>Гриль, печь, маслобойка, содовый фонтан, мороженица, кофемашина. Очереди крафта; слоты станков = средний sink.</p></div>
+    <div class="card"><h4>Склад</h4><p>Лимит хранения → апгрейд силоса и ледника. Дефицит места создаёт решения, не боль (излишки — в подарки соседям).</p></div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Планировка фермы — опции</h3>
+  <div class="grid g3">
+    <div class="card opt reco"><span class="letter">Вариант A</span><h4>Модульные слоты</h4><p>Фиксированные площадки под грядки/станки, как в текущем прототипе. Быстро строить, идеально читается камерой, дешёвый нетворкинг.</p><p class="risk"><b>План:</b> ядро MVP; свобода приходит через декор.</p></div>
+    <div class="card opt"><span class="letter">Вариант B</span><h4>Сетка-грядки</h4><p>Классическая свободная сетка (Stardew). Гибкость и «пиксельное фермерство», но дороже UI/камера в 3D.</p></div>
+    <div class="card opt"><span class="letter">Вариант C</span><h4>Свободный билд</h4><p>Двор и интерьер дайнера расставляются свободно. Мечта билдеров — целевое состояние v1.0, когда появится косметика.</p></div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Лимит активности — опции</h3>
+  <div class="grid g3">
+    <div class="card opt"><span class="letter">Вариант A</span><h4>Энергия</h4><p>Классика мобилок: жёстко режет сессию, агрессивная монетизация.</p><p class="risk"><b>Риск:</b> убивает «уют», чувствуется как счётчик.</p></div>
+    <div class="card opt reco"><span class="letter">Вариант B</span><h4>Без энергии</h4><p>Лимитируют сами таймеры, слоты и склад. Сессия заканчивается естественно: «всё поставил — вернусь вечером».</p></div>
+    <div class="card opt"><span class="letter">Вариант C</span><h4>Гибрид</h4><p>Энергия только на «сверх-действия» (ручное ускорение, доп. смена). Компромисс, если экономике понадобится клапан.</p></div>
+  </div>
+
+  <div class="why"><span class="wt">Почему цепляет</span><p>Таймеры разной длины (15 мин / 2 ч / ночь) сами раскладывают день игрока на 2–3 захода — ретеншн без принуждения. А именованная корова, которую ты кормишь неделю, удерживает лучше любой энергии.</p></div>
+</div></section>
+
+<!-- ═══════════ 05 INGREDIENTS ═══════════ -->
+<section class="slide" id="ing"><div class="wrap">
+  <div class="kicker"><b>05</b> Продукты и открытие мира</div>
+  <h2 class="title">Пять тиров — <span class="fl">от огорода</span> до легенд</h2>
+  <p class="lede">Каждый тир — новый пласт контента и скачок ценности. <b>Сложность растёт экспоненциально:</b>
+    выше тир — длиннее таймеры, глубже цепочки, дороже вход.</p>
+
+  <div class="grid g5">
+    <div class="tile"><span class="em">🍅🥬🥔</span><span class="nm">T1 · Огород</span><span class="nt">5–15 мин · томат, салат, картофель, пшеница, яйца</span></div>
+    <div class="tile"><span class="em">🥛🌽🍓</span><span class="nm">T2 · Ферма</span><span class="nt">30 мин–2 ч · молоко→масло/сыр, кукуруза, клубника, бекон</span></div>
+    <div class="tile"><span class="em">🥩🍒🎃</span><span class="nm">T3 · Округ</span><span class="nt">2–8 ч · говядина, вишня, тыква, кофе, мёд</span></div>
+    <div class="tile"><span class="em">🍑🦐🍁</span><span class="nm">T4 · Штаты</span><span class="nt">8–24 ч · персики Джорджии, креветки Галфа, кленовый сироп</span></div>
+    <div class="tile"><span class="em">🦞✨🌟</span><span class="nm">T5 · Легенды</span><span class="nt">1–3 дня · лобстер Мэна, трюфель, ваниль, ивентовые</span></div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Как открывается мир — три механики работают вместе</h3>
+  <div class="grid g3">
+    <div class="card opt reco"><span class="letter">Стержень</span><h4>Экспедиции грузовика</h4><p>Отправляй грузовик в роуд-трип по карте штатов: 4–24 ч, выбор маршрута = стратегия. Новый штат открывает регионалку, рецепты и открытку в коллекцию.</p></div>
+    <div class="card opt"><span class="letter">Daily-ритуал</span><h4>Каталог почтой</h4><p>«Sears, Roebuck and Co.»: заказал редкие семена — жди почтовый грузовик. Причина заглянуть в игру утром: «что там пришло?»</p></div>
+    <div class="card opt"><span class="letter">Социальный</span><h4>Фуражинг на карте</h4><p>Грибы, ягоды, рыбалка на общей карте города. Точки обновляются ежедневно — повод пройтись мимо чужих ферм и позалипать.</p></div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Роуд-трип прогрессии</h3>
+  <div class="road">
+    <div class="rstop done"><div class="pin"></div><div class="rl">Дом</div><div class="rs">T1–T2 · старт</div></div>
+    <div class="rstop done"><div class="pin"></div><div class="rl">Чикаго</div><div class="rs">T3 · мясо и кофе</div></div>
+    <div class="rstop"><div class="pin"></div><div class="rl">Нэшвилл</div><div class="rs">T3 · юг: мёд, пекан</div></div>
+    <div class="rstop"><div class="pin"></div><div class="rl">Новый Орлеан</div><div class="rs">T4 · креветки, специи</div></div>
+    <div class="rstop"><div class="pin"></div><div class="rl">Техас</div><div class="rs">T4 · барбекю-канон</div></div>
+    <div class="rstop"><div class="pin"></div><div class="rl">Калифорния</div><div class="rs">T5 · цитрусы, легенды</div></div>
+  </div>
+
+  <div class="why"><span class="wt">Почему цепляет</span><p>Прогрессия = путешествие по Америке 50-х: каждый штат — новая кухня, новые открытки, новые блюда на ярмарке. Контент-лестница почти бесконечна (50 штатов!), а тема дороги склеивает ферму, грузовик и дайнер в одну историю.</p></div>
+</div></section>
+
+<!-- ═══════════ 06 KITCHEN ═══════════ -->
+<section class="slide" id="kitchen"><div class="wrap">
+  <div class="kicker"><b>06</b> Кухня</div>
+  <h2 class="title">Рецепты — <span class="fl">карточки,</span> а не таблицы</h2>
+  <p class="lede">Готовка без стресса: ставишь блюдо в очередь — станок работает сам. Сложные блюда — цепочки
+    (мука → тесто → корж → пай). <b>Каждый рецепт — коллекционная карточка с мастерством.</b></p>
+
+  <div class="grid g2">
+    <div>
+      <div class="rcard">
+        <div class="rt">Cherry Pie à la Mode</div>
+        <div class="stars">★★★☆☆ mastery · готовили 34 раза</div>
+        <div class="rmeta"><span>Тир 3</span><span>Печь · 45 мин</span><span>Редкость: классика</span></div>
+        <div class="rrow"><span>🍒 Вишня ×6</span><span class="dots"></span><span>грядка T3</span></div>
+        <div class="rrow"><span>🌾 Тесто ×1</span><span class="dots"></span><span>цепочка: мука→тесто</span></div>
+        <div class="rrow"><span>🍦 Пломбир ×1</span><span class="dots"></span><span>мороженица</span></div>
+        <div class="rrow" style="margin-top:10px"><b>База $75</b><span class="dots"></span><b style="color:var(--teal)">c mastery $92</b></div>
+      </div>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card"><h4>Mastery ★</h4><p>Готовишь чаще → −время, +качество, +цена. Гринд вознаграждается без инфляции: растёт эффективность, не тираж.</p></div>
+      <div class="card"><h4>Сеты «Blue Plate Special»</h4><p>Блюдо + гарнир + напиток = сет с бонусом к цене на ярмарке. Комбинаторика планирования: что растить под какой сет.</p></div>
+      <div class="card"><h4>Деревья блюд</h4><p>Тост → сэндвич → клаб; бургер → чиз → делюкс; яблочный пай → вишнёвый → à la mode; шейк → малт → банана-сплит.</p></div>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Как открываются рецепты — опции</h3>
+  <div class="grid g3">
+    <div class="card opt reco"><span class="letter">База</span><h4>По уровню и штатам</h4><p>Предсказуемая лестница: уровень кухни + открытые штаты выдают канон меню. Понятный онбординг.</p></div>
+    <div class="card opt reco"><span class="letter">Секретки</span><h4>Эксперименты</h4><p>Смешай ингредиенты сам — найди скрытый рецепт. «А что если бекон в шейк?» — топливо для соцсетей и вики-сообщества.</p></div>
+    <div class="card opt"><span class="letter">Нарратив</span><h4>От NPC и ивентов</h4><p>Бабушкины карточки, приз конкурса, награда ивента. Эксклюзивы для коллекционеров.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══════════ 07 FAIR ═══════════ -->
+<section class="slide" id="fair"><div class="wrap">
+  <div class="kicker"><b>07</b> Суббота</div>
+  <h2 class="title">Ярмарка: <span class="fl">весь город</span> на площади</h2>
+  <p class="lede">Окно 36–48 часов, чтобы успели все таймзоны. Два слоя участия:
+    <b>пассивный прилавок для всех</b> и опциональная активная смена для тех, кто хочет оверкукд-вайба.</p>
+
+  <div class="grid g2">
+    <div>
+      <div class="awn"></div>
+      <div class="stall">
+        <h4 style="margin:4px 0 2px; font-family:var(--disp); text-transform:uppercase; letter-spacing:.08em">Смена у прилавка · 10–12 мин</h4>
+        <p style="margin:0; font-size:13.5px; color:var(--muted)">Посетители подходят с запросами — собирай подносы из готового стока. Серии без промаха → чаевые ×2. Провала нет: не успел — гость просто взял «дежурное блюдо».</p>
+        <div class="orders">
+          <div class="ticket"><span class="tt">🍔 + 🥤</span>Бургер и малт<div class="meter"><i style="width:78%"></i></div></div>
+          <div class="ticket"><span class="tt">🥧 à la mode</span>с шариком пломбира<div class="meter"><i style="width:45%"></i></div></div>
+          <div class="ticket"><span class="tt">Blue Plate</span>мясной сет + кофе<div class="meter"><i style="width:90%"></i></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card"><h4>Прилавок · пассив</h4><p>Выложи сток, поставь цены — продаётся само по спросу города. Минимальное участие в ярмарке — 5 минут, и ты в игре.</p></div>
+      <div class="card"><h4>Конкурсы недели</h4><p><b>Пирог недели</b>, <b>гигантский овощ</b>, <b>лучшая витрина</b>. Судят NPC + голоса игроков. Приз — блю-риббон на стену и рамка профиля.</p></div>
+      <div class="card"><h4>Итог недели</h4><p>Личный чек («заработано, продано, звезда ярмарки») + вклад в ивент. Скриншотная сводка — как чек из дайнера.</p></div>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Формат активной смены — опции</h3>
+  <div class="grid g3">
+    <div class="card opt reco"><span class="letter">Вариант A</span><h4>Соло-смена</h4><p>Своя палатка, свой ритм. Просто в разработке и балансе — старт для MVP.</p></div>
+    <div class="card opt"><span class="letter">Вариант B</span><h4>Кооп-стенд стрита</h4><p>2–3 игрока на одном стенде: один собирает, другой подаёт. Социальный магнит — цель v1.x.</p></div>
+    <div class="card opt"><span class="letter">Вариант C</span><h4>Скор-атак</h4><p>Асинхронное сравнение очков смены в лиге. Дёшево, но теряет «живость» ярмарки.</p></div>
+  </div>
+
+  <div class="why"><span class="wt">Почему цепляет</span><p>Ярмарка — сцена, где неделя труда становится спектаклем: твои пироги едят «люди», твоя витрина собирает голоса, твоя лента висит на стене. Продажа перестаёт быть кнопкой «sell» — это праздник с результатом.</p></div>
+</div></section>
+
+<!-- ═══════════ 08 EVENT ═══════════ -->
+<section class="slide" id="event"><div class="wrap">
+  <div class="kicker"><b>08</b> Уикенд · весь сервер</div>
+  <h2 class="title">Общий котёл: <span class="fl">накорми</span> большую цель</h2>
+  <p class="lede">Каждые выходные город коллективно «кормит» что-то большое. Блюда конвертируются в сытость,
+    вехи открывают награды <b>всем жителям</b> — твой вклад виден и нужен.</p>
+
+  <svg class="diagram" viewBox="0 0 900 210" role="img" aria-label="Шкала сытости серверного ивента с вехами наград">
+    <text x="450" y="26" text-anchor="middle" class="dg-lab" style="font-size:15px">АППЕТИТОМЕТР ГОРОДА · ВС 21:00 ФИНАЛ</text>
+    <rect x="60" y="60" width="780" height="34" rx="17" fill="var(--line)"/>
+    <rect x="60" y="60" width="512" height="34" rx="17" class="dg-teal"/>
+    <g stroke="var(--paper)" stroke-width="3">
+      <line x1="255" y1="58" x2="255" y2="96"/><line x1="450" y1="58" x2="450" y2="96"/><line x1="645" y1="58" x2="645" y2="96"/>
+    </g>
+    <text x="572" y="83" text-anchor="end" class="dg-lab" style="fill:#F2FFFB">66%</text>
+    <g class="dg-cap">
+      <text x="255" y="122" text-anchor="middle">25% · семена T3 всем</text>
+      <text x="450" y="122" text-anchor="middle">50% · декор + тикеты</text>
+      <text x="645" y="122" text-anchor="middle">75% · буст недели</text>
+      <text x="840" y="122" text-anchor="end">100% · парад + рамка</text>
+    </g>
+    <g transform="translate(60 150)">
+      <text x="0" y="16" class="dg-sm">Личные вехи вклада → сундуки · Вклад стрита → вымпел на площади · Лиги по историческому вкладу, не по спенду</text>
+    </g>
+  </svg>
+
+  <h3 class="sub"><span class="st">✶</span> Ротация тем — чередуем, чтобы не приедалось</h3>
+  <div class="grid g3">
+    <div class="card opt reco"><span class="letter">Тема 1</span><h4>«Приехал Обжора»</h4><p>Гастрокритик-обжора Гримсби — комичный «босс» с фазами-капризами: «сейчас хочу сладкое ×2!». Оверкукд-вайб, город хохочет и носит пироги.</p></div>
+    <div class="card opt reco"><span class="letter">Тема 2</span><h4>«Большой фестиваль»</h4><p>Городской праздник с палатками-сценами: закуски / гриль / десерты. Вклад по категориям — стриты договариваются, кто что закрывает.</p></div>
+    <div class="card opt"><span class="letter">Сезонки</span><h4>Календарь Америки</h4><p>День Благодарения, Drive-in Night (кормим зрителей автокино), Ярмарка штата — город против города: лайтово, награды обоим.</p></div>
+  </div>
+
+  <div class="why"><span class="wt">Почему это драйвер монетизации</span><p>К ивенту <b>готовятся</b>: пятница–суббота — естественный пик покупок бустов, слотов и бандлов «перед ярмаркой». А поскольку ивент кооперативный, спенд социально одобряем: твой буст кормит общий котёл. Кит здесь не враг, а «меценат ярмарки» — с бейджем.</p></div>
+</div></section>
+
+<!-- ═══════════ 09 TOWN ═══════════ -->
+<section class="slide" id="town"><div class="wrap">
+  <div class="kicker"><b>09</b> Мультиплеер</div>
+  <h2 class="title">Город, <span class="fl">стриты</span> и добрососедство</h2>
+  <p class="lede">Сервер — это <b>город</b> с ярмарочной площадью в центре. Игрок живёт на <b>стрите</b> из 10–20 ферм —
+    это его близкий круг (аналог альянса, но без войны).</p>
+
+  <svg class="diagram" viewBox="0 0 760 400" role="img" aria-label="Карта города: площадь в центре, четыре стрита с фермами вокруг">
+    <ellipse cx="380" cy="200" rx="330" ry="165" class="dg-dash"/>
+    <!-- fairground -->
+    <g>
+      <circle cx="380" cy="200" r="62" class="dg-node hot"/>
+      <path d="M348 196 L380 158 L412 196 Z" class="dg-cher"/>
+      <rect x="352" y="196" width="56" height="26" rx="4" fill="var(--mustard)" opacity=".85"/>
+      <line x1="380" y1="158" x2="380" y2="140" stroke="var(--ink)" stroke-width="3"/>
+      <path d="M380 140 l22 6 -22 6z" class="dg-teal"/>
+      <text x="380" y="246" text-anchor="middle" class="dg-lab">Площадь · ярмарка</text>
+    </g>
+    <!-- street clusters -->
+    <g>
+      <g transform="translate(120 66)">
+        <rect x="0" y="0" width="26" height="26" rx="5" class="dg-teal"/><rect x="34" y="0" width="26" height="26" rx="5" class="dg-teal"/>
+        <rect x="0" y="34" width="26" height="26" rx="5" class="dg-teal"/><rect x="34" y="34" width="26" height="26" rx="5" fill="var(--teal)" opacity=".45"/>
+        <text x="30" y="82" text-anchor="middle" class="dg-cap">Мэйпл-стрит</text>
+      </g>
+      <g transform="translate(586 66)">
+        <rect x="0" y="0" width="26" height="26" rx="5" class="dg-cher"/><rect x="34" y="0" width="26" height="26" rx="5" class="dg-cher"/>
+        <rect x="0" y="34" width="26" height="26" rx="5" fill="var(--cherry)" opacity=".45"/><rect x="34" y="34" width="26" height="26" rx="5" class="dg-cher"/>
+        <text x="30" y="82" text-anchor="middle" class="dg-cap">Черри-лейн</text>
+      </g>
+      <g transform="translate(120 286)">
+        <rect x="0" y="0" width="26" height="26" rx="5" class="dg-must"/><rect x="34" y="0" width="26" height="26" rx="5" fill="var(--mustard)" opacity=".5"/>
+        <rect x="0" y="34" width="26" height="26" rx="5" class="dg-must"/><rect x="34" y="34" width="26" height="26" rx="5" class="dg-must"/>
+        <text x="30" y="82" text-anchor="middle" class="dg-cap">Хани-роуд</text>
+      </g>
+      <g transform="translate(586 286)">
+        <rect x="0" y="0" width="26" height="26" rx="5" fill="var(--chrome)"/><rect x="34" y="0" width="26" height="26" rx="5" fill="var(--chrome)" opacity=".6"/>
+        <rect x="0" y="34" width="26" height="26" rx="5" fill="var(--chrome)"/><rect x="34" y="34" width="26" height="26" rx="5" fill="var(--chrome)"/>
+        <text x="30" y="82" text-anchor="middle" class="dg-cap">Чром-авеню</text>
+      </g>
+    </g>
+    <!-- town projects -->
+    <g transform="translate(330 322)">
+      <circle cx="0" cy="20" r="17" fill="none" stroke="var(--ink)" stroke-width="3"/>
+      <line x1="-12" y1="8" x2="12" y2="32" stroke="var(--ink)" stroke-width="2.4"/><line x1="12" y1="8" x2="-12" y2="32" stroke="var(--ink)" stroke-width="2.4"/>
+      <rect x="34" y="4" width="52" height="32" rx="4" class="dg-card" stroke="var(--ink)" stroke-width="2.4"/>
+      <rect x="40" y="10" width="40" height="14" rx="2" fill="var(--teal)" opacity=".4"/>
+      <text x="46" y="56" text-anchor="middle" class="dg-cap">town projects</text>
+    </g>
+  </svg>
+
+  <h3 class="sub"><span class="st">✶</span> Сколько людей на карте — опции</h3>
+  <div class="scroll-x"><table>
+    <tr><th>Опция</th><th>Размер</th><th>Ощущение</th><th>Риски / когда</th></tr>
+    <tr><td><b>Хутор</b></td><td class="num">30–50</td><td>Все знакомы, тепло</td><td>Хрупко: 10 отвалов — и пусто</td></tr>
+    <tr><td><b>Город ✶ рекомендуем</b></td><td class="num">100–200 <span style="color:var(--muted)">(≈40–60 активных/день)</span></td><td>Узнаваемость + всегда живо</td><td>Стриты обязательны, иначе анонимно</td></tr>
+    <tr><td><b>Округ</b></td><td class="num">500+</td><td>Мегаlivеness</td><td>Аноним; оставить как «регион» из городов для v2</td></tr>
+  </table></div>
+  <p style="font-size:13.5px; color:var(--muted); margin-top:10px">Логика цифр: кооп-заказам нужно 5–15 участников; конкурсу — 20–30 заявок, чтобы победа была достижимой; шкалы ивента стабильны от ~40 активных. Стрит 10–20 ≈ комфортный круг взаимных обязательств.</p>
+
+  <h3 class="sub"><span class="st">✶</span> Позитив-сум механики</h3>
+  <div class="grid g3">
+    <div class="card"><h4>Взаимопомощь</h4><p>Полей/ускорь соседям (лимит в день) — <b>выгодно обоим</b>. Подарки излишками. «Сосед полил твои грядки» — лучший пуш в жанре.</p></div>
+    <div class="card"><h4>Кооп-заказы</h4><p>Доска города: «Кейтеринг свадьбы — 20 пирогов, 40 бургеров до Чт». Награда всем участникам, вклад виден.</p></div>
+    <div class="card"><h4>Potluck стрита</h4><p>Перед ярмаркой стрит накрывает общий стол: каждый приносит блюдо → бафф стриту на субботу.</p></div>
+    <div class="card"><h4>Менторство</h4><p>Ветеран «показывает округу» новичку; когда тот достигает вехи — косметика обоим.</p></div>
+    <div class="card"><h4>Town projects</h4><p>Город неделями строит Драйв-ин, Колесо, Радиостанцию: постоянные баффы и видимая эволюция общей карты. Сервер = дом.</p></div>
+    <div class="card"><h4>Никакого негатива</h4><p>Нет краж, рейдов, порчи. Соревнование — только опциональные конкурсы и дружеские лиги.</p></div>
+  </div>
+</div></section>
+
+<div class="checks" role="presentation"></div>
+
+<!-- ═══════════ 10 MERGE ═══════════ -->
+<section class="slide" id="merge"><div class="wrap">
+  <div class="kicker"><b>10</b> Живучесть серверов</div>
+  <h2 class="title">Переезды <span class="fl">по любви,</span> не по приказу</h2>
+  <p class="lede">Игроки отваливаются — города пустеют. Классический форс-мердж рвёт социальные связи, ради которых люди остаются.
+    <b>У нас переезд — всегда выбор, и переезжают вместе.</b></p>
+
+  <svg class="diagram" viewBox="0 0 620 190" role="img" aria-label="Грузовик перевозит домик на новое место" style="max-width:560px">
+    <g stroke="var(--line)" stroke-width="3" stroke-dasharray="4 12" stroke-linecap="round"><line x1="10" y1="96" x2="120" y2="96"/></g>
+    <g transform="translate(150 40)">
+      <rect x="0" y="60" width="200" height="44" rx="8" class="dg-teal"/>
+      <rect x="166" y="26" width="66" height="46" rx="8" class="dg-teal"/>
+      <rect x="178" y="34" width="26" height="20" rx="3" class="dg-paper"/>
+      <!-- house on flatbed -->
+      <rect x="34" y="16" width="86" height="46" rx="4" class="dg-card" stroke="var(--ink)" stroke-width="3"/>
+      <path d="M26 18 L77 -16 L128 18 Z" class="dg-cher"/>
+      <rect x="62" y="34" width="26" height="28" rx="3" fill="var(--cherry)" opacity=".8"/>
+      <line x1="20" y1="62" x2="34" y2="24" stroke="var(--ink)" stroke-width="3"/>
+      <line x1="134" y1="62" x2="120" y2="24" stroke="var(--ink)" stroke-width="3"/>
+      <circle cx="42" cy="108" r="13" class="dg-ink"/><circle cx="42" cy="108" r="4.6" class="dg-paper"/>
+      <circle cx="150" cy="108" r="13" class="dg-ink"/><circle cx="150" cy="108" r="4.6" class="dg-paper"/>
+      <circle cx="204" cy="108" r="13" class="dg-ink"/><circle cx="204" cy="108" r="4.6" class="dg-paper"/>
+    </g>
+    <g class="dg-must">
+      <path d="M480 60 l5 14 14 5 -14 5 -5 14 -5 -14 -14 -5 14 -5z"/>
+    </g>
+    <text x="520" y="130" text-anchor="middle" class="dg-cap">новый город →</text>
+  </svg>
+
+  <div class="grid g3">
+    <div class="card"><h4>1 · Moving Truck</h4><p>Личный переезд в любой открытый город: ферма, прогресс и коллекции едут с тобой. Кулдаун 2 недели, френд-лист сохраняется.</p></div>
+    <div class="card"><h4>2 · Караван стрита</h4><p>Стрит голосует — и переезжает целиком, занимая свободную улицу. Главная ценность (твои люди) не теряется никогда.</p></div>
+    <div class="card"><h4>3 · Слияние городов</h4><p>Город ниже порога активности получает предложение-мердж: голосование жителей, обе стороны получают неделю «Grand Reopening» с праздничными бонусами.</p></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h4>Стимулы, не принуждение</h4><ul>
+      <li>Пустеющий город: жителям бесплатные Moving Truck + бонус на новом месте</li>
+      <li>Принимающий город: награда «за гостеприимство» за каждый приехавший стрит</li>
+      <li>Вклад в town projects конвертируется в тикеты при переезде — ничего не «сгорает»</li></ul></div>
+    <div class="card"><h4>Почему «по желанию» — правильно</h4><p>Игроки остаются ради людей. Форс-мердж говорит «твой дом не важен». Караван говорит «заберите свой дом с собой» — и превращает даже смерть сервера в общее приключение.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══════════ 11 POWER ═══════════ -->
+<section class="slide" id="power"><div class="wrap">
+  <div class="kicker"><b>11</b> Прогрессия</div>
+  <h2 class="title">Last War, <span class="fl">переведённый</span> на мирный</h2>
+  <p class="lede">Берём проверенный скелет прокачки и серверной жизни — меняем войну на кухню.
+    Ощущение растущей мощи остаётся, агрессия уходит.</p>
+
+  <div class="scroll-x"><table>
+    <tr><th>Last War</th><th>Sunnyside</th><th>Как работает</th></tr>
+    <tr><td><b>Heroes</b></td><td><b>Стафф</b></td><td>Повар, кархоп-официантка, фермер, механик, бабушка с рецептами. Навыки: авто-полив, −10% время гриля, +чаевые. Найм — сюжетом и ивентами, апгрейд — жетонами.</td></tr>
+    <tr><td><b>Research</b></td><td><b>Know-How</b></td><td>Дерево знаний: Агрономия · Кухня · Коммерция · Город. Долгие исследования — стратегический выбор недели.</td></tr>
+    <tr><td><b>Base upgrades</b></td><td><b>Постройки</b></td><td>Дом, амбар, кухня, дайнер, гараж, силос. Уровень здания открывает слоты и тиры.</td></tr>
+    <tr><td><b>Power</b></td><td><b>Farm Value</b></td><td>Сводная «стоимость фермы» — статус и матчмейкинг лиг. Растёт от всего, что делаешь.</td></tr>
+    <tr><td><b>Arms Race</b></td><td><b>Daily Specials</b></td><td>Ротация фокус-задач дня (сегодня — выпечка!): все жмут в одно окно, лидерборд дня, лёгкий азарт.</td></tr>
+    <tr><td><b>Season</b></td><td><b>Route Pass</b></td><td>Сезон 8–10 недель с темой («Лето-55»), фри + платный трек.</td></tr>
+    <tr><td><b>VIP</b></td><td><b>Клуб завсегдатаев</b></td><td>Уровни лояльности от стриков и активности (не только спенда): столик у окна, скидка в ивент-лавке.</td></tr>
+  </table></div>
+
+  <h3 class="sub"><span class="st">✶</span> Глубина стаффа — опции</h3>
+  <div class="grid g3">
+    <div class="card opt"><span class="letter">Лайт</span><h4>Пассивки-слоты</h4><p>Нанял — получил бонус. Минимум менеджмента, для MVP.</p></div>
+    <div class="card opt reco"><span class="letter">Мид</span><h4>Посты и навыки</h4><p>Назначай стафф на посты (кухня/поле/прилавок), качай навыки, собирай синергии сетов. Глубина без гачи.</p></div>
+    <div class="card opt"><span class="letter">Хард</span><h4>Гача-коллекция</h4><p>Рарности и дубли. Двигает выручку, но пахнет p2w.</p><p class="risk"><b>Риск:</b> ломает «позитивный» контракт с игроком. Только если гача — косметическая.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══════════ 12 ECONOMY ═══════════ -->
+<section class="slide" id="eco"><div class="wrap">
+  <div class="kicker"><b>12</b> Экономика</div>
+  <h2 class="title">Экспонента <span class="fl">со смыслом</span></h2>
+  <p class="lede">Выше тир — драматически дороже за штуку, умеренно лучше в час: <b>прогресс = меньше кликов и больше планирования</b>, а не бесконечный гринд. Ранние тиры не умирают — их ест спрос и кооп-заказы.</p>
+
+  <div class="chartrow">
+    <div class="card chart">
+      <h4>Цена блюда за тир, $</h4>
+      <svg viewBox="0 0 520 240" role="img" aria-label="Столбчатая диаграмма: цена блюда растёт от 6 долларов на первом тире до 900 на пятом">
+        <g class="gridln"><line x1="90" y1="18" x2="90" y2="208"/><line x1="223" y1="18" x2="223" y2="208"/><line x1="356" y1="18" x2="356" y2="208"/><line x1="490" y1="18" x2="490" y2="208"/></g>
+        <g class="ax"><text x="90" y="224" text-anchor="middle">0</text><text x="223" y="224" text-anchor="middle">300</text><text x="356" y="224" text-anchor="middle">600</text><text x="490" y="224" text-anchor="middle">900</text></g>
+        <g class="axl"><text x="14" y="40">T1</text><text x="14" y="78">T2</text><text x="14" y="116">T3</text><text x="14" y="154">T4</text><text x="14" y="192">T5</text></g>
+        <g class="bar" data-tip="T1 · тост, лимонад: $6 за блюдо (×1)"><rect x="90" y="28" width="4" height="22" rx="2" fill="var(--cherry)"/><text x="102" y="44" class="blab">$6 <tspan class="bmul">×1</tspan></text></g>
+        <g class="bar" data-tip="T2 · панкейки, BLT: $22 (×3.7)"><rect x="90" y="66" width="10" height="22" rx="2" fill="var(--cherry)"/><text x="108" y="82" class="blab">$22 <tspan class="bmul">×3.7</tspan></text></g>
+        <g class="bar" data-tip="T3 · чизбургер, вишнёвый пай: $75 (×12.5)"><rect x="90" y="104" width="33" height="22" rx="2" fill="var(--cherry)"/><text x="131" y="120" class="blab">$75 <tspan class="bmul">×12.5</tspan></text></g>
+        <g class="bar" data-tip="T4 · клаб-сет, гамбо: $260 (×43)"><rect x="90" y="142" width="116" height="22" rx="2" fill="var(--cherry)"/><text x="214" y="158" class="blab">$260 <tspan class="bmul">×43</tspan></text></g>
+        <g class="bar" data-tip="T5 · лобстер-ролл делюкс: $900 (×150)"><rect x="90" y="180" width="400" height="22" rx="2" fill="var(--cherry)"/><text x="484" y="173" text-anchor="end" class="blab">$900 <tspan class="bmul">×150</tspan></text></g>
+      </svg>
+    </div>
+    <div class="card chart">
+      <h4>Минут на цикл блюда</h4>
+      <svg viewBox="0 0 520 240" role="img" aria-label="Столбчатая диаграмма: время цикла растёт от 5 минут на первом тире до 300 на пятом">
+        <g class="gridln"><line x1="90" y1="18" x2="90" y2="208"/><line x1="223" y1="18" x2="223" y2="208"/><line x1="356" y1="18" x2="356" y2="208"/><line x1="490" y1="18" x2="490" y2="208"/></g>
+        <g class="ax"><text x="90" y="224" text-anchor="middle">0</text><text x="223" y="224" text-anchor="middle">100</text><text x="356" y="224" text-anchor="middle">200</text><text x="490" y="224" text-anchor="middle">300</text></g>
+        <g class="axl"><text x="14" y="40">T1</text><text x="14" y="78">T2</text><text x="14" y="116">T3</text><text x="14" y="154">T4</text><text x="14" y="192">T5</text></g>
+        <g class="bar" data-tip="T1: 5 минут — цикл «зашёл на кофе»"><rect x="90" y="28" width="7" height="22" rx="2" fill="var(--teal)"/><text x="105" y="44" class="blab">5</text></g>
+        <g class="bar" data-tip="T2: 15 минут"><rect x="90" y="66" width="20" height="22" rx="2" fill="var(--teal)"/><text x="118" y="82" class="blab">15</text></g>
+        <g class="bar" data-tip="T3: 45 минут — цикл «два захода в день»"><rect x="90" y="104" width="60" height="22" rx="2" fill="var(--teal)"/><text x="158" y="120" class="blab">45</text></g>
+        <g class="bar" data-tip="T4: 120 минут"><rect x="90" y="142" width="160" height="22" rx="2" fill="var(--teal)"/><text x="258" y="158" class="blab">120</text></g>
+        <g class="bar" data-tip="T5: 300 минут — «поставил на ночь»"><rect x="90" y="180" width="400" height="22" rx="2" fill="var(--teal)"/><text x="484" y="173" text-anchor="end" class="blab">300</text></g>
+      </svg>
+    </div>
+    <div class="card" style="display:flex; flex-direction:column; gap:18px; justify-content:center">
+      <div class="stat"><span class="sv">×150</span><span class="sk">ценность за клик · T1→T5</span></div>
+      <div class="stat tealv"><span class="sv">×2.5</span><span class="sk">доход в час · T1→T5</span></div>
+      <div class="stat"><span class="sv">×2.2</span><span class="sk">рост цены апгрейда за уровень</span></div>
+      <p style="margin:0; font-size:13px; color:var(--muted)">Цифры — стартовые гипотезы для эконом-таблицы и плейтестов.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Рынок спроса недели — сердце экономики</h3>
+  <div class="grid g2">
+    <div class="boardbox">
+      <p class="bt">★ Городская доска · спрос этой недели ★</p>
+      <div class="brow"><span class="ic up">▲</span><span>Пироги и выпечка</span><span class="dots"></span><span class="val up">+30%</span></div>
+      <div class="brow"><span class="ic up">▲</span><span>Шейки и содовая</span><span class="dots"></span><span class="val up">+15%</span></div>
+      <div class="brow"><span class="ic">·</span><span>Завтраки</span><span class="dots"></span><span class="val">±0%</span></div>
+      <div class="brow"><span class="ic dn">▼</span><span>Бургеры и гриль</span><span class="dots"></span><span class="val dn">−20%</span></div>
+      <div class="brow" style="margin-top:8px; opacity:.75"><span class="ic">✶</span><span>Ностальгия-бонус: домашний лимонад (T1)</span><span class="dots"></span><span class="val up">×2</span></div>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card"><h4>Как работает</h4><p>В понедельник город объявляет тренды (±15–30% к категориям). Стрит договаривается: «вы берёте гриль, мы — выпечку». Перенасыщенная категория мягко дешевеет в течение ярмарки — флудить одной метой невыгодно.</p></div>
+      <div class="card"><h4>Catch-up для новичков</h4><p>Неделя «Гранд-опенинг» ×2 к доходу; «ностальгия-бонусы» регулярно поднимают спрос на T1–T2 — огород новичка нужен городу, а не только ему.</p></div>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="st">✶</span> Потоки валют</h3>
+  <div class="flow">
+    <div class="fcol">
+      <div class="fbox"><b>Источники</b>Ярмарка и прилавок · кооп-заказы · ивенты · Daily Specials · конкурсы</div>
+      <div class="fbox"><b>Премиум-вход</b>Route Pass · бандлы · Prize Machine</div>
+    </div>
+    <div class="farr">→</div>
+    <div class="fcol">
+      <div class="fbox money"><b>$ Bucks · софт</b>вся производственная экономика</div>
+      <div class="fbox money"><b>◉ Dimes · прем</b>время, слоты, косметика</div>
+      <div class="fbox money"><b>🎟 Tickets · ивент</b>валюта общего котла</div>
+      <div class="fbox money"><b>🎀 Ribbons · престиж</b>только конкурсы, только витрина</div>
+    </div>
+    <div class="farr">→</div>
+    <div class="fcol">
+      <div class="fbox"><b>Синки</b>земля (×2.2/ур) · станки и слоты · стафф · know-how · склад</div>
+      <div class="fbox"><b>Статусные синки</b>косметика · town projects · ивент-лавка · рамки и декор</div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ═══════════ 13 MONEY ═══════════ -->
+<section class="slide" id="money"><div class="wrap">
+  <div class="kicker"><b>13</b> Монетизация</div>
+  <h2 class="title">Платят за <span class="fl">красоту</span> и время — не за силу</h2>
+  <p class="lede">Кооп-структура делает спенд социально одобряемым: буст одного кормит общий котёл всех.
+    <b>Прямой продажи силы нет</b> — только время, удобство и самовыражение.</p>
+
+  <div class="grid g3">
+    <div class="card"><h4>1 · Route Pass</h4><p>Сезон 8–10 недель, фри + платный трек. Прогресс от недельных ритуалов (ярмарка, ивент), не от гринда. Эксклюзив — косметика и декор.</p></div>
+    <div class="card"><h4>2 · Косметика</h4><p>Скины дайнера, грузовика, стаффа; сеты «Googie», «Chrome», «Tiki», «Xmas-55». Витрина — общая карта: твой неон видят все.</p></div>
+    <div class="card"><h4>3 · Prize Machine</h4><p>Автомат с игрушками: косметик-гача с открытым pity; дубли → скрап → обмен на выбор. Раз в день — бесплатная попытка.</p></div>
+    <div class="card"><h4>4 · Бустеры</h4><p>Удобрение (−время роста), овертайм станка (+слот на 24 ч), контракт грузовика (+экспедиция). Дневные кэпы покупок.</p></div>
+    <div class="card"><h4>5 · Ивент-бандлы</h4><p>«Перед ярмаркой»: сток + бусты в пятницу–субботу. Главный недельный пик выручки — привязан к празднику, не к боли.</p></div>
+    <div class="card"><h4>6 · Неон-конструктор</h4><p>Собери вывеску своей фермы из букв, форм и анимаций. Премиум-набор символов — вечный магазин самовыражения.</p></div>
+  </div>
+
+  <div class="why"><span class="wt">Гардрейлы</span><p>Лиги считаются по историческому вкладу, не по спенду · pity открыт цифрой · кэпы на дейли-бусты · конкурсы судят качество, не количество · щедрый фри-трек. Киты получают статус («Меценат ярмарки» на площади), а не превосходство.</p></div>
+</div></section>
+
+<!-- ═══════════ 14 RETENTION ═══════════ -->
+<section class="slide" id="retention"><div class="wrap">
+  <div class="kicker"><b>14</b> Ритм и удержание</div>
+  <h2 class="title">«Как обычно?» — <span class="fl">стрик</span> завсегдатая</h2>
+  <p class="lede">Три горизонта крючков. Дневной приносит 10–15 минут уюта, недельный — праздник,
+    долгий — коллекцию и город, который жалко бросить.</p>
+
+  <div class="scroll-x"><table>
+    <tr><th>Горизонт</th><th>Крючки</th><th>Эмоция</th></tr>
+    <tr><td><b>День</b></td><td>Собрать-пересадить · 3 Daily Specials · помочь ×3 · почта и каталог · бесплатная игрушка «крекер-джек» · стрик «Завсегдатай» с растущим бонусом (страховка стрика за тикеты)</td><td>«Зашёл на кофе»</td></tr>
+    <tr><td><b>Неделя</b></td><td>ПН спрос и план · кооп-заказы до ЧТ · potluck ПТ · СБ ярмарка и конкурсы · ВС финал котла и награды · тик Route Pass</td><td>«Завтра ярмарка!»</td></tr>
+    <tr><td><b>Месяцы</b></td><td>Коллекции (рецепты, ленты, открытки, игрушки) · town projects · новые штаты-экспедиции · сезоны и лиги · декор и неон</td><td>«Это мой город»</td></tr>
+  </table></div>
+
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card"><h4>Возвращающие пуши</h4><p>«Грузовик вернулся из Нэшвилла» · «Сосед полил твои грядки» · «Завтра ярмарка — сток готов?» Все три — про мир, не про счётчик.</p></div>
+    <div class="card"><h4>Стрик без вины</h4><p>Пропуск не обнуляет в ноль: стрик замерзает на сутки, страховка покупается за ивент-тикеты. Возвращение — праздник, не наказание.</p></div>
+    <div class="card"><h4>Отпуск-режим</h4><p>«Уехал на неделю» — ферма консервируется красиво (чехлы, табличка Gone Fishin’), сосед может присмотреть. Уважение к жизни игрока = долгий LTV.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══════════ 15 COLLECT ═══════════ -->
+<section class="slide" id="collect"><div class="wrap">
+  <div class="kicker"><b>15</b> Коллекционеры и билдеры</div>
+  <h2 class="title">Ачивка — <span class="fl">это вещь</span> на стене</h2>
+  <p class="lede">Каждое достижение материально: его можно повесить, поставить на полку или включить в неон.
+    Профиль игрока — это его дайнер, а не список цифр.</p>
+
+  <div class="grid g3">
+    <div class="card"><h4>📖 Recipe Box</h4><p>Карточки рецептов с mastery-звёздами и историей («впервые — 12 мая, готовили 214 раз»).</p></div>
+    <div class="card"><h4>🎀 Blue Ribbons</h4><p>Ленты конкурсов на стене славы. Год и номинация выгравированы.</p></div>
+    <div class="card"><h4>✉️ Открытки «Greetings from…»</h4><p>По одной за каждый штат и ивент. Полный сет региона → рамка и бафф экспедиций.</p></div>
+    <div class="card"><h4>🧸 Полка игрушек</h4><p>Фигурки из Prize Machine сериями («Динозавры шоссе», «Космос-57»). Дубли — в обмен.</p></div>
+    <div class="card"><h4>🏅 Таблички-ачивки</h4><p>«Продал 1000 пирогов» — латунная табличка. Вешается в интерьере, гости видят.</p></div>
+    <div class="card"><h4>📷 Фотомод Kodachrome</h4><p>Ретро-фильтры, рамки-открытки, подпись фермы. Один клик — шеринг наружу, бесплатный маркетинг.</p></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h4>Неон-конструктор — флекс города</h4><p>Вывеска фермы собирается из букв, пиктограмм и анимаций и <b>видна на общей карте</b>. Лучшие вывески недели попадают в подборку на площади.</p></div>
+    <div class="card"><h4>Свободный декор (v1.0)</h4><p>Двор и интерьер дайнера: столики, джукбокс, витрины, чекерборд-пол. Билдеры получают полную свободу, когда появляется масса косметики.</p></div>
+  </div>
+</div></section>
+
+<div class="checks" role="presentation"></div>
+
+<!-- ═══════════ 16 ROADMAP ═══════════ -->
+<section class="slide" id="roadmap"><div class="wrap">
+  <div class="kicker"><b>16</b> Путь к релизу</div>
+  <h2 class="title">Роадмап: <span class="fl">от прототипа</span> к городу</h2>
+  <p class="lede">Прототип фермы и truck-day уже в репозитории — это ядро v0.1. Дальше наращиваем петли снаружи внутрь:
+    сначала неделя, потом город, потом праздник.</p>
+
+  <div class="timeline">
+    <div class="tl now"><div class="dot">0.1</div><h5>Есть сейчас</h5><p>Соло-прототип: грядки-слоты, интеракции, день фуд-трака, камера.</p></div>
+    <div class="tl"><div class="dot">0.2</div><h5>Неделя</h5><p>Календарь, ярмарка-пассив, рецепты T1–T2, Recipe Box, итоговый чек недели.</p></div>
+    <div class="tl"><div class="dot">0.3</div><h5>Город</h5><p>Auth + общая карта (Supabase), визиты, помощь, подарки, кооп-заказы.</p></div>
+    <div class="tl"><div class="dot">0.4</div><h5>Праздник</h5><p>Ивент «Фестиваль», рынок спроса, стриты, Daily Specials, стафф-лайт.</p></div>
+    <div class="tl"><div class="dot">1.0</div><h5>Релиз</h5><p>Route Pass, косметика + Prize Machine, экспедиции, конкурсы, активная смена, переезды.</p></div>
+  </div>
+
+  <div class="card" style="margin-top:10px"><h4>Тех-заметка</h4><p>Мультиплеер асинхронный — реалтайм-физика не нужна. Supabase (Postgres + Realtime + Edge Functions) закрывает всё до v1.0: состояние ферм, визиты, чат, агрегацию ивента. Выделенный тик-сервер — только если появятся живые кооп-смены.</p></div>
+
+  <h3 class="sub"><span class="st">✶</span> Решения, которые принимаем вместе</h3>
+  <div class="decide">
+    <div class="dec"><span class="box"></span><div><b>Планировка фермы</b><span>слоты (A) на MVP → свободный билд (C) к 1.0?</span></div></div>
+    <div class="dec"><span class="box"></span><div><b>Энергия</b><span>без энергии (B) или гибрид (C)?</span></div></div>
+    <div class="dec"><span class="box"></span><div><b>Размер города</b><span>100–200 — подтвердить плейтестом волны</span></div></div>
+    <div class="dec"><span class="box"></span><div><b>Активная смена</b><span>в MVP или после ярмарки-пассива?</span></div></div>
+    <div class="dec"><span class="box"></span><div><b>Стафф</b><span>лайт на старте → мид; гача только косметическая?</span></div></div>
+    <div class="dec"><span class="box"></span><div><b>Название</b><span>Sunnyside / Blue Plate / Fair &amp; Square / Neon Harvest</span></div></div>
+  </div>
+</div></section>
+
+<footer>
+  <span class="fs">y’all come back now!</span>
+  Sunnyside · концепт v0.1 · все цифры — гипотезы для эконом-таблицы и плейтестов · собрано для обсуждения командой
+</footer>
+
+<div id="tip" role="tooltip"></div>
+<script>
+  (function(){
+    var tip=document.getElementById('tip');
+    document.querySelectorAll('.bar[data-tip]').forEach(function(b){
+      b.addEventListener('mousemove',function(e){
+        tip.textContent=b.getAttribute('data-tip');
+        tip.style.display='block';
+        var x=Math.min(e.clientX+14, window.innerWidth-tip.offsetWidth-10);
+        tip.style.left=x+'px'; tip.style.top=(e.clientY+16)+'px';
+      });
+      b.addEventListener('mouseleave',function(){ tip.style.display='none'; });
+    });
+  })();
+</script>
+
+
