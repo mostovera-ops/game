@@ -1,11 +1,26 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BEDS, RECIPES, SLOTS_PER_BED, SLOT_IDS, bedOf, useGameStore } from './store'
+
+/** Доводит слот до stage 2, подсовывая нужный бросок удачи при созревании. */
+function ripen(id: string, luckyRoll: number) {
+  const S = () => useGameStore.getState()
+  S().plant(id)
+  S().water(id)
+  S().endDay() // stage 1 — удача ещё не бросается
+  S().water(id)
+  vi.spyOn(Math, 'random').mockReturnValue(luckyRoll)
+  S().endDay() // stage 2 — здесь бросок
+}
 
 const S = () => useGameStore.getState()
 const slot = (id: string) => S().slots.find((x) => x.id === id)!
 
 beforeEach(() => {
   S().resetGame()
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('farm cycle', () => {
@@ -94,6 +109,153 @@ describe('инструменты', () => {
 
     S().water(id) // созревшее не поливается
     expect(slot(id).watered).toBe(false)
+  })
+})
+
+describe('удачное растение (1 к 10)', () => {
+  it('бросок < 0.1 → lucky, сбор даёт 2 единицы', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 0.05)
+    expect(slot(id).stage).toBe(2)
+    expect(slot(id).lucky).toBe(true)
+
+    S().harvest(id)
+    expect(S().inventory.carrot).toBe(2)
+  })
+
+  it('бросок ≥ 0.1 → обычное, сбор даёт 1 единицу', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 0.5)
+    expect(slot(id).lucky).toBe(false)
+
+    S().harvest(id)
+    expect(S().inventory.carrot).toBe(1)
+  })
+
+  it('удача бросается один раз — созревшее не переигрывает её на endDay', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 0.05)
+    expect(slot(id).lucky).toBe(true)
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.99) // «неудачный» бросок
+    S().endDay()
+    expect(slot(id).lucky).toBe(true)
+  })
+
+  it('сбор очищает флаг удачи, новый росток не наследует его', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 0.05)
+    S().harvest(id)
+    expect(slot(id).lucky).toBe(false)
+    S().plant(id)
+    expect(slot(id).lucky).toBe(false)
+  })
+})
+
+describe('уведомления', () => {
+  it('сбор кладёт тост с культурой и количеством', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 0.05)
+    S().harvest(id)
+    const n = S().notices.at(-1)!
+    expect(n.kind).toBe('harvest')
+    expect(n.crop).toBe('carrot')
+    expect(n.amount).toBe(2)
+  })
+
+  it('гибель без полива сообщает, сколько погибло', () => {
+    S().plant(SLOT_IDS[0])
+    S().plant(SLOT_IDS[1])
+    S().endDay()
+    const n = S().notices.at(-1)!
+    expect(n.kind).toBe('withered')
+    expect(n.amount).toBe(2)
+  })
+
+  it('торговля: нет ресурсов / не то блюдо / нет клиента', () => {
+    useGameStore.setState({
+      phase: 'truck',
+      inventory: { carrot: 0, greens: 0, tomato: 0 },
+      truck: {
+        timeLeft: 60, queue: [], served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+      },
+    })
+    S().serveCustomer('soup')
+    expect(S().notices.at(-1)!.kind).toBe('no-customer')
+
+    useGameStore.setState({
+      truck: {
+        timeLeft: 60,
+        queue: [{ want: 'salad', patience: 16, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+      },
+    })
+    S().serveCustomer('soup')
+    expect(S().notices.at(-1)!.kind).toBe('wrong-dish')
+    expect(S().notices.at(-1)!.recipe).toBe('salad')
+
+    useGameStore.setState({
+      truck: {
+        timeLeft: 60,
+        queue: [{ want: 'soup', patience: 16, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+      },
+    })
+    S().serveCustomer('soup')
+    expect(S().notices.at(-1)!.kind).toBe('no-ingredients')
+  })
+
+  it('успешная продажа сообщает цену', () => {
+    useGameStore.setState({
+      phase: 'truck',
+      inventory: { carrot: 2, greens: 0, tomato: 0 },
+      truck: {
+        timeLeft: 60,
+        queue: [{ want: 'soup', patience: 16, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+      },
+    })
+    expect(S().serveCustomer('soup')).toBe('ok')
+    const n = S().notices.at(-1)!
+    expect(n.kind).toBe('served')
+    expect(n.amount).toBe(RECIPES.soup.price)
+  })
+
+  it('ушедший клиент и конец времени попадают в тосты', () => {
+    useGameStore.setState({
+      phase: 'truck',
+      truck: {
+        timeLeft: 60,
+        queue: [{ want: 'taco', patience: 0.5, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 99, ended: false,
+      },
+    })
+    S().tickTruck(1)
+    expect(S().notices.at(-1)!.kind).toBe('customer-left')
+
+    useGameStore.setState({
+      truck: {
+        timeLeft: 0.5, queue: [], served: 0, spawnTimer: 0, nextSpawnIn: 99, ended: false,
+      },
+    })
+    S().tickTruck(1)
+    expect(S().notices.at(-1)!.kind).toBe('time-up')
+  })
+
+  it('тостов на экране не больше четырёх', () => {
+    for (let i = 0; i < 7; i++) {
+      S().plant(SLOT_IDS[i])
+      S().endDay() // каждый endDay даёт тост withered
+    }
+    expect(S().notices.length).toBeLessThanOrEqual(4)
+  })
+
+  it('dismissNotice убирает тост по id', () => {
+    S().plant(SLOT_IDS[0])
+    S().endDay()
+    const id = S().notices.at(-1)!.id
+    S().dismissNotice(id)
+    expect(S().notices.find((n) => n.id === id)).toBeUndefined()
   })
 })
 

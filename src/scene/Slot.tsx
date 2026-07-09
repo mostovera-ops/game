@@ -3,25 +3,36 @@
  * (scale по стадии, tween ~400мс) и невидимый box-хитбокс для кликов/ховера.
  *
  * Клик зависит от инструмента в руках:
- *   семена — пусто → посадить, созрело → собрать;
- *   лейка  — растёт → полить.
+ *   семена — пусто → посадить;
+ *   лейка  — растёт → полить;
+ *   рука   — созрело → собрать.
  *
- * Политый слот показывается двумя способами сразу: мокрое пятно на почве
- * и капля над ростком. Пятно читается сверху, капля — при косой камере.
+ * Политый слот держит мокрое пятно на почве, пока не наступит новый день.
+ * Капля же всплывает на секунду в момент полива — это отклик на действие,
+ * а не индикатор состояния.
+ *
+ * Созревшее растение показывает комиксовое облачко с ресурсом. Вокруг удачного
+ * (даст 2 единицы) кружат разноцветные звёздочки.
  */
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import { applyPalette, CROP_ASSET, type Palette, type Vec3 } from '../assets/scene'
 import { useGameStore, type CropId } from '../game/store'
+import { SpeechBubble } from './SpeechBubble'
 
-const STAGE_SCALE = [0.15, 0.55, 1.0]
+// Ростки крупные: слот читается с дефолтного зума, без приближения камеры.
+const STAGE_SCALE = [0.32, 0.8, 1.35]
+
+/** Сколько капля висит над слотом после полива. */
+const DROP_MS = 1000
 
 // Мокрая земля — темнее сухой, но всё ещё земля: чистый чёрный читался дырой.
 const WET_COLOR = '#4f3826'
 const DROP_COLOR = '#6db3f2'
+const GOLD = '#f4b942'
 
 function CropModel({ crop, palette }: { crop: CropId; palette: Palette }) {
   const { scene } = useGLTF(`/assets/props/${CROP_ASSET[crop]}.glb`)
@@ -33,25 +44,98 @@ function CropModel({ crop, palette }: { crop: CropId; palette: Palette }) {
   return <primitive object={object} />
 }
 
-/** Капля над политым ростком: покачивается, чтобы цеплять глаз. */
+/** Капля: всплывает и тает — живёт ровно DROP_MS после полива. */
 function Droplet() {
   const ref = useRef<THREE.Group>(null)
+  const mat = useRef<THREE.MeshBasicMaterial>(null)
+  const born = useRef(0)
+
   useFrame((state) => {
     const g = ref.current
     if (!g) return
-    g.position.y = 0.46 + Math.sin(state.clock.elapsedTime * 2.2) * 0.035
-    g.rotation.y = state.clock.elapsedTime * 0.8
+    if (!born.current) born.current = state.clock.elapsedTime
+    const age = (state.clock.elapsedTime - born.current) / (DROP_MS / 1000)
+    g.position.y = 0.62 + age * 0.22 // всплывает
+    if (mat.current) mat.current.opacity = Math.max(0, 1 - age * age) // тает к концу
   })
+
   return (
-    <group ref={ref} position={[0, 0.46, 0]}>
+    <group ref={ref} position={[0, 0.62, 0]}>
       <mesh position={[0, 0.05, 0]}>
         <coneGeometry args={[0.05, 0.1, 8]} />
-        <meshBasicMaterial color={DROP_COLOR} />
+        <meshBasicMaterial ref={mat} color={DROP_COLOR} transparent depthWrite={false} />
       </mesh>
       <mesh>
         <sphereGeometry args={[0.05, 12, 10]} />
-        <meshBasicMaterial color={DROP_COLOR} />
+        <meshBasicMaterial color={DROP_COLOR} transparent depthWrite={false} />
       </mesh>
+    </group>
+  )
+}
+
+/** Пятиконечная звёздочка в плоскости XY. Геометрия одна на все слоты. */
+const starGeometry = (() => {
+  const shape = new THREE.Shape()
+  const spikes = 5
+  const outer = 0.5
+  const inner = 0.21
+  for (let i = 0; i < spikes * 2; i++) {
+    const r = i % 2 === 0 ? outer : inner
+    const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2
+    const x = Math.cos(a) * r
+    const y = Math.sin(a) * r
+    if (i === 0) shape.moveTo(x, y)
+    else shape.lineTo(x, y)
+  }
+  shape.closePath()
+  return new THREE.ShapeGeometry(shape)
+})()
+
+/** Звёздочки вокруг удачного растения: у каждой свой цвет, радиус и фаза. */
+const SPARKS = [
+  { color: '#f4b942', radius: 0.3, y: 0.3, size: 0.13, speed: 1.5, phase: 0 },
+  { color: '#ff8b5e', radius: 0.26, y: 0.5, size: 0.1, speed: -1.9, phase: 1.3 },
+  { color: '#6db3f2', radius: 0.32, y: 0.18, size: 0.095, speed: 1.2, phase: 2.6 },
+  { color: '#9fc25f', radius: 0.24, y: 0.62, size: 0.11, speed: -1.4, phase: 4.0 },
+  { color: '#f995aa', radius: 0.29, y: 0.4, size: 0.085, speed: 1.7, phase: 5.2 },
+]
+
+/**
+ * Хоровод разноцветных звёздочек над удачным растением — тем, что даст 2
+ * единицы. Кружат по орбитам, покачиваются по высоте и вращаются вокруг себя.
+ */
+function LuckyStars() {
+  const refs = useRef<(THREE.Mesh | null)[]>([])
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
+    SPARKS.forEach((s, i) => {
+      const m = refs.current[i]
+      if (!m) return
+      const a = t * s.speed + s.phase
+      m.position.set(
+        Math.cos(a) * s.radius,
+        s.y + Math.sin(t * 2 + s.phase) * 0.05,
+        Math.sin(a) * s.radius,
+      )
+      // Звезда плоская: разворачиваем её лицом к камере, иначе с ребра пропадает.
+      m.quaternion.copy(state.camera.quaternion)
+      m.rotateZ(a * 1.6)
+    })
+  })
+
+  return (
+    <group>
+      {SPARKS.map((s, i) => (
+        <mesh
+          key={i}
+          ref={(el) => (refs.current[i] = el)}
+          geometry={starGeometry}
+          scale={s.size}
+        >
+          <meshBasicMaterial color={s.color} transparent opacity={0.95} depthWrite={false} />
+        </mesh>
+      ))}
     </group>
   )
 }
@@ -72,6 +156,7 @@ export function Slot({
   const harvest = useGameStore((s) => s.harvest)
 
   const [hover, setHover] = useState(false)
+  const [splash, setSplash] = useState(false) // капля живёт отдельно от watered
   const growRef = useRef<THREE.Group>(null)
 
   const target = slot.crop ? STAGE_SCALE[slot.stage] : 0
@@ -84,20 +169,30 @@ export function Slot({
     g.scale.setScalar(THREE.MathUtils.damp(g.scale.x, target, 10, dt))
   })
 
+  // Капля всплывает в момент полива (false → true) и уходит через секунду.
+  useEffect(() => {
+    if (!slot.watered) return
+    setSplash(true)
+    const t = setTimeout(() => setSplash(false), DROP_MS)
+    return () => clearTimeout(t)
+  }, [slot.watered])
+
   const growing = !!slot.crop && slot.stage < 2
   const ripe = !!slot.crop && slot.stage === 2
 
   // Что произойдёт по клику этим инструментом — от этого же зависит курсор.
-  const actionable = tool === 'can' ? growing : !slot.crop || ripe
+  const actionable =
+    tool === 'can' ? growing : tool === 'hand' ? ripe : !slot.crop
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
     if (tool === 'can') {
       if (growing) water(slotId)
-      return
+    } else if (tool === 'hand') {
+      if (ripe) harvest(slotId)
+    } else if (!slot.crop) {
+      plant(slotId)
     }
-    if (!slot.crop) plant(slotId)
-    else if (ripe) harvest(slotId)
   }
   const onOver = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
@@ -118,17 +213,20 @@ export function Slot({
         </mesh>
       )}
 
+      {ripe && slot.lucky && <LuckyStars />}
+
       {slot.crop && (
         <group ref={growRef}>
           <CropModel crop={slot.crop} palette={palette} />
         </group>
       )}
 
-      {slot.watered && <Droplet />}
+      {ripe && slot.crop && <SpeechBubble crop={slot.crop} lucky={slot.lucky} />}
+      {splash && <Droplet />}
 
       {/* невидимый хитбокс над слотом — рейкаст по нему, не по геометрии растения */}
-      <mesh position={[0, 0.25, 0]} onClick={onClick} onPointerOver={onOver} onPointerOut={onOut}>
-        <boxGeometry args={[0.4, 0.6, 0.4]} />
+      <mesh position={[0, 0.3, 0]} onClick={onClick} onPointerOver={onOver} onPointerOut={onOut}>
+        <boxGeometry args={[0.44, 0.7, 0.44]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
@@ -136,7 +234,7 @@ export function Slot({
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
           <ringGeometry args={[0.16, 0.22, 24]} />
           <meshBasicMaterial
-            color={actionable ? '#f4b942' : '#8a8378'}
+            color={actionable ? GOLD : '#8a8378'}
             transparent
             opacity={0.85}
             depthWrite={false}
