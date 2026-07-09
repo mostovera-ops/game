@@ -35,9 +35,9 @@ const num3 = (v: string | null, fallback: [number, number, number]): [number, nu
   const p = v?.split(',').map(Number)
   return p && p.length === 3 && p.every((n) => !Number.isNaN(n)) ? [p[0], p[1], p[2]] : fallback
 }
-const CAM_POS = num3(params.get('cam'), [9, 7, 11])
-const CAM_TARGET = num3(params.get('tgt'), [0.5, 0.6, -1.8])
-const CAM_ZOOM = params.get('zoom') ? Number(params.get('zoom')) : 90
+const CAM_POS = num3(params.get('cam'), [8, 13, 7])
+const CAM_TARGET = num3(params.get('tgt'), [4, 0.3, -0.6])
+const CAM_ZOOM = params.get('zoom') ? Number(params.get('zoom')) : 100
 
 export default function App() {
   return (
