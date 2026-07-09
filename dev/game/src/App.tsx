@@ -46,7 +46,7 @@ function CameraProbe() {
 }
 
 // Панель кадрирования (?frame): показывает параметры камеры и даёт их скопировать.
-function FramePanel() {
+function FramePanel({ scene }: { scene: 'farm' | 'truck' }) {
   const [state, setState] = useState<CamState | null>(null)
   useEffect(() => {
     let raf = 0
@@ -63,9 +63,13 @@ function FramePanel() {
   const url = `?cam=${state.pos.map(f).join(',')}&tgt=${state.target.map(f).join(',')}&zoom=${Math.round(
     state.zoom,
   )}`
+  const other = scene === 'farm' ? '?frame=truck' : '?frame'
   return (
     <div className="pointer-events-auto absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/80 px-4 py-3 text-center font-mono text-xs text-white">
-      <div className="opacity-80">перетаскивай — поворот · колесо — зум · правой кнопкой — сдвиг</div>
+      <div className="text-sm font-bold text-[#f4b942]">
+        Кадрирую: {scene === 'farm' ? '🌱 ферма (дни 1–6)' : '🚚 фудтрек (день 7)'}
+      </div>
+      <div className="mt-1 opacity-80">перетаскивай — поворот · колесо — зум · правой кнопкой — сдвиг</div>
       <div className="mt-2 text-sm">
         cam=[{state.pos.map(f).join(', ')}] · tgt=[{state.target.map(f).join(', ')}] · zoom=
         {Math.round(state.zoom)}
@@ -76,6 +80,7 @@ function FramePanel() {
       >
         Копировать параметры камеры
       </button>
+      <div className="mt-2 opacity-70">вторая сцена — открой {other}</div>
     </div>
   )
 }
@@ -83,34 +88,49 @@ function FramePanel() {
 const params =
   typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
 const SHOW_PERF = params.has('perf')
-const FRAME = params.has('frame')
+// ?frame — кадрируем ферму, ?frame=truck — кадрируем фудтрек, иначе игра.
+const FRAME_SCENE: 'farm' | 'truck' | null = params.has('frame')
+  ? params.get('frame') === 'truck'
+    ? 'truck'
+    : 'farm'
+  : null
 
-// Дефолтный кадр фермы. Переопределяется из URL:
-//   ?cam=x,y,z&tgt=x,y,z&zoom=N — чтобы искать ракурс без пересборки.
 const num3 = (v: string | null, fallback: [number, number, number]): [number, number, number] => {
   const p = v?.split(',').map(Number)
   return p && p.length === 3 && p.every((n) => !Number.isNaN(n)) ? [p[0], p[1], p[2]] : fallback
 }
-const CAM_POS = num3(params.get('cam'), [10.7, 6.7, 12.8])
-const CAM_TARGET = num3(params.get('tgt'), [2.2, 0.3, 0])
-const CAM_ZOOM = params.get('zoom') ? Number(params.get('zoom')) : 78
+
+// Две сцены — два ракурса. ?cam/tgt/zoom переопределяют текущий кадрируемый.
+const FARM_CAM = {
+  pos: num3(params.get('cam'), [10.7, 6.7, 12.8]),
+  target: num3(params.get('tgt'), [2.2, 0.3, 0]),
+  zoom: params.get('zoom') ? Number(params.get('zoom')) : 78,
+}
+const TRUCK_CAM = {
+  pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [6.84, 4.5, 0.61]),
+  target: num3(FRAME_SCENE === 'truck' ? params.get('tgt') : null, [1.84, 0.9, -5.89]),
+  zoom: FRAME_SCENE === 'truck' && params.get('zoom') ? Number(params.get('zoom')) : 95,
+}
+
+// Начальный кадр: в режиме кадрирования — под выбранную сцену; иначе ферма.
+const START = FRAME_SCENE === 'truck' ? TRUCK_CAM : FARM_CAM
 
 export default function App() {
   return (
     <div className="relative h-full w-full">
       <Canvas flat shadows dpr={[1, 2]}>
         <color attach="background" args={['#cfe1ee']} />
-        <OrthographicCamera makeDefault position={CAM_POS} zoom={CAM_ZOOM} near={0.1} far={200} />
+        <OrthographicCamera makeDefault position={START.pos} zoom={START.zoom} near={0.1} far={200} />
         {SHOW_PERF && <Perf position="top-left" />}
         <Suspense fallback={null}>
-          <Farm farmCam={{ pos: CAM_POS, target: CAM_TARGET, zoom: CAM_ZOOM }} />
+          <Farm farmCam={FARM_CAM} truckCam={TRUCK_CAM} rig={FRAME_SCENE === null} />
           <RenderStats />
         </Suspense>
-        <OrbitControls makeDefault target={CAM_TARGET} minZoom={20} maxZoom={300} />
-        {FRAME && <CameraProbe />}
+        <OrbitControls makeDefault target={START.target} minZoom={20} maxZoom={300} />
+        {FRAME_SCENE && <CameraProbe />}
       </Canvas>
-      {!FRAME && <HUD />}
-      {FRAME && <FramePanel />}
+      {!FRAME_SCENE && <HUD />}
+      {FRAME_SCENE && <FramePanel scene={FRAME_SCENE} />}
     </div>
   )
 }

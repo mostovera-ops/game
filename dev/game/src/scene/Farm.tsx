@@ -70,27 +70,19 @@ function TruckTick() {
 
 type OrbitLike = { enabled: boolean; target: THREE.Vector3; update: () => void }
 
+const toView = (v: CamView) => ({
+  pos: new THREE.Vector3(...v.pos),
+  target: new THREE.Vector3(...v.target),
+  zoom: v.zoom,
+})
+
 /** На дне 7 плавно переводит камеру на фудтрек; обратно — на ферму. */
-function CameraRig({ truckPos, farm }: { truckPos: Vec3; farm: CamView }) {
+function CameraRig({ farm, truck }: { farm: CamView; truck: CamView }) {
   const phase = useGameStore((s) => s.phase)
   const camera = useThree((s) => s.camera) as THREE.OrthographicCamera
   const controls = useThree((s) => s.controls) as OrbitLike | null
 
-  const views = useMemo(() => {
-    const tp = new THREE.Vector3(...truckPos)
-    return {
-      truck: {
-        pos: tp.clone().add(new THREE.Vector3(5, 4.5, 6.5)),
-        target: tp.clone().add(new THREE.Vector3(0, 0.9, 0)),
-        zoom: 95,
-      },
-      farm: {
-        pos: new THREE.Vector3(...farm.pos),
-        target: new THREE.Vector3(...farm.target),
-        zoom: farm.zoom,
-      },
-    }
-  }, [truckPos, farm])
+  const views = useMemo(() => ({ farm: toView(farm), truck: toView(truck) }), [farm, truck])
 
   const anim = useRef<{
     t: number
@@ -202,7 +194,15 @@ function Ground({ size, color }: { size: number; color: string }) {
   )
 }
 
-export function Farm({ farmCam }: { farmCam: CamView }) {
+export function Farm({
+  farmCam,
+  truckCam,
+  rig = true,
+}: {
+  farmCam: CamView
+  truckCam: CamView
+  rig?: boolean
+}) {
   const layout = useJSON<SceneLayout>('/assets/scene-layout.json')
   const palette = useJSON<Palette>('/assets/palette.json')
 
@@ -211,8 +211,6 @@ export function Farm({ farmCam }: { farmCam: CamView }) {
     for (const p of layout.props) (map[p.asset] ??= []).push(p)
     return map
   }, [layout])
-
-  const truckPos: Vec3 = byAsset.food_truck?.[0]?.position ?? [0, 0, 0]
 
   // slotId (`${bed}:${slot}`) → мировая позиция из plots[].
   const slotPositions = useMemo(() => {
@@ -281,7 +279,7 @@ export function Farm({ farmCam }: { farmCam: CamView }) {
       ))}
       <SwayClock />
       <TruckTick />
-      <CameraRig truckPos={truckPos} farm={farmCam} />
+      {rig && <CameraRig farm={farmCam} truck={truckCam} />}
     </>
   )
 }
