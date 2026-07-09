@@ -15,7 +15,10 @@ export type RecipeId = 'salad' | 'soup' | 'taco'
 export type Phase = 'farm' | 'truck'
 export type Stage = 0 | 1 | 2
 
-/** slotId = `${bedIndex}:${slotIndex}` — 3 грядки × 4 слота = 12 слотов. */
+/** Чем игрок действует по слоту: сажает семя или поливает из лейки. */
+export type Tool = 'seed' | 'can'
+
+/** slotId = `${bedIndex}:${slotIndex}` — 3 грядки × 3 слота = 9 слотов. */
 export type SlotId = string
 
 export interface Slot {
@@ -28,9 +31,9 @@ export interface Slot {
 export type Inventory = Record<CropId, number>
 
 export const BEDS = 3
-export const SLOTS_PER_BED = 4
+export const SLOTS_PER_BED = 3
 
-/** Все 12 идентификаторов слотов в порядке грядка→слот. */
+/** Все 9 идентификаторов слотов в порядке грядка→слот. */
 export const SLOT_IDS: SlotId[] = Array.from({ length: BEDS }, (_, bed) =>
   Array.from({ length: SLOTS_PER_BED }, (_, slot) => `${bed}:${slot}`),
 ).flat()
@@ -102,11 +105,15 @@ interface GameData {
   slots: Slot[]
   inventory: Inventory
   selectedSeed: CropId
+  tool: Tool
   truck: TruckState | null
 }
 
 interface GameActions {
+  /** Выбрать семя — заодно берёт в руки семена, а не лейку. */
   selectSeed: (seed: CropId) => void
+  /** Переключить инструмент (семена ↔ лейка). */
+  selectTool: (tool: Tool) => void
   /** Посадить выбранное семя в пустой слот. */
   plant: (slotId: SlotId) => void
   /** Полить растущий слот (stage < 2). */
@@ -137,6 +144,7 @@ function initialData(): GameData {
     slots: emptySlots(),
     inventory: emptyInventory(),
     selectedSeed: 'carrot',
+    tool: 'seed',
     truck: null,
   }
 }
@@ -165,7 +173,9 @@ export const useGameStore = create<GameState>()(
     (set, get) => ({
       ...initialData(),
 
-      selectSeed: (seed) => set({ selectedSeed: seed }),
+      selectSeed: (seed) => set({ selectedSeed: seed, tool: 'seed' }),
+
+      selectTool: (tool) => set({ tool }),
 
       plant: (slotId) =>
         set((s) => ({
@@ -292,6 +302,15 @@ export const useGameStore = create<GameState>()(
     {
       name: 'farm-truck',
       storage,
+      // v1: грядка стала 3-слотовой, появился инструмент. Сохранения v0 держат
+      // 12 слотов — их id (`bed:3`) больше не существуют, поэтому грядки
+      // сбрасываем; деньги, инвентарь и день игрока остаются.
+      version: 1,
+      migrate: (persisted, from) => {
+        const s = persisted as Partial<GameData>
+        if (from >= 1) return s as GameData
+        return { ...s, slots: emptySlots(), tool: 'seed' } as GameData
+      },
       // Персистим только данные, не экшены.
       partialize: (s): GameData => ({
         day: s.day,
@@ -300,6 +319,7 @@ export const useGameStore = create<GameState>()(
         slots: s.slots,
         inventory: s.inventory,
         selectedSeed: s.selectedSeed,
+        tool: s.tool,
         truck: s.truck,
       }),
     },

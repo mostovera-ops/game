@@ -58,7 +58,9 @@ function WeekBar() {
 function FarmControls() {
   const inventory = useGameStore((s) => s.inventory)
   const selectedSeed = useGameStore((s) => s.selectedSeed)
+  const tool = useGameStore((s) => s.tool)
   const selectSeed = useGameStore((s) => s.selectSeed)
+  const selectTool = useGameStore((s) => s.selectTool)
   const endDay = useGameStore((s) => s.endDay)
 
   return (
@@ -70,13 +72,28 @@ function FarmControls() {
             onClick={() => selectSeed(c)}
             title={CROP_NAME[c]}
             className={`flex flex-col items-center rounded-md px-3 py-1.5 text-2xl transition ${
-              selectedSeed === c ? 'bg-[#9fc25f]' : 'bg-white/5 hover:bg-white/10'
+              tool === 'seed' && selectedSeed === c
+                ? 'bg-[#9fc25f]'
+                : 'bg-white/5 hover:bg-white/10'
             }`}
           >
             <span>{CROP_EMOJI[c]}</span>
             <span className="text-[10px] opacity-70">{i + 1}</span>
           </button>
         ))}
+
+        <div className="mx-1 h-10 w-px bg-white/15" />
+
+        <button
+          onClick={() => selectTool('can')}
+          title="Лейка — полить росток"
+          className={`flex flex-col items-center rounded-md px-3 py-1.5 text-2xl transition ${
+            tool === 'can' ? 'bg-[#6db3f2]' : 'bg-white/5 hover:bg-white/10'
+          }`}
+        >
+          <span>💧</span>
+          <span className="text-[10px] opacity-70">4</span>
+        </button>
       </div>
 
       <div className={`${panel} flex items-center gap-3 px-4 py-3`}>
@@ -185,10 +202,15 @@ function WeekSummary() {
 export function HUD() {
   const phase = useGameStore((s) => s.phase)
   const selectSeed = useGameStore((s) => s.selectSeed)
+  const selectTool = useGameStore((s) => s.selectTool)
   const serveCustomer = useGameStore((s) => s.serveCustomer)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === '4') {
+        if (phase === 'farm') selectTool('can') // лейка есть только на ферме
+        return
+      }
       const idx = { '1': 0, '2': 1, '3': 2 }[e.key]
       if (idx === undefined) return
       if (phase === 'farm') selectSeed(CROPS[idx])
@@ -196,7 +218,7 @@ export function HUD() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, selectSeed, serveCustomer])
+  }, [phase, selectSeed, selectTool, serveCustomer])
 
   return (
     <div className="pointer-events-none absolute inset-0 flex select-none flex-col justify-between p-4 font-mono text-[#f0e4c9]">

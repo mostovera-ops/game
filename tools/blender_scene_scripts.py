@@ -651,7 +651,16 @@ path = join_objects(bricks, name="BrickPath")
 sit_on_ground(path)
 
 # --- Грядки (исправленный масштаб) ---
-def add_raised_bed(x, y, w=1.6, d=0.6, h=0.28):
+# Почву поднимаем чуть выше рамки: если её верх совпадает с верхом дерева
+# (обе грани на z = h), глубинный буфер не может выбрать ближнюю — верх грядки
+# мерцает при движении камеры. SOIL_LIFT разводит грани, дерево остаётся
+# бортиком по периметру.
+SOIL_LIFT = 0.015
+BED_H = 0.28
+SOIL_TOP_Z = BED_H + SOIL_LIFT  # на этой Z сидят растения (см. 08_export.py)
+
+
+def add_raised_bed(x, y, w=1.6, d=0.6, h=BED_H):
     bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, h/2))
     frame = bpy.context.active_object
     frame.scale = (w, d, h)
@@ -659,9 +668,11 @@ def add_raised_bed(x, y, w=1.6, d=0.6, h=0.28):
     frame.data.materials.append(mat_bed_wood)
     shade_flat(frame)
 
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, h*0.75))
+    soil_h = h*0.5                      # полная высота плиты почвы
+    soil_z = h + SOIL_LIFT - soil_h/2   # центр так, чтобы верх был на SOIL_TOP_Z
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, soil_z))
     soil = bpy.context.active_object
-    soil.scale = (w*0.92, d*0.85, h*0.5)
+    soil.scale = (w*0.92, d*0.85, soil_h)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     soil.data.materials.append(mat_soil)
     shade_flat(soil)

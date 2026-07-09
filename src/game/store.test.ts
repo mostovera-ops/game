@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { RECIPES, SLOT_IDS, useGameStore } from './store'
+import { BEDS, RECIPES, SLOTS_PER_BED, SLOT_IDS, bedOf, useGameStore } from './store'
 
 const S = () => useGameStore.getState()
 const slot = (id: string) => S().slots.find((x) => x.id === id)!
@@ -47,6 +47,53 @@ describe('farm cycle', () => {
     S().endDay() // день 6 → 7
     expect(S().day).toBe(7)
     expect(S().phase).toBe('truck')
+  })
+})
+
+describe('грядка: 3 слота', () => {
+  it('в грядке ровно 3 слота, всего 9', () => {
+    expect(SLOTS_PER_BED).toBe(3)
+    expect(SLOT_IDS.length).toBe(BEDS * 3)
+    for (let bed = 0; bed < BEDS; bed++) {
+      expect(SLOT_IDS.filter((id) => bedOf(id) === bed).length).toBe(3)
+    }
+  })
+
+  it('четвёртого слота не существует', () => {
+    expect(SLOT_IDS).not.toContain('0:3')
+    expect(S().slots.find((x) => x.id === '0:3')).toBeUndefined()
+  })
+})
+
+describe('инструменты', () => {
+  it('по умолчанию в руках семена', () => {
+    expect(S().tool).toBe('seed')
+  })
+
+  it('выбор семени возвращает семена в руки', () => {
+    S().selectTool('can')
+    expect(S().tool).toBe('can')
+    S().selectSeed('tomato')
+    expect(S().tool).toBe('seed')
+    expect(S().selectedSeed).toBe('tomato')
+  })
+
+  it('water красит слот только пока растение растёт', () => {
+    const id = SLOT_IDS[0]
+    S().water(id) // пустой слот
+    expect(slot(id).watered).toBe(false)
+
+    S().plant(id)
+    S().water(id)
+    expect(slot(id).watered).toBe(true)
+
+    S().endDay()
+    S().water(id)
+    S().endDay() // stage 2 — созрело
+    expect(slot(id).stage).toBe(2)
+
+    S().water(id) // созревшее не поливается
+    expect(slot(id).watered).toBe(false)
   })
 })
 
