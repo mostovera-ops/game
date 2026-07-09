@@ -1,0 +1,425 @@
+<title>Ферма → Фудтрак — статус сборки</title>
+<style>
+  :root {
+    /* neutrals biased toward the game's soil/parchment world */
+    --bg: #1b1522;
+    --bg-2: #17111d;
+    --panel: #241c2e;
+    --panel-2: #2b2235;
+    --line: rgba(240, 228, 201, 0.11);
+    --line-strong: rgba(240, 228, 201, 0.2);
+    --ink: #f0e4c9;
+    --muted: #a99d84;
+    --faint: #786f5f;
+    --accent: #f4b942;   /* mustard — the single accent */
+    --accent-ink: #241a10;
+    /* semantic status (distinct from accent) */
+    --done: #9fc25f;
+    --wip: #e8862f;
+    --blocked: #ff8b5e;
+    --todo: #6b6478;
+
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, "Courier New", monospace;
+
+    --radius: 12px;
+    --maxw: 1040px;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #efe6d3;
+      --bg-2: #e7ddc7;
+      --panel: #f8f2e5;
+      --panel-2: #fcf7ec;
+      --line: rgba(59, 42, 32, 0.14);
+      --line-strong: rgba(59, 42, 32, 0.26);
+      --ink: #34281d;
+      --muted: #6e6152;
+      --faint: #9a8d78;
+      --accent: #b8830f;
+      --accent-ink: #fff8e6;
+      --done: #5f7f2f;
+      --wip: #bf6a1c;
+      --blocked: #cf5027;
+      --todo: #9a8f7c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1522; --bg-2: #17111d; --panel: #241c2e; --panel-2: #2b2235;
+    --line: rgba(240,228,201,0.11); --line-strong: rgba(240,228,201,0.2);
+    --ink: #f0e4c9; --muted: #a99d84; --faint: #786f5f;
+    --accent: #f4b942; --accent-ink: #241a10;
+    --done: #9fc25f; --wip: #e8862f; --blocked: #ff8b5e; --todo: #6b6478;
+  }
+  :root[data-theme="light"] {
+    --bg: #efe6d3; --bg-2: #e7ddc7; --panel: #f8f2e5; --panel-2: #fcf7ec;
+    --line: rgba(59,42,32,0.14); --line-strong: rgba(59,42,32,0.26);
+    --ink: #34281d; --muted: #6e6152; --faint: #9a8d78;
+    --accent: #b8830f; --accent-ink: #fff8e6;
+    --done: #5f7f2f; --wip: #bf6a1c; --blocked: #cf5027; --todo: #9a8f7c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 500px at 80% -10%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+      linear-gradient(var(--bg), var(--bg-2));
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 40px 22px 80px; }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  h1 {
+    font-size: clamp(30px, 5.5vw, 52px);
+    line-height: 1.02;
+    margin: 14px 0 8px;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    font-weight: 800;
+  }
+  h1 .arrow { color: var(--accent); font-weight: 500; }
+  .lede { color: var(--muted); max-width: 60ch; font-size: 16px; margin: 0; }
+
+  /* header status strip */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 28px;
+  }
+  .strip .cell { background: var(--panel); padding: 16px 18px; }
+  .strip .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .strip .v { font-size: 26px; font-weight: 750; margin-top: 4px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 8px; }
+  .strip .v small { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .ok { color: var(--done); }
+  .warn { color: var(--blocked); }
+
+  section { margin-top: 46px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  .sec-head h2 { font-size: 13px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.16em; margin: 0; color: var(--muted); font-weight: 600; }
+  .sec-head .rule { flex: 1; height: 1px; background: var(--line); }
+
+  /* roadmap stepper — the game's week-dial pips, repurposed as dev roadmap */
+  .roadmap { display: flex; gap: 10px; flex-wrap: wrap; }
+  .stage {
+    flex: 1 1 170px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stage::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--st, var(--todo));
+  }
+  .stage .num {
+    font-family: var(--mono); font-size: 12px; color: var(--faint);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .pip { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; background: color-mix(in srgb, var(--st) 22%, transparent); color: var(--st); border: 1.5px solid var(--st); }
+  .stage h3 { margin: 12px 0 6px; font-size: 16px; font-weight: 700; }
+  .stage p { margin: 0; font-size: 13px; color: var(--muted); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+    background: color-mix(in srgb, var(--st) 15%, transparent);
+    color: var(--st); border: 1px solid color-mix(in srgb, var(--st) 45%, transparent);
+    margin-top: 12px;
+  }
+  .st-done { --st: var(--done); }
+  .st-wip { --st: var(--wip); }
+  .st-blocked { --st: var(--blocked); }
+  .st-todo { --st: var(--todo); }
+
+  /* generic panels grid */
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  .grid.thirds { grid-template-columns: 1.2fr 1fr; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+  .card h3 { margin: 0 0 14px; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+  .card h3 .tag { font-family: var(--mono); font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-left: auto; }
+
+  ul.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+  ul.checks li { display: flex; gap: 10px; font-size: 14px; align-items: flex-start; }
+  ul.checks li .mk { flex: none; width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 800; margin-top: 1px; }
+  .mk.d { background: color-mix(in srgb, var(--done) 20%, transparent); color: var(--done); }
+  .mk.b { background: color-mix(in srgb, var(--blocked) 20%, transparent); color: var(--blocked); }
+  ul.checks li code { font-family: var(--mono); font-size: 12.5px; color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 1px 5px; border-radius: 4px; }
+  ul.checks li .sub { color: var(--muted); }
+
+  pre {
+    margin: 12px 0 0; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink); line-height: 1.5;
+  }
+  pre .pr { color: var(--accent); }
+  pre .cm { color: var(--faint); }
+
+  /* architecture boundary */
+  .arch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .mod { border: 1px solid var(--line); border-radius: 10px; padding: 13px 13px 15px; background: var(--panel-2); }
+  .mod .name { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+  .mod .desc { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .mod.hard { border-color: color-mix(in srgb, var(--done) 45%, var(--line)); }
+  .mod .flag { display: inline-block; margin-top: 9px; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--done); border: 1px solid color-mix(in srgb, var(--done) 40%, transparent); padding: 2px 6px; border-radius: 999px; }
+
+  /* tests */
+  .test { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .test:first-of-type { border-top: none; }
+  .test .pass { color: var(--done); font-family: var(--mono); font-weight: 700; flex: none; }
+
+  /* data model */
+  .beds { display: flex; flex-direction: column; gap: 8px; }
+  .bed { display: flex; align-items: center; gap: 8px; }
+  .bed .lbl { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 58px; flex: none; }
+  .slot { flex: 1; height: 26px; border-radius: 6px; background: color-mix(in srgb, #3b2a20 40%, var(--panel-2)); border: 1px solid var(--line); display: grid; place-items: center; font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  :root[data-theme="light"] .slot, :root:not([data-theme]) .slot { background: color-mix(in srgb, #c8b28f 40%, var(--panel-2)); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme]) .slot { background: color-mix(in srgb, #c8b28f 40%, var(--panel-2)); } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 4px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
+  td .price { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; }
+  .crop { display: inline-flex; align-items: center; gap: 5px; }
+  .seed { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  /* stack chips */
+  .stack { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stack span { font-family: var(--mono); font-size: 12px; padding: 5px 10px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink); background: var(--panel-2); }
+  .stack span b { color: var(--accent); font-weight: 700; }
+
+  /* commit log */
+  .log { display: flex; flex-direction: column; }
+  .commit { display: flex; gap: 14px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--line); }
+  .commit:first-child { border-top: none; }
+  .commit .hash { font-family: var(--mono); font-size: 12.5px; color: var(--accent); flex: none; }
+  .commit .msg { font-size: 13.5px; }
+  .commit .msg .t { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-right: 8px; }
+
+  .sprout { display: inline-block; transform-origin: bottom center; }
+  @media (prefers-reduced-motion: no-preference) {
+    .sprout { animation: sway 3.4s ease-in-out infinite; }
+    .sprout:nth-child(2) { animation-delay: -1.1s; }
+    .sprout:nth-child(3) { animation-delay: -2.2s; }
+  }
+  @keyframes sway { 0%,100% { transform: rotate(-5deg); } 50% { transform: rotate(6deg); } }
+
+  footer { margin-top: 54px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12.5px; font-family: var(--mono); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  @media (max-width: 720px) {
+    .strip { grid-template-columns: repeat(2, 1fr); }
+    .grid, .grid.thirds { grid-template-columns: 1fr; }
+    .arch { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow"><span class="dot"></span> Сборка · mostovera-ops/game · ветка main · 09.07.2026</div>
+    <h1>Ферма <span class="arrow">→</span> Фудтрак</h1>
+    <p class="lede">Браузерная 3D-игра: 6 дней растишь урожай, на 7-й продаёшь блюда из фудтрака. Ассеты собраны из Blender-скриптов headless-режимом прямо на сервере — ручной прогон Blender не нужен.</p>
+
+    <div class="strip">
+      <div class="cell">
+        <div class="k">Ассеты</div>
+        <div class="v ok">13 <small>GLB ✓</small></div>
+      </div>
+      <div class="cell">
+        <div class="k">Сцена, тр-ки</div>
+        <div class="v">5 620 <small>&lt; 50k</small></div>
+      </div>
+      <div class="cell">
+        <div class="k">pnpm build</div>
+        <div class="v ok">✓ <small>strict</small></div>
+      </div>
+      <div class="cell">
+        <div class="k">pnpm test</div>
+        <div class="v ok">7/7 <small>vitest</small></div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>Роадмап</h2><div class="rule"></div></div>
+    <div class="roadmap">
+      <div class="stage st-done">
+        <div class="num">0 <span class="pip">✓</span></div>
+        <h3>Экспортёр</h3>
+        <p>Сцена собрана из скриптов 01–07 и выгружена в 13 GLB + JSON. Проверено.</p>
+        <span class="chip">Готово</span>
+      </div>
+      <div class="stage st-wip">
+        <div class="num">1 <span class="pip">◐</span></div>
+        <h3>Сцена</h3>
+        <p>Стек поднят, build+test зелёные. Рендер фермы — после ассетов.</p>
+        <span class="chip">Каркас готов</span>
+      </div>
+      <div class="stage st-wip">
+        <div class="num">2 <span class="pip">◐</span></div>
+        <h3>Цикл фермы</h3>
+        <p>Store + правила + тесты готовы. Слоты, клик, HUD — ждут сцены.</p>
+        <span class="chip">Логика готова</span>
+      </div>
+      <div class="stage st-todo">
+        <div class="num">3 <span class="pip">○</span></div>
+        <h3>Фудтрак</h3>
+        <p>День 7: очередь, готовка, продажа.</p>
+        <span class="chip">Впереди</span>
+      </div>
+      <div class="stage st-todo">
+        <div class="num">4 <span class="pip">○</span></div>
+        <h3>Ярмарка</h3>
+        <p>Покупка ингредиентов у соседей.</p>
+        <span class="chip">Впереди</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Что уже в репозитории</h2><div class="rule"></div></div>
+    <div class="grid thirds">
+      <div class="card">
+        <h3>Сделано <span class="tag">green</span></h3>
+        <ul class="checks">
+          <li><span class="mk d">✓</span><div><b>Task 0 — ассеты собраны и в репо</b> — 13 GLB (Y-up, без анимаций), <code>scene-layout.json</code>, <code>palette.json</code>. Сцена построена из скриптов 01–07 и выгружена экспортёром, всё headless через <code>bpy</code>. <span class="sub">Origin растений в основании — фикс парящего tomato_bush. Итого 5 620 треугольников.</span></div></li>
+          <li><span class="mk d">✓</span><div><b>Каркас проекта Task 1</b> — Vite + React + TS(strict) + r3f + drei + zustand + Tailwind + vitest. <span class="sub">Собирается и тестируется.</span></div></li>
+          <li><span class="mk d">✓</span><div><b>Игровой store Task 2</b> — <code>src/game/store.ts</code>: чистые переходы plant / water / harvest / endDay / serve, persist в localStorage, ноль импортов three/react. <span class="sub">7 тестов, включая три обязательных сценария.</span></div></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Как собрались ассеты <span class="tag ok" style="color:var(--done)">headless</span></h3>
+        <ul class="checks">
+          <li><span class="mk d">✓</span><div>Blender поставлен как PyPI-модуль <code>bpy 5.0.1</code> — без GUI, прямо на сервере.</div></li>
+          <li><span class="mk d">✓</span><div>Скрипты <b>01→07</b> построили сцену, экспортёр <b>08</b> выгрузил её в <code>public/assets/</code>.</div></li>
+        </ul>
+        <pre><span class="cm"># повторить сборку ассетов одной командой</span>
+python tools/_build_and_export.py</pre>
+        <ul class="checks" style="margin-top:12px;">
+          <li><span class="mk d">✓</span><div>Проверено: у всех 13 пропсов origin в основании (min-Y ≈ 0), <code>tomato_bush</code> больше не висит.</div></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Граница модулей</h2><div class="rule"></div></div>
+    <div class="arch">
+      <div class="mod hard">
+        <div class="name">game/</div>
+        <div class="desc">Состояние и правила. Тестируется без браузера.</div>
+        <span class="flag">0 импортов three</span>
+      </div>
+      <div class="mod">
+        <div class="name">scene/</div>
+        <div class="desc">three.js и r3f. Только рендер.</div>
+      </div>
+      <div class="mod">
+        <div class="name">ui/</div>
+        <div class="desc">HUD. Обычный DOM поверх канваса.</div>
+      </div>
+      <div class="mod">
+        <div class="name">assets/</div>
+        <div class="desc">Типы для json, обёртки над useGLTF.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section style="margin-top:46px;">
+      <div class="sec-head"><h2>Тесты · vitest</h2><div class="rule"></div></div>
+      <div class="card">
+        <h3><code style="font-family:var(--mono);font-size:13px;">src/game/store.test.ts</code> <span class="tag ok" style="color:var(--done)">7 passed</span></h3>
+        <div class="test"><span class="pass">✓</span><div>посадил → полил → endDay → полил → endDay → stage 2 → harvest → инвентарь +1</div></div>
+        <div class="test"><span class="pass">✓</span><div>посадил → endDay без полива → слот пуст</div></div>
+        <div class="test"><span class="pass">✓</span><div>endDay на дне 6 → phase === «truck»</div></div>
+        <div class="test"><span class="pass">✓</span><div>созревшее (stage 2) без полива не погибает</div></div>
+        <div class="test"><span class="pass">✓</span><div>нельзя посадить в занятый слот</div></div>
+        <div class="test"><span class="pass">✓</span><div>serve вычитает ингредиенты и добавляет деньги</div></div>
+        <div class="test"><span class="pass">✓</span><div>serve не проходит без ингредиентов</div></div>
+      </div>
+    </section>
+
+    <section style="margin-top:46px;">
+      <div class="sec-head"><h2>Модель фермы</h2><div class="rule"></div></div>
+      <div class="card">
+        <h3>12 слотов <span class="tag">3 грядки × 4</span></h3>
+        <div class="beds">
+          <div class="bed"><span class="lbl">bed 0</span><span class="slot">0:0</span><span class="slot">0:1</span><span class="slot">0:2</span><span class="slot">0:3</span></div>
+          <div class="bed"><span class="lbl">bed 1</span><span class="slot">1:0</span><span class="slot">1:1</span><span class="slot">1:2</span><span class="slot">1:3</span></div>
+          <div class="bed"><span class="lbl">bed 2</span><span class="slot">2:0</span><span class="slot">2:1</span><span class="slot">2:2</span><span class="slot">2:3</span></div>
+        </div>
+        <table>
+          <thead><tr><th>Рецепт</th><th>Нужно</th><th style="text-align:right;">Цена</th></tr></thead>
+          <tbody>
+            <tr><td>Салат</td><td><span class="crop"><span class="seed" style="background:#d1453a;"></span>томат</span> + <span class="crop"><span class="seed" style="background:#9fc25f;"></span>зелень</span></td><td style="text-align:right;"><span class="price">8</span></td></tr>
+            <tr><td>Морк. суп</td><td><span class="crop"><span class="seed" style="background:#e8862f;"></span>морковь ×2</span></td><td style="text-align:right;"><span class="price">6</span></td></tr>
+            <tr><td>Тако</td><td><span class="crop"><span class="seed" style="background:#e8862f;"></span></span><span class="crop"><span class="seed" style="background:#d1453a;"></span></span><span class="crop"><span class="seed" style="background:#9fc25f;"></span> три</span></td><td style="text-align:right;"><span class="price">14</span></td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;">Стадии роста: <span class="sprout">🌱</span> 0 посажено → <span class="sprout">🌿</span> 1 растёт → <span class="sprout">🥕</span> 2 созрело. Полил → +1 стадия назавтра; не полил и stage&nbsp;&lt;&nbsp;2 → погибает.</p>
+      </div>
+    </section>
+  </div>
+
+  <section>
+    <div class="sec-head"><h2>Стек</h2><div class="rule"></div></div>
+    <div class="stack">
+      <span>Vite <b>5</b></span>
+      <span>React <b>18</b></span>
+      <span>TypeScript <b>strict</b></span>
+      <span>@react-three/fiber <b>8</b></span>
+      <span>@react-three/drei</span>
+      <span>r3f-perf</span>
+      <span>zustand <b>5</b></span>
+      <span>Tailwind <b>4</b></span>
+      <span>vitest <b>2</b></span>
+      <span>Blender · bpy <b>Python</b></span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Журнал коммитов</h2><div class="rule"></div></div>
+    <div class="card log">
+      <div class="commit"><span class="hash">6e02b2e</span><span class="msg"><span class="t">Task 0</span>сгенерированы и закоммичены ассеты сцены (headless bpy)</span></div>
+      <div class="commit"><span class="hash">c6979d9</span><span class="msg"><span class="t">Task 0</span>08_export: надёжное определение корня проекта</span></div>
+      <div class="commit"><span class="hash">c0f113c</span><span class="msg"><span class="t">Task 2</span>store: headless-состояние и правила + покрытие vitest</span></div>
+      <div class="commit"><span class="hash">c493e73</span><span class="msg"><span class="t">Task 1</span>каркас Vite + React + TS + r3f + drei + zustand + Tailwind + vitest</span></div>
+      <div class="commit"><span class="hash">542f5e1</span><span class="msg"><span class="t">Task 0</span>tools/08_export.py — экспортёр Blender → public/assets</span></div>
+      <div class="commit"><span class="hash">144e221</span><span class="msg"><span class="t">context</span>CLAUDE.md, список задач, bpy-скрипты сцены, 2D-прототип</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>mostovera-ops/game · main</span>
+    <span>assets ✓ · build ✓ · tests 7/7 ✓ · next: рендер фермы (Task 1)</span>
+  </footer>
+</div>
