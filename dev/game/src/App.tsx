@@ -1,25 +1,32 @@
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { Suspense } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls, OrthographicCamera } from '@react-three/drei'
 import { Perf } from 'r3f-perf'
+import { Farm } from './scene/Farm'
 
-// Скаффолд стека (начало Task 1). Реальная <Farm /> из scene-layout.json
-// придёт, когда экспортёр сгенерирует public/assets/. Пока — дымовой тест
-// три/fiber/drei/r3f-perf: сцена собирается и рендерится.
+// Пишет число draw call'ов в window — чтобы снять метрику из скриншот-харнеса.
+function RenderStats() {
+  const gl = useThree((s) => s.gl)
+  useFrame(() => {
+    ;(window as unknown as { __render?: unknown }).__render = {
+      calls: gl.info.render.calls,
+      triangles: gl.info.render.triangles,
+    }
+  })
+  return null
+}
+
 export default function App() {
   return (
-    <Canvas shadows camera={{ position: [6, 6, 10], fov: 45 }}>
+    <Canvas flat shadows dpr={[1, 2]}>
+      <color attach="background" args={['#cfe1ee']} />
+      <OrthographicCamera makeDefault position={[9, 6, 12]} zoom={42} near={0.1} far={200} />
       <Perf position="top-left" />
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow />
-      <mesh castShadow position={[0, 0.5, 0]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial color="#9fc25f" />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[40, 40]} />
-        <meshLambertMaterial color="#5a8f33" />
-      </mesh>
-      <OrbitControls />
+      <Suspense fallback={null}>
+        <Farm />
+        <RenderStats />
+      </Suspense>
+      <OrbitControls makeDefault target={[-1, 0.5, 0]} />
     </Canvas>
   )
 }
