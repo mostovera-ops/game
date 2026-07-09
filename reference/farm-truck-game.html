@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ферма → Фудтрак</title>
+<style>
+  :root{
+    --dusk:#241a33;
+    --coral:#ff8b5e;
+    --leaf:#6b8f3f;
+    --leaf-light:#9fc25f;
+    --soil:#3b2a20;
+    --soil-light:#55402c;
+    --mustard:#f4b942;
+    --parchment:#f0e4c9;
+    --tomato:#d1453a;
+    --carrot:#e8862f;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;min-height:100vh;background:var(--soil);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Courier New',ui-monospace,monospace;color:var(--parchment);
+  }
+  #wrap{width:800px;max-width:100vw;padding:10px;}
+  #hud{
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--soil);border:3px solid var(--soil-light);border-bottom:none;
+    padding:8px 14px;border-radius:6px 6px 0 0;
+  }
+  #weekdial{display:flex;gap:6px;}
+  .pip{
+    width:22px;height:22px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;background:rgba(240,228,201,0.08);
+    filter:grayscale(1) opacity(0.4);transition:all .2s;
+  }
+  .pip.done{filter:none;opacity:1;background:var(--leaf);}
+  .pip.current{filter:none;opacity:1;background:var(--mustard);transform:scale(1.25);
+    box-shadow:0 0 0 3px rgba(244,185,66,0.35);}
+  .pip.truck.done{background:var(--coral);}
+  .pip.truck.current{background:var(--coral);}
+  #daylabel{font-weight:bold;letter-spacing:1px;text-transform:uppercase;font-size:13px;color:var(--parchment);}
+  #money{font-weight:bold;color:var(--mustard);font-size:15px;letter-spacing:1px;}
+  #stagewrap{position:relative;border:3px solid var(--soil-light);}
+  canvas{display:block;width:100%;height:auto;image-rendering:pixelated;background:var(--dusk);}
+  #toast{
+    position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    background:var(--soil);border:2px solid var(--mustard);color:var(--parchment);
+    padding:6px 14px;border-radius:4px;font-size:12px;letter-spacing:.5px;
+    opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;white-space:nowrap;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(4px);}
+  #hint{
+    position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+    font-size:11px;color:var(--parchment);opacity:.65;letter-spacing:.5px;
+    pointer-events:none;
+  }
+  #controls{
+    background:var(--soil);border:3px solid var(--soil-light);border-top:none;
+    border-radius:0 0 6px 6px;padding:10px 14px;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    min-height:56px;
+  }
+  .btnrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  button.pxbtn{
+    background:var(--mustard);color:var(--soil);border:2px solid var(--soil);
+    font-family:inherit;font-weight:bold;letter-spacing:.5px;font-size:12px;
+    padding:8px 12px;cursor:pointer;box-shadow:3px 3px 0 var(--soil-light);
+    transition:transform .05s;text-transform:uppercase;
+  }
+  button.pxbtn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--soil-light);}
+  button.pxbtn.seed{background:var(--parchment);font-size:16px;padding:6px 10px;}
+  button.pxbtn.seed.selected{background:var(--leaf-light);}
+  button.pxbtn.recipe{background:var(--coral);}
+  button.pxbtn.end{background:var(--leaf);color:var(--parchment);}
+  .chip{
+    background:rgba(240,228,201,0.1);border:1px solid var(--soil-light);
+    border-radius:4px;padding:4px 8px;font-size:13px;
+  }
+  #modal-overlay{
+    position:fixed;inset:0;background:rgba(36,26,51,0.85);
+    display:none;align-items:center;justify-content:center;z-index:10;
+  }
+  #modal-overlay.show{display:flex;}
+  #modal{
+    background:var(--soil);border:3px solid var(--mustard);border-radius:8px;
+    padding:26px 30px;max-width:360px;text-align:center;
+  }
+  #modal h2{margin:0 0 10px;color:var(--mustard);letter-spacing:1px;text-transform:uppercase;font-size:18px;}
+  #modal p{font-size:13px;line-height:1.6;margin:6px 0;}
+  #modal .big{font-size:26px;color:var(--coral);font-weight:bold;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div id="weekdial"></div>
+    <div id="daylabel">День 1</div>
+    <div id="money">💰 0</div>
+  </div>
+  <div id="stagewrap">
+    <canvas id="game" width="800" height="360"></canvas>
+    <div id="toast"></div>
+    <div id="hint"></div>
+  </div>
+  <div id="controls"></div>
+</div>
+
+<div id="modal-overlay">
+  <div id="modal"></div>
+</div>
+
+<script>
+/* ============== DATA ============== */
+const CROPS = {
+  carrot:{name:'Морковь', emoji:'🥕'},
+  greens:{name:'Зелень', emoji:'🥬'},
+  tomato:{name:'Томат', emoji:'🍅'},
+};
+const RECIPES = {
+  salad:{key:'salad', name:'Салат', emoji:'🥗', needs:{tomato:1, greens:1}, price:8},
+  soup:{key:'soup', name:'Морк. суп', emoji:'🍲', needs:{carrot:2}, price:6},
+  taco:{key:'taco', name:'Тако', emoji:'🌮', needs:{carrot:1, tomato:1, greens:1}, price:14},
+};
+const PLOT_POS = [
+  {x:180,y:130},{x:400,y:130},{x:620,y:130},
+  {x:180,y:270},{x:400,y:270},{x:620,y:270},
+];
+
+/* ============== STATE ============== */
+const state = {
+  day: 1, week: 1, money: 0,
+  selectedSeed: 'carrot',
+  inventory: {carrot:0, greens:0, tomato:0},
+  plots: PLOT_POS.map(p=>({x:p.x,y:p.y,crop:null,stage:0,watered:false})),
+  player: {x:400,y:200},
+  keys: {},
+  truck: null,
+};
+
+/* ============== DOM refs ============== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const weekdialEl = document.getElementById('weekdial');
+const daylabelEl = document.getElementById('daylabel');
+const moneyEl = document.getElementById('money');
+const controlsEl = document.getElementById('controls');
+const toastEl = document.getElementById('toast');
+const hintEl = document.getElementById('hint');
+const modalOverlay = document.getElementById('modal-overlay');
+const modalEl = document.getElementById('modal');
+
+/* ============== HUD ============== */
+function buildWeekDial(){
+  weekdialEl.innerHTML='';
+  for(let i=1;i<=7;i++){
+    const pip=document.createElement('div');
+    pip.className='pip'+(i===7?' truck':'');
+    pip.textContent = i===7 ? '🚚' : '🌱';
+    weekdialEl.appendChild(pip);
+  }
+}
+function updateHUD(){
+  const pips = weekdialEl.children;
+  for(let i=0;i<7;i++){
+    const dayNum=i+1;
+    pips[i].classList.remove('done','current');
+    if(dayNum<state.day) pips[i].classList.add('done');
+    else if(dayNum===state.day) pips[i].classList.add('current');
+  }
+  daylabelEl.textContent = state.day<=6 ? `День ${state.day} из 6 — Ферма` : `День 7 — Фудтрак!`;
+  moneyEl.textContent = `💰 ${state.money}`;
+  renderControls();
+}
+let toastTimer=null;
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1600);
+}
+
+/* ============== CONTROLS (bottom bar) ============== */
+function renderControls(){
+  controlsEl.innerHTML='';
+  if(state.day<=6){
+    const seedRow=document.createElement('div');
+    seedRow.className='btnrow';
+    const label=document.createElement('span');
+    label.className='chip';
+    label.textContent='Семя:';
+    seedRow.appendChild(label);
+    Object.keys(CROPS).forEach((key,idx)=>{
+      const b=document.createElement('button');
+      b.className='pxbtn seed'+(state.selectedSeed===key?' selected':'');
+      b.textContent=CROPS[key].emoji;
+      b.title=CROPS[key].name+' ('+(idx+1)+')';
+      b.onclick=()=>selectSeed(key);
+      seedRow.appendChild(b);
+    });
+    controlsEl.appendChild(seedRow);
+
+    const invRow=document.createElement('div');
+    invRow.className='btnrow';
+    Object.keys(CROPS).forEach(key=>{
+      const chip=document.createElement('span');
+      chip.className='chip';
+      chip.textContent=`${CROPS[key].emoji}${state.inventory[key]}`;
+      invRow.appendChild(chip);
+    });
+    const endBtn=document.createElement('button');
+    endBtn.className='pxbtn end';
+    endBtn.textContent='Закончить день →';
+    endBtn.onclick=endFarmDay;
+    invRow.appendChild(endBtn);
+    controlsEl.appendChild(invRow);
+  } else if(state.day===7){
+    const invRow=document.createElement('div');
+    invRow.className='btnrow';
+    Object.keys(CROPS).forEach(key=>{
+      const chip=document.createElement('span');
+      chip.className='chip';
+      chip.textContent=`${CROPS[key].emoji}${state.inventory[key]}`;
+      invRow.appendChild(chip);
+    });
+    controlsEl.appendChild(invRow);
+
+    const recRow=document.createElement('div');
+    recRow.className='btnrow';
+    Object.values(RECIPES).forEach((r,idx)=>{
+      const b=document.createElement('button');
+      b.className='pxbtn recipe';
+      b.textContent=`${r.emoji} ${r.name} (${idx+1})`;
+      b.onclick=()=>serve(r.key);
+      recRow.appendChild(b);
+    });
+    controlsEl.appendChild(recRow);
+  }
+}
+
+function selectSeed(key){
+  state.selectedSeed = key;
+  renderControls();
+}
+
+/* ============== FARM LOGIC ============== */
+function nearestPlot(){
+  let best=null, bestDist=9999;
+  state.plots.forEach(p=>{
+    const d=Math.hypot(p.x-state.player.x, p.y-state.player.y);
+    if(d<bestDist){bestDist=d; best=p;}
+  });
+  return bestDist<58 ? best : null;
+}
+
+function interactNearestPlot(){
+  if(state.day>6) return;
+  const plot = nearestPlot();
+  if(!plot){ return; }
+  if(!plot.crop){
+    plot.crop = state.selectedSeed;
+    plot.stage = 0;
+    plot.watered = false;
+    showToast(`Посажено: ${CROPS[plot.crop].name}`);
+  } else if(plot.stage<2){
+    if(plot.watered){
+      showToast('Уже полито сегодня');
+    } else {
+      plot.watered = true;
+      showToast('Полито 💧');
+    }
+  } else {
+    const cropName = CROPS[plot.crop].name;
+    state.inventory[plot.crop]++;
+    plot.crop=null; plot.stage=0; plot.watered=false;
+    showToast(`Собрано: ${cropName}!`);
+    updateHUD();
+  }
+}
+
+function endFarmDay(){
+  state.plots.forEach(p=>{
+    if(p.crop){
+      if(p.watered){
+        p.stage = Math.min(2, p.stage+1);
+      } else if(p.stage<2){
+        showToast(`${CROPS[p.crop].name} завяла без полива 😢`);
+        p.crop=null; p.stage=0;
+      }
+    }
+    p.watered=false;
+  });
+  state.day++;
+  if(state.day>6){
+    startTruckDay();
+  } else {
+    updateHUD();
+  }
+}
+
+/* ============== TRUCK LOGIC ============== */
+function startTruckDay(){
+  state.day=7;
+  state.truck = {
+    timeLeft: 60,
+    queue: [],
+    served: 0,
+    spawnTimer: 0.5,
+    nextSpawnIn: 2.5,
+    ended: false,
+  };
+  updateHUD();
+}
+
+function spawnCustomer(){
+  const keys=Object.keys(RECIPES);
+  const want = keys[Math.floor(Math.random()*keys.length)];
+  state.truck.queue.push({want, patience:16, maxPatience:16});
+}
+
+function updateTruck(dt){
+  const t = state.truck;
+  if(!t || t.ended) return;
+  t.timeLeft -= dt;
+  if(t.timeLeft<=0){
+    t.timeLeft=0;
+    t.ended=true;
+    endTruckDay();
+    return;
+  }
+  t.spawnTimer += dt;
+  if(t.spawnTimer>=t.nextSpawnIn && t.queue.length<4){
+    t.spawnTimer=0;
+    t.nextSpawnIn = 3+Math.random()*3;
+    spawnCustomer();
+  }
+  let left=false;
+  t.queue.forEach(c=>{ c.patience -= dt; if(c.patience<=0) left=true; });
+  if(left){
+    t.queue = t.queue.filter(c=>c.patience>0);
+    showToast('Клиент ушёл, не дождался 😤');
+  }
+  moneyEl.textContent = `💰 ${state.money}`;
+  daylabelEl.textContent = `День 7 — Фудтрак! ⏱ ${Math.ceil(t.timeLeft)}с`;
+}
+
+function serve(recipeKey){
+  if(state.day!==7 || !state.truck) return;
+  const t = state.truck;
+  if(t.queue.length===0){ showToast('Нет клиентов'); return; }
+  const customer = t.queue[0];
+  const recipe = RECIPES[recipeKey];
+  if(customer.want !== recipeKey){
+    showToast('Клиент хотел другое блюдо');
+    return;
+  }
+  for(const ing in recipe.needs){
+    if((state.inventory[ing]||0) < recipe.needs[ing]){
+      showToast('Не хватает ингредиентов!');
+      return;
+    }
+  }
+  for(const ing in recipe.needs){ state.inventory[ing] -= recipe.needs[ing]; }
+  state.money += recipe.price;
+  t.served++;
+  t.queue.shift();
+  showToast(`Продано: ${recipe.name} +${recipe.price}💰`);
+  updateHUD();
+}
+
+function endTruckDay(){
+  const served = state.truck.served;
+  const earned = state.money;
+  modalEl.innerHTML = `
+    <h2>Конец недели ${state.week}!</h2>
+    <p>Клиентов обслужено: <b>${served}</b></p>
+    <p>Всего денег: <span class="big">💰 ${earned}</span></p>
+    <button class="pxbtn end" id="nextWeekBtn">Начать новую неделю →</button>
+  `;
+  modalOverlay.classList.add('show');
+  document.getElementById('nextWeekBtn').onclick = startNewWeek;
+}
+
+function startNewWeek(){
+  state.week++;
+  state.day=1;
+  state.truck=null;
+  state.plots.forEach(p=>{p.crop=null;p.stage=0;p.watered=false;});
+  modalOverlay.classList.remove('show');
+  updateHUD();
+}
+
+/* ============== INPUT ============== */
+window.addEventListener('keydown', e=>{
+  const k = e.key.toLowerCase();
+  state.keys[k]=true;
+  if(state.day<=6){
+    if(k==='1') selectSeed('carrot');
+    if(k==='2') selectSeed('greens');
+    if(k==='3') selectSeed('tomato');
+    if(k===' '){ e.preventDefault(); interactNearestPlot(); }
+  } else if(state.day===7){
+    if(k==='1') serve('salad');
+    if(k==='2') serve('soup');
+    if(k==='3') serve('taco');
+  }
+});
+window.addEventListener('keyup', e=>{ state.keys[e.key.toLowerCase()]=false; });
+
+canvas.addEventListener('click', (e)=>{
+  if(state.day>6) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width/rect.width;
+  const scaleY = canvas.height/rect.height;
+  const cx = (e.clientX-rect.left)*scaleX;
+  const cy = (e.clientY-rect.top)*scaleY;
+  state.plots.forEach(p=>{
+    if(Math.hypot(p.x-cx,p.y-cy)<40){
+      const near = nearestPlot();
+      if(near===p) interactNearestPlot();
+    }
+  });
+});
+
+/* ============== UPDATE / RENDER ============== */
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+function updatePlayer(dt){
+  const speed=180;
+  let dx=0,dy=0;
+  if(state.keys['arrowup']||state.keys['w']) dy-=1;
+  if(state.keys['arrowdown']||state.keys['s']) dy+=1;
+  if(state.keys['arrowleft']||state.keys['a']) dx-=1;
+  if(state.keys['arrowright']||state.keys['d']) dx+=1;
+  if(dx||dy){
+    const len=Math.hypot(dx,dy);
+    state.player.x = clamp(state.player.x + (dx/len)*speed*dt, 40, 760);
+    state.player.y = clamp(state.player.y + (dy/len)*speed*dt, 40, 330);
+  }
+}
+
+function hexToRgb(hex){
+  const n=parseInt(hex.slice(1),16);
+  return {r:(n>>16)&255, g:(n>>8)&255, b:n&255};
+}
+function lerpColor(c1,c2,t){
+  const p1=hexToRgb(c1), p2=hexToRgb(c2);
+  const r=Math.round(p1.r+(p2.r-p1.r)*t);
+  const gg=Math.round(p1.g+(p2.g-p1.g)*t);
+  const b=Math.round(p1.b+(p2.b-p1.b)*t);
+  return `rgb(${r},${gg},${b})`;
+}
+
+function drawBackgroundFarm(){
+  const g = ctx.createLinearGradient(0,0,0,360);
+  const t = (state.day-1)/6;
+  g.addColorStop(0, lerpColor('#4a3866','#5c3a4d', t));
+  g.addColorStop(1, lerpColor('#2c3d1f','#3d3320', t));
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,800,360);
+  ctx.fillStyle='#3d5a28';
+  ctx.fillRect(0,90,800,270);
+  ctx.fillStyle='rgba(0,0,0,0.06)';
+  for(let x=0;x<800;x+=40){
+    for(let y=90;y<360;y+=40){
+      if(((x+y)/40)%2===0) ctx.fillRect(x,y,40,40);
+    }
+  }
+}
+
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y);
+  c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r);
+  c.arcTo(x,y,x+w,y,r);
+  c.closePath();
+}
+
+function drawPlot(p){
+  const isNear = nearestPlot()===p && state.day<=6;
+  ctx.save();
+  ctx.translate(p.x,p.y);
+  if(isNear){
+    const pulse = 2+Math.sin(performance.now()/180)*2;
+    ctx.strokeStyle='rgba(244,185,66,0.8)';
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(0,0,44+pulse,0,Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = p.watered ? '#4a3220' : '#5a4028';
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth=3;
+  roundRect(ctx,-34,-24,68,48,6);
+  ctx.fill(); ctx.stroke();
+
+  if(p.crop){
+    const emoji = CROPS[p.crop].emoji;
+    if(p.stage===0){ ctx.font='18px serif'; ctx.fillText('🌱',-9,8); }
+    else if(p.stage===1){ ctx.font='26px serif'; ctx.fillText(emoji,-13,10); }
+    else {
+      ctx.save();
+      ctx.shadowColor='rgba(244,185,66,0.9)';
+      ctx.shadowBlur=14;
+      ctx.font='34px serif';
+      ctx.fillText(emoji,-17,12);
+      ctx.restore();
+    }
+  }
+  if(p.watered){
+    ctx.font='14px serif';
+    ctx.fillText('💧',22,-16);
+  }
+  ctx.restore();
+}
+
+function drawPlayer(){
+  const p = state.player;
+  const moving = state.keys['arrowup']||state.keys['arrowdown']||state.keys['arrowleft']||state.keys['arrowright']||state.keys['w']||state.keys['a']||state.keys['s']||state.keys['d'];
+  ctx.save();
+  ctx.translate(p.x,p.y);
+  const bob = moving ? Math.sin(performance.now()/140)*2 : 0;
+  ctx.translate(0,bob);
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(0,20,16,6,0,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle='#f4b942';
+  ctx.strokeStyle='#3b2a20';
+  ctx.lineWidth=3;
+  roundRect(ctx,-14,-10,28,30,8);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#f0d9b0';
+  ctx.beginPath();
+  ctx.arc(0,-20,12,0,Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#d1453a';
+  ctx.beginPath();
+  ctx.moveTo(-14,-26);
+  ctx.lineTo(14,-26);
+  ctx.lineTo(0,-38);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function renderFarm(){
+  drawBackgroundFarm();
+  state.plots.forEach(drawPlot);
+  drawPlayer();
+  hintEl.textContent = nearestPlot() ? 'ПРОБЕЛ — взаимодействовать' : 'Стрелки/WASD — ходить';
+}
+
+function drawBackgroundTruck(){
+  const g = ctx.createLinearGradient(0,0,0,360);
+  g.addColorStop(0,'#241a33');
+  g.addColorStop(1,'#4a2f2a');
+  ctx.fillStyle=g; ctx.fillRect(0,0,800,360);
+  ctx.fillStyle='#3d3328';
+  ctx.fillRect(0,260,800,100);
+}
+
+function drawTruck(){
+  ctx.save();
+  ctx.translate(560,190);
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(0,95,140,14,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#f4b942';
+  ctx.strokeStyle='#3b2a20'; ctx.lineWidth=4;
+  roundRect(ctx,-150,-40,300,110,10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#2a9d8f';
+  roundRect(ctx,-150,-70,90,50,8); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#bfe6f5';
+  roundRect(ctx,-135,-60,60,26,4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#3b2a20';
+  ctx.fillRect(20,10,130,10);
+  ctx.fillStyle='#241a1a';
+  ctx.beginPath(); ctx.arc(-90,72,20,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(70,72,20,0,Math.PI*2); ctx.fill();
+  ctx.font='30px serif';
+  ctx.fillText('🌮',40,-5);
+  ctx.restore();
+}
+
+function drawCustomer(c, idx){
+  const x = 90+idx*110, y=210;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(0,42,14,5,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#9fc25f';
+  roundRect(ctx,-13,-8,26,40,8); ctx.fill();
+  ctx.strokeStyle='#3b2a20'; ctx.lineWidth=2; roundRect(ctx,-13,-8,26,40,8); ctx.stroke();
+  ctx.fillStyle='#f0d9b0';
+  ctx.beginPath(); ctx.arc(0,-18,11,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#f0e4c9';
+  roundRect(ctx,-22,-58,44,32,6); ctx.fill();
+  ctx.strokeStyle='#3b2a20'; ctx.lineWidth=2; roundRect(ctx,-22,-58,44,32,6); ctx.stroke();
+  ctx.font='22px serif';
+  ctx.fillText(RECIPES[c.want].emoji,-13,-36);
+  const pct = Math.max(0,c.patience/c.maxPatience);
+  ctx.fillStyle='#2b1d12';
+  ctx.fillRect(-20,-64,40,5);
+  ctx.fillStyle = pct>0.4 ? '#9fc25f' : '#d1453a';
+  ctx.fillRect(-20,-64,40*pct,5);
+  ctx.restore();
+}
+
+function renderTruck(){
+  drawBackgroundTruck();
+  drawTruck();
+  if(state.truck){
+    state.truck.queue.forEach((c,i)=>drawCustomer(c,i));
+  }
+  hintEl.textContent = 'Клавиши 1/2/3 или кнопки внизу — подать блюдо';
+}
+
+/* ============== MAIN LOOP ============== */
+let lastTime = performance.now();
+function gameLoop(now){
+  const dt = Math.min(0.05,(now-lastTime)/1000);
+  lastTime = now;
+  ctx.clearRect(0,0,800,360);
+  if(state.day<=6){
+    updatePlayer(dt);
+    renderFarm();
+  } else if(state.day===7){
+    updateTruck(dt);
+    renderTruck();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+/* ============== INIT ============== */
+function showIntro(){
+  modalEl.innerHTML = `
+    <h2>Ферма → Фудтрак</h2>
+    <p>6 дней выращивай урожай на ферме, на 7-й — продавай блюда из фудтрака.</p>
+    <p style="text-align:left;font-size:12px;opacity:.85;">
+    Стрелки / WASD — ходить<br>
+    Пробел — посадить / полить / собрать<br>
+    1 2 3 — выбрать семя (на ферме) или блюдо (в фудтраке)
+    </p>
+    <button class="pxbtn end" id="startBtn">Начать игру →</button>
+  `;
+  modalOverlay.classList.add('show');
+  document.getElementById('startBtn').onclick = ()=>{ modalOverlay.classList.remove('show'); };
+}
+
+buildWeekDial();
+updateHUD();
+showIntro();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

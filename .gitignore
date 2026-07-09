@@ -1,0 +1,20 @@
+# deps / build
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# blender source of truth is the scripts, not the .blend (see CLAUDE.md)
+*.blend
+*.blend1
+
+# env / editor
+.env
+.env.*
+.DS_Store
+.vscode/
+.idea/
+
+# python
+__pycache__/
+*.pyc
