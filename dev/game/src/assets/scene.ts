@@ -3,8 +3,17 @@
  * Только рендер-слой (scene/) импортирует это; game/ ничего отсюда не берёт.
  */
 import * as THREE from 'three'
+import type { CropId } from '../game/store'
+import { applySway, isCropMaterial } from '../scene/sway'
 
 export type Vec3 = [number, number, number]
+
+/** Культура игры → имя GLB-пропса. */
+export const CROP_ASSET: Record<CropId, string> = {
+  carrot: 'carrot',
+  greens: 'greens',
+  tomato: 'tomato_bush',
+}
 
 export interface PropInstance {
   asset: string
@@ -16,6 +25,7 @@ export interface PropInstance {
 export interface Plot {
   id: number
   bed: Vec3
+  bedRotationY: number
   slots: Vec3[]
 }
 
@@ -68,6 +78,7 @@ export function lambert(name: string, palette: Palette): THREE.MeshLambertMateri
     transparent: glass,
     opacity: glass ? 0.35 : 1,
   })
+  if (isCropMaterial(name)) applySway(mat) // культуры качаются на ветру
   materials.set(name, mat)
   return mat
 }

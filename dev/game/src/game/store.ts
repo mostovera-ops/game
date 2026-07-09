@@ -37,6 +37,11 @@ export const SLOT_IDS: SlotId[] = Array.from({ length: BEDS }, (_, bed) =>
 
 export const CROPS: CropId[] = ['carrot', 'greens', 'tomato']
 
+/** Индекс грядки из slotId (`${bed}:${slot}`). */
+export function bedOf(slotId: SlotId): number {
+  return Number(slotId.split(':')[0])
+}
+
 export const RECIPES: Record<
   RecipeId,
   { needs: Partial<Record<CropId, number>>; price: number }
@@ -201,3 +206,8 @@ export const useGameStore = create<GameState>()(
     },
   ),
 )
+
+// Доступ к стору из DevTools / скриншот-харнеса.
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __game?: unknown }).__game = useGameStore
+}

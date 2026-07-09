@@ -4,6 +4,7 @@
  */
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { useFrame } from '@react-three/fiber'
 import { useGLTF, Instances, Instance } from '@react-three/drei'
 import {
   useJSON,
@@ -13,6 +14,9 @@ import {
   type Palette,
   type PropInstance,
 } from '../assets/scene'
+import { swayUniforms } from './sway'
+import { Beds } from './Beds'
+import { Slot } from './Slot'
 
 const propUrl = (asset: string) => `/assets/props/${asset}.glb`
 
@@ -33,7 +37,18 @@ const INSTANCED_ASSETS = ['tree', 'bush'] as const
 // Тень отбрасывают только эти (см. Task 1).
 const CASTERS = new Set(['house', 'greenhouse', 'food_truck', 'tree', 'raised_bed'])
 
-for (const a of [...SINGLETON_ASSETS, ...INSTANCED_ASSETS]) useGLTF.preload(propUrl(a))
+const PLANT_ASSETS = ['raised_bed', 'carrot', 'greens', 'tomato_bush'] as const
+
+for (const a of [...SINGLETON_ASSETS, ...INSTANCED_ASSETS, ...PLANT_ASSETS])
+  useGLTF.preload(propUrl(a))
+
+/** Один uniform времени на всю сцену — двигает покачивание культур. */
+function SwayClock() {
+  useFrame((_, dt) => {
+    swayUniforms.uTime.value += dt
+  })
+  return null
+}
 
 function Singleton({
   url,
@@ -119,6 +134,15 @@ export function Farm() {
     return map
   }, [layout])
 
+  // slotId (`${bed}:${slot}`) → мировая позиция из plots[].
+  const slotPositions = useMemo(() => {
+    const out: { id: string; position: PropInstance['position'] }[] = []
+    for (const plot of layout.plots) {
+      plot.slots.forEach((position, i) => out.push({ id: `${plot.id}:${i}`, position }))
+    }
+    return out
+  }, [layout])
+
   // sun.direction — куда светит; позиция источника в противоположной стороне.
   const sunPos = useMemo(() => {
     const d = layout.sun.direction
@@ -170,6 +194,12 @@ export function Farm() {
           />
         )
       })}
+
+      <Beds plots={layout.plots} palette={palette} />
+      {slotPositions.map((s) => (
+        <Slot key={s.id} slotId={s.id} position={s.position} palette={palette} />
+      ))}
+      <SwayClock />
     </>
   )
 }

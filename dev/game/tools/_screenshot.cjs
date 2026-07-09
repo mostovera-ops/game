@@ -26,7 +26,29 @@ const OUT = process.argv[3] || 'farm.png'
   } catch {
     console.log('WARN: __render.calls stayed 0 (scene may not have rendered)')
   }
-  await page.waitForTimeout(2000)
+
+  if (process.argv[4] === 'seed') {
+    await page.waitForFunction(() => !!window.__game, { timeout: 10000 })
+    await page.evaluate(() => {
+      const store = window.__game
+      const preset = {
+        '0:0': { crop: 'carrot', stage: 2, watered: true },
+        '0:1': { crop: 'greens', stage: 1, watered: true },
+        '0:2': { crop: 'tomato', stage: 2, watered: false },
+        '1:0': { crop: 'carrot', stage: 1, watered: false },
+        '1:2': { crop: 'greens', stage: 0, watered: true },
+        '2:1': { crop: 'tomato', stage: 2, watered: true },
+      }
+      store.setState({
+        day: 3,
+        money: 0,
+        inventory: { carrot: 2, greens: 1, tomato: 3 },
+        slots: store.getState().slots.map((s) => (preset[s.id] ? { ...s, ...preset[s.id] } : s)),
+      })
+    })
+  }
+
+  await page.waitForTimeout(2500)
 
   const stats = await page.evaluate(() => window.__render || null)
   await page.screenshot({ path: OUT })
