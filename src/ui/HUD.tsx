@@ -64,6 +64,8 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
         text: `Без полива погибло растений: ${n.amount}`,
         tone: 'bad',
       }
+    case 'too-far':
+      return { text: 'Слишком далеко — подойдите к грядке', tone: 'warn' }
   }
 }
 

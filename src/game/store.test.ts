@@ -250,6 +250,17 @@ describe('уведомления', () => {
     expect(S().notices.length).toBeLessThanOrEqual(4)
   })
 
+  it('notify не дублирует один и тот же вид подряд', () => {
+    S().notify('too-far')
+    S().notify('too-far')
+    S().notify('too-far')
+    expect(S().notices.filter((n) => n.kind === 'too-far').length).toBe(1)
+
+    S().notify('no-customer')
+    S().notify('too-far') // вид сменился — снова можно
+    expect(S().notices.filter((n) => n.kind === 'too-far').length).toBe(2)
+  })
+
   it('dismissNotice убирает тост по id', () => {
     S().plant(SLOT_IDS[0])
     S().endDay()

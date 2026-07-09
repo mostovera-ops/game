@@ -47,6 +47,7 @@ export type NoticeKind =
   | 'time-up'
   | 'harvest'
   | 'withered'
+  | 'too-far'
 
 export interface Notice {
   id: number
@@ -158,6 +159,8 @@ interface GameActions {
   selectTool: (tool: Tool) => void
   /** Убрать тост по id (истёк таймер или клик). */
   dismissNotice: (id: number) => void
+  /** Сообщить о событии без данных. Подряд один и тот же вид не дублируется. */
+  notify: (kind: NoticeKind) => void
   /** Посадить выбранное семя в пустой слот. */
   plant: (slotId: SlotId) => void
   /** Полить растущий слот (stage < 2). */
@@ -234,6 +237,13 @@ export const useGameStore = create<GameState>()(
 
       dismissNotice: (id) =>
         set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
+
+      notify: (kind) =>
+        set((s) => {
+          // Клик по дальней грядке легко повторить трижды — не копим одинаковые.
+          if (s.notices.at(-1)?.kind === kind) return {}
+          return withNotice(s, { kind })
+        }),
 
       plant: (slotId) =>
         set((s) => ({

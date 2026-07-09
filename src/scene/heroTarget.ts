@@ -9,3 +9,8 @@
 import * as THREE from 'three'
 
 export const heroTarget = new THREE.Vector3()
+
+// Доступ из DevTools и автопроверок. В прод-сборку не попадает.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __heroTarget?: unknown }).__heroTarget = heroTarget
+}

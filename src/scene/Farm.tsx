@@ -21,6 +21,10 @@ import { Beds } from './Beds'
 import { Slot } from './Slot'
 import { Hero } from './Hero'
 import { heroTarget } from './heroTarget'
+import { hero } from './heroState'
+import { halfExtentsXZ, type Collider } from './collision'
+import { say } from './heroSpeech'
+import { PHRASES } from './phrases'
 
 export interface CamView {
   pos: Vec3
@@ -52,6 +56,13 @@ const PLANT_ASSETS = ['raised_bed', 'carrot', 'greens', 'tomato_bush'] as const
 // Стартовая точка героя: на дорожке перед домом, вне его 3×3 основания.
 const HERO_START: Vec3 = [1.0, 0, 2.2]
 
+// Через что герой не проходит. Дорожка и божья коровка — не препятствия.
+const SOLID_SINGLETONS = ['house', 'greenhouse', 'food_truck', 'log_table', 'sit_log'] as const
+
+// Деревья и кусты бьются кругом по стволу: их bbox — это крона, и по нему
+// между двумя ёлками было бы не пройти.
+const TRUNK_RADIUS: Record<string, number> = { tree: 0.26, bush: 0.34 }
+
 for (const a of [...SINGLETON_ASSETS, ...INSTANCED_ASSETS, ...PLANT_ASSETS])
   useGLTF.preload(propUrl(a))
 
@@ -75,6 +86,9 @@ function TruckTick() {
 
 type OrbitLike = { enabled: boolean; target: THREE.Vector3; update: () => void }
 
+/** Как резво камера догоняет идущего героя. */
+const FOLLOW_LAMBDA = 2.5
+
 const toView = (v: CamView) => ({
   pos: new THREE.Vector3(...v.pos),
   target: new THREE.Vector3(...v.target),
@@ -95,6 +109,7 @@ function CameraRig({ farm, truck }: { farm: CamView; truck: CamView }) {
     to: { pos: THREE.Vector3; target: THREE.Vector3; zoom: number }
   } | null>(null)
   const prevPhase = useRef(phase)
+  const follow = useRef(new THREE.Vector3())
 
   useEffect(() => {
     if (phase === prevPhase.current) return
@@ -107,7 +122,18 @@ function CameraRig({ farm, truck }: { farm: CamView; truck: CamView }) {
 
   useFrame((_, dt) => {
     const a = anim.current
-    if (!a) return
+    if (!a) {
+      // Герой пошёл — камера подкатывается к нему. Пока он стоит, не трогаем:
+      // игрок волен отвести камеру и разглядеть ферму.
+      if (phase === 'farm' && controls && hero.moving) {
+        const k = 1 - Math.exp(-FOLLOW_LAMBDA * Math.min(dt, 0.1))
+        follow.current.copy(hero.pos).sub(controls.target).multiplyScalar(k)
+        controls.target.add(follow.current)
+        camera.position.add(follow.current) // смещаем вместе, чтобы сохранить ракурс и зум
+        controls.update()
+      }
+      return
+    }
     a.t = Math.min(1, a.t + dt / 1.1)
     const e = a.t < 0.5 ? 2 * a.t * a.t : 1 - Math.pow(-2 * a.t + 2, 2) / 2 // easeInOutQuad
     camera.position.lerpVectors(a.from.pos, a.to.pos, e)
@@ -123,6 +149,33 @@ function CameraRig({ farm, truck }: { farm: CamView; truck: CamView }) {
     }
   })
   return null
+}
+
+/** Имя материала объекта, либо '' если материала нет. */
+function materialName(object: THREE.Object3D): string {
+  const mat = (object as THREE.Mesh).material
+  if (!mat) return ''
+  return Array.isArray(mat) ? (mat[0]?.name ?? '') : mat.name
+}
+
+/**
+ * Клик по пропсу: если у материала есть реплика — герой её произносит.
+ * Если нет (стена, крыша, теплица), событие не перехватываем: оно дойдёт до
+ * земли, и герой пойдёт туда, как и раньше.
+ */
+function speak(e: ThreeEvent<MouseEvent>) {
+  // Обработчик зовётся на каждом пересечении луча по очереди, а не только на
+  // ближнем. Без этой проверки клик по молчаливому пропсу спереди озвучивал бы
+  // тот, что стоит за ним (стекло теплицы → куст).
+  if (e.intersections[0]?.object !== e.object) return
+
+  // У инстансов (деревья, кусты) e.object — прокси drei без материала;
+  // сам InstancedMesh с материалом лежит в eventObject.
+  const name = materialName(e.object) || materialName(e.eventObject)
+  const text = PHRASES[name]
+  if (!text) return
+  e.stopPropagation()
+  say(text)
 }
 
 function Singleton({
@@ -148,6 +201,7 @@ function Singleton({
       position={inst.position}
       rotation={[0, inst.rotationY, 0]}
       scale={inst.scale}
+      onClick={speak}
     />
   )
 }
@@ -175,6 +229,7 @@ function InstancedProp({
           geometry={part.geometry}
           material={part.material}
           castShadow={cast}
+          onClick={speak}
         >
           {list.map((inst, j) => (
             <Instance
@@ -188,6 +243,69 @@ function InstancedProp({
       ))}
     </>
   )
+}
+
+/**
+ * Коллайдеры сцены. Коробки берём из bbox самих GLB, а не из констант: пропс
+ * поменяет размер в Blender — препятствие поедет за ним.
+ */
+function useColliders(layout: SceneLayout): Collider[] {
+  const house = useGLTF(propUrl('house')).scene
+  const greenhouse = useGLTF(propUrl('greenhouse')).scene
+  const truck = useGLTF(propUrl('food_truck')).scene
+  const logTable = useGLTF(propUrl('log_table')).scene
+  const sitLog = useGLTF(propUrl('sit_log')).scene
+  const bed = useGLTF(propUrl('raised_bed')).scene
+
+  return useMemo(() => {
+    const scenes: Record<string, THREE.Object3D> = {
+      house,
+      greenhouse,
+      food_truck: truck,
+      log_table: logTable,
+      sit_log: sitLog,
+    }
+    const out: Collider[] = []
+
+    for (const asset of SOLID_SINGLETONS) {
+      const { hx, hz } = halfExtentsXZ(scenes[asset])
+      for (const inst of layout.props.filter((p) => p.asset === asset)) {
+        out.push({
+          kind: 'rect',
+          x: inst.position[0],
+          z: inst.position[2],
+          rot: inst.rotationY,
+          hx: hx * inst.scale[0],
+          hz: hz * inst.scale[2],
+        })
+      }
+    }
+
+    for (const asset of INSTANCED_ASSETS) {
+      for (const inst of layout.props.filter((p) => p.asset === asset)) {
+        out.push({
+          kind: 'circle',
+          x: inst.position[0],
+          z: inst.position[2],
+          r: TRUNK_RADIUS[asset] * inst.scale[0],
+        })
+      }
+    }
+
+    const bedHalf = halfExtentsXZ(bed)
+    for (const plot of layout.plots) {
+      out.push({
+        kind: 'rect',
+        x: plot.bed[0],
+        z: plot.bed[2],
+        rot: plot.bedRotationY,
+        hx: bedHalf.hx,
+        hz: bedHalf.hz,
+      })
+    }
+
+    return out
+  }, [layout, house, greenhouse, truck, logTable, sitLog, bed])
 }
 
 function Ground({ size, color }: { size: number; color: string }) {
@@ -217,6 +335,7 @@ export function Farm({
 }) {
   const layout = useJSON<SceneLayout>('/assets/scene-layout.json')
   const palette = useJSON<Palette>('/assets/palette.json')
+  const colliders = useColliders(layout)
 
   const byAsset = useMemo(() => {
     const map: Record<string, PropInstance[]> = {}
@@ -286,7 +405,7 @@ export function Farm({
       })}
 
       <Beds plots={layout.plots} palette={palette} />
-      <Hero palette={palette} start={HERO_START} />
+      <Hero palette={palette} start={HERO_START} colliders={colliders} />
       {slotPositions.map((s) => (
         <Slot key={s.id} slotId={s.id} position={s.position} palette={palette} />
       ))}
