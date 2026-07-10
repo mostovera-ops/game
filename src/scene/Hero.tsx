@@ -32,6 +32,7 @@ import { resolveCollisions, type Collider } from './collision'
 import { getSpeech, subscribeSpeech } from './heroSpeech'
 import { faceForNotice, getExpression, subscribeFace } from './heroFace'
 import { applyEyes, Blinker, collectEyes, gazeTarget } from './heroEyes'
+import { pointerNDC, trackPointer } from './pointer'
 import { HeroBubble } from './HeroBubble'
 import { HERO_SEAT, yawTo as faceTo } from './truckStage'
 
@@ -113,6 +114,7 @@ export function Hero({
 }) {
   const { scene } = useGLTF(HERO_URL)
   const camera = useThree((s) => s.camera)
+  const canvas = useThree((s) => s.gl.domElement)
   const pressed = usePressedKeys()
   const phrase = useSyncExternalStore(subscribeSpeech, getSpeech, getSpeech)
   const heroColor = useGameStore((s) => s.heroColor)
@@ -156,6 +158,10 @@ export function Hero({
   const gaze = useRef(new THREE.Vector3())
   const hasGaze = useRef(false)
 
+  // Курсор слушаем у окна, а не у канваса: за открытой лавкой герой иначе
+  // перестал бы следить за мышью — модалка съедает pointermove.
+  useEffect(() => trackPointer(canvas), [canvas])
+
   // Игровое событие → гримаса. Реагируем только на тост, которого ещё не
   // видели: когда истёкший тост уходит с экрана, последним снова становится
   // предыдущий, и без этой проверки лицо переигрывало бы старое событие.
@@ -181,7 +187,7 @@ export function Hero({
   const fwd = useRef(new THREE.Vector3())
   const right = useRef(new THREE.Vector3())
 
-  useFrame((state, rawDt) => {
+  useFrame((_, rawDt) => {
     const g = group.current
     if (!g) return
 
@@ -302,7 +308,7 @@ export function Hero({
     // пересекает — тогда держим прежнюю цель, а не роняем взгляд в ноль.
     if (eyes.length) {
       const eyeY = g.position.y + eyes[0].center.y
-      if (gazeTarget(state.pointer, camera, eyeY, gaze.current)) hasGaze.current = true
+      if (gazeTarget(pointerNDC(), camera, eyeY, gaze.current)) hasGaze.current = true
       applyEyes(
         eyes,
         g,

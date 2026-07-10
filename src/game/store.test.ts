@@ -51,8 +51,12 @@ describe('farm cycle', () => {
     expect(slot(id).stage).toBe(1)
 
     S().water(id)
+    // Бросок удачи фиксируем: иначе раз в десять прогонов растение оказывается
+    // удачным, даёт 2 единицы, и тест про обычный сбор падает на ровном месте.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
     S().endDay()
     expect(slot(id).stage).toBe(2)
+    expect(slot(id).lucky).toBe(false)
 
     const before = S().inventory.carrot
     S().harvest(id)

@@ -44,8 +44,11 @@ const BY_NOTICE: Partial<Record<NoticeKind, Expression>> = {
   'no-ingredients': 'sad', // хотел приготовить, да не из чего
 }
 
-/** Сколько гримаса держится на лице. */
-export const EXPRESSION_MS = 2200
+/**
+ * Сколько гримаса держится на лице. Дольше тоста (2.6 с): лицо героя мелкое и
+ * часто повёрнуто от камеры, за две секунды его успевали просто не заметить.
+ */
+export const EXPRESSION_MS = 4000
 
 let current: Expression = 'neutral'
 let timer: ReturnType<typeof setTimeout> | undefined
