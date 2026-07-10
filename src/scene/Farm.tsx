@@ -27,6 +27,7 @@ import { intent, clearIntent, setIntent } from './intent'
 import { halfExtentsXZ, type Collider } from './collision'
 import { say } from './heroSpeech'
 import { PHRASES } from './phrases'
+import { HATCH_LAMBDA, HATCH_OPEN } from './truckStage'
 
 export interface CamView {
   pos: Vec3
@@ -40,7 +41,7 @@ const propUrl = (asset: string) => `/assets/props/${asset}.glb`
 const SINGLETON_ASSETS = [
   'house',
   'greenhouse',
-  'food_truck',
+  'food_truck_open',
   'brick_path',
   'log_table',
   'sit_log',
@@ -52,7 +53,7 @@ const SINGLETON_ASSETS = [
 const INSTANCED_ASSETS = ['tree', 'bush'] as const
 
 // Тень отбрасывают только эти (см. Task 1).
-const CASTERS = new Set(['house', 'greenhouse', 'food_truck', 'tree', 'raised_bed', 'seed_store'])
+const CASTERS = new Set(['house', 'greenhouse', 'food_truck_open', 'tree', 'raised_bed', 'seed_store'])
 
 const PLANT_ASSETS = ['raised_bed', 'carrot', 'greens', 'tomato_bush'] as const
 
@@ -64,7 +65,7 @@ const HERO_START: Vec3 = [2.17, 0, -0.39]
 const SOLID_SINGLETONS = [
   'house',
   'greenhouse',
-  'food_truck',
+  'food_truck_open',
   'log_table',
   'sit_log',
   'seed_store',
@@ -293,6 +294,51 @@ function Singleton({
 }
 
 /**
+ * Фудтрак: тот же Singleton, но с живой створкой раздачи.
+ *
+ * В GLB створка закрыта и лежит отдельным узлом `Hatch` с origin на петле, а
+ * подпорки под неё — узлом `HatchProps` с origin на прилавке (см.
+ * tools/_export_food_truck_open.py). Потому их и не смержили с кузовом.
+ *
+ * На седьмой день створка поднимается, открывая окно и героя внутри, а из-под
+ * неё вырастают подпорки; на ферме всё складывается обратно. Обе вещи ведёт
+ * одна доля открытия, иначе стойки упирались бы в воздух посреди хода.
+ * Затухание, а не клип: один угол и один масштаб, AnimationMixer тут лишний.
+ *
+ * Крутим напрямую в useFrame, мимо React: фаза меняется раз в день, а кадров у
+ * перехода шестьдесят.
+ */
+function FoodTruck(props: { url: string; inst: PropInstance; palette: Palette; cast: boolean }) {
+  const group = useRef<THREE.Group>(null)
+  const parts = useRef<{ hatch: THREE.Object3D; props: THREE.Object3D } | null>(null)
+  const open = useRef(0)
+
+  useFrame((_, dt) => {
+    if (!parts.current) {
+      const hatch = group.current?.getObjectByName('Hatch')
+      const struts = group.current?.getObjectByName('HatchProps')
+      if (!hatch || !struts) return
+      parts.current = { hatch, props: struts }
+    }
+    const { hatch, props: struts } = parts.current
+
+    const want = useGameStore.getState().phase === 'truck' ? 1 : 0
+    open.current = THREE.MathUtils.damp(open.current, want, HATCH_LAMBDA, Math.min(dt, 0.1))
+
+    hatch.rotation.x = open.current * HATCH_OPEN
+    // Нулевой масштаб вырождает матрицу — вместо него прячем стойки целиком.
+    struts.visible = open.current > 0.02
+    struts.scale.y = Math.max(open.current, 0.02)
+  })
+
+  return (
+    <group ref={group}>
+      <Singleton {...props} />
+    </group>
+  )
+}
+
+/**
  * Лавка семян: тот же Singleton, но клик по ней — не реплика, а поход за
  * семенами. Торговлю откроет <Interactions>, когда герой дойдёт.
  *
@@ -373,7 +419,7 @@ function InstancedProp({
 function useColliders(layout: SceneLayout): Collider[] {
   const house = useGLTF(propUrl('house')).scene
   const greenhouse = useGLTF(propUrl('greenhouse')).scene
-  const truck = useGLTF(propUrl('food_truck')).scene
+  const truck = useGLTF(propUrl('food_truck_open')).scene
   const logTable = useGLTF(propUrl('log_table')).scene
   const sitLog = useGLTF(propUrl('sit_log')).scene
   const seedStore = useGLTF(propUrl('seed_store')).scene
@@ -383,7 +429,7 @@ function useColliders(layout: SceneLayout): Collider[] {
     const scenes: Record<string, THREE.Object3D> = {
       house,
       greenhouse,
-      food_truck: truck,
+      food_truck_open: truck,
       log_table: logTable,
       sit_log: sitLog,
       seed_store: seedStore,
@@ -504,7 +550,8 @@ export function Farm({
       <Ground size={layout.ground.size} color={palette[layout.ground.material] ?? '#5a8f33'} />
 
       {SINGLETON_ASSETS.flatMap((asset) => {
-        const Prop = asset === 'seed_store' ? SeedStore : Singleton
+        const Prop =
+          asset === 'seed_store' ? SeedStore : asset === 'food_truck_open' ? FoodTruck : Singleton
         return (byAsset[asset] ?? []).map((inst, i) => (
           <Prop
             key={`${asset}-${i}`}

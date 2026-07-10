@@ -30,7 +30,7 @@ export const PHRASES: Record<string, string> = {
   WoodLog: LOG,
   TableTop: LOG,
 
-  // Фудтрак целиком
+  // Фудтрак целиком, включая кухню за окном раздачи
   TruckBody: TRUCK,
   TruckRoof: TRUCK,
   TruckWindow: TRUCK,
@@ -38,6 +38,14 @@ export const PHRASES: Record<string, string> = {
   TruckAwning: TRUCK,
   TruckTrim: TRUCK,
   TruckWheel: TRUCK,
+  TruckFloor: TRUCK,
+  TruckWall: TRUCK,
+  TruckFridge: TRUCK,
+  TruckStove: TRUCK,
+  TruckPot: TRUCK,
+  TruckShelf: TRUCK,
+  TruckMenu: TRUCK,
+  TruckLamp: TRUCK,
 
   // Лавка семян реплик не имеет: клик по ней ведёт героя торговать
   // (см. SeedStore в Farm.tsx), а не заставляет рассуждать о товаре.

@@ -31,7 +31,7 @@ import { clearIntent } from './intent'
 import { resolveCollisions, type Collider } from './collision'
 import { getSpeech, subscribeSpeech } from './heroSpeech'
 import { HeroBubble } from './HeroBubble'
-import { HERO_SEAT, yawTo as faceTo } from './truckStage'
+import { HERO_SEAT, HERO_YAW } from './truckStage'
 
 const HERO_URL = '/assets/props/hero.glb'
 useGLTF.preload(HERO_URL)
@@ -151,6 +151,8 @@ export function Hero({
   const group = useRef<THREE.Group>(null)
   const phase = useRef(0)
   const amp = useRef(0)
+  // Был ли герой в фудтраке в прошлом кадре: по этому ловим конец дня продаж.
+  const wasInTruck = useRef(false)
 
   // Без этого цель осталась бы в мировом нуле и герой на старте пошёл бы в дом.
   useEffect(() => {
@@ -171,36 +173,45 @@ export function Hero({
     const dt = Math.min(rawDt, MAX_DT)
     if (dt <= 0) return
 
-    // День 7: герой за прилавком фудтрака и никуда не ходит. Не «стоит на
-    // месте», а именно занимает своё место: доезжает до него и замирает лицом
-    // к очереди, даже если день начался посреди грядок.
+    // День 7: герой внутри фудтрака и никуда не ходит. Он оказывается там
+    // сразу, а не идёт пешком: кузов закрыт, дверь со стороны кабины вне кадра,
+    // и разыгрывать вход было бы враньём. Камера в этот момент ещё едет к
+    // фудтраку, а створка раздачи только поднимается, — к концу перехода он уже
+    // на месте, лицом к очереди.
+    //
+    // Ростом он тот же, что и всегда, но ноги в кузове прячем: интерьер ниже
+    // его полного роста. За прилавком их всё равно не видно, а туловище встаёт
+    // ровно на пол — за это отвечает y у HERO_SEAT.
     if (useGameStore.getState().phase === 'truck') {
-      const dx = HERO_SEAT.x - g.position.x
-      const dz = HERO_SEAT.z - g.position.z
-      const dist = Math.hypot(dx, dz)
-      const seated = dist <= ARRIVE
-      if (!seated) {
-        const stepLen = Math.min(SPEED * dt, dist)
-        g.position.x += (dx / dist) * stepLen
-        g.position.z += (dz / dist) * stepLen
-        phase.current += STEP_RATE * dt
-      }
-      // За прилавком он смотрит в окно, то есть на очередь: +Z.
-      const want = seated ? faceTo(0, 1) : faceTo(dx, dz)
-      const turn = ((want - g.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI
-      g.rotation.y += turn * (1 - Math.exp(-TURN_LAMBDA * dt))
+      g.position.copy(HERO_SEAT)
+      g.rotation.y = HERO_YAW
 
       hero.pos.set(g.position.x, 0, g.position.z)
-      hero.moving = !seated
+      hero.moving = false
+      wasInTruck.current = true
 
-      amp.current = THREE.MathUtils.damp(amp.current, seated ? 0 : STEP_AMP, AMP_LAMBDA, dt)
-      const swingT = Math.sin(phase.current) * amp.current
-      if (legs.l) legs.l.rotation.x = swingT
-      if (legs.r) legs.r.rotation.x = -swingT
+      amp.current = 0
+      if (legs.l) legs.l.visible = false
+      if (legs.r) legs.r.visible = false
 
-      heroTarget.set(g.position.x, 0, g.position.z) // чтобы по возврату на ферму не убежал
       return
     }
+
+    // День продаж кончился. Герой не выходит из фудтрака пешком через полкарты —
+    // новая неделя застаёт его дома, у двери, ровно там же, где начиналась игра.
+    if (wasInTruck.current) {
+      wasInTruck.current = false
+      g.position.set(...start)
+      g.rotation.y = 0
+      heroTarget.set(...start)
+      hero.pos.set(...start)
+      hero.faceAt = null
+      if (legs.l) legs.l.visible = true
+      if (legs.r) legs.r.visible = true
+    }
+
+    // На ферме герой ходит по земле, а не по полу кузова.
+    g.position.y = 0
 
     // --- куда хочет двигаться герой в этом кадре ---
     let vx = 0

@@ -108,10 +108,12 @@ const FARM_CAM = {
 }
 // День 7 идёт крупным планом: в кадре только окно фудтрака и очередь у него.
 // Камера ортографическая, поэтому «ближе» — это zoom, а не короче вектор.
+// Грузовик стоит наискось: камера смотрит вдоль FACE_DIR из truckStage.ts,
+// в точку между окном раздачи и головой очереди.
 const TRUCK_CAM = {
-  pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [6.0, 3.8, 1.4]),
-  target: num3(FRAME_SCENE === 'truck' ? params.get('tgt') : null, [1.9, 0.75, -3.9]),
-  zoom: FRAME_SCENE === 'truck' && params.get('zoom') ? Number(params.get('zoom')) : 155,
+  pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [6.31, 2.67, -1.83]),
+  target: num3(FRAME_SCENE === 'truck' ? params.get('tgt') : null, [2.32, 1.05, -4.83]),
+  zoom: FRAME_SCENE === 'truck' && params.get('zoom') ? Number(params.get('zoom')) : 175,
 }
 
 // Начальный кадр: в режиме кадрирования — под выбранную сцену; иначе ферма.

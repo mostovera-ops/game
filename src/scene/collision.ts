@@ -91,9 +91,12 @@ function pushOutRect(
   radius: number,
   c: RectCollider,
 ): { x: number; z: number } | null {
-  const cos = Math.cos(-c.rot)
-  const sin = Math.sin(-c.rot)
-  // В локальные координаты прямоугольника.
+  // В локальные координаты прямоугольника. Знаки — как у three: поворот на rot
+  // вокруг Y даёт x' = x·cos + z·sin, z' = −x·sin + z·cos, ниже обратное к нему.
+  // Ошибиться тут было легко и незаметно: у всех пропсов, кроме фудтрака, rot
+  // равен нулю, а на нуле обе версии совпадают.
+  const cos = Math.cos(c.rot)
+  const sin = Math.sin(c.rot)
   const dx = x - c.x
   const dz = z - c.z
   const lx = dx * cos - dz * sin
@@ -129,10 +132,8 @@ function pushOutRect(
   }
 
   // Обратно в мировые.
-  const wcos = Math.cos(c.rot)
-  const wsin = Math.sin(c.rot)
   return {
-    x: c.x + nx * wcos - nz * wsin,
-    z: c.z + nx * wsin + nz * wcos,
+    x: c.x + nx * cos + nz * sin,
+    z: c.z - nx * sin + nz * cos,
   }
 }

@@ -17,7 +17,7 @@ import { useGLTF } from '@react-three/drei'
 import { applyPalette, type Palette } from '../assets/scene'
 import { useGameStore, type Customer } from '../game/store'
 import { OrderBubble } from './OrderBubble'
-import { SPAWN, queueSpot, yawTo } from './truckStage'
+import { QUEUE_YAW, SPAWN, queueSpot, yawTo } from './truckStage'
 
 const HERO_URL = '/assets/props/hero.glb'
 
@@ -97,7 +97,7 @@ function CustomerFigure({
       step.current += STEP_RATE * dt
       want = yawTo(dx, dz)
     } else {
-      want = yawTo(0, -1) // дошёл — разворачивается к окну
+      want = QUEUE_YAW // дошёл — разворачивается к окну
     }
 
     const delta = ((want - g.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI

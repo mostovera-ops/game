@@ -29,17 +29,17 @@
       ]
     },
     {
-      "asset": "food_truck",
+      "asset": "food_truck_open",
       "position": [
         1.8441,
-        -0.0243,
+        0.0,
         -5.8892
       ],
-      "rotationY": 0.0,
+      "rotationY": 0.9268585,
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.710829,
+        0.710829,
+        0.710829
       ]
     },
     {
