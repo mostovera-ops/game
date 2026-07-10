@@ -11,6 +11,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import type { Palette } from '../../assets/scene'
 import { critterUrl, node, useCreature } from './model'
+import { hoverProp, unhoverProp } from '../propHover'
 import { dampAngle, forestPoint, hopArc, rand, yawTo, type Point } from './roam'
 
 const URL = critterUrl('rabbit')
@@ -34,7 +35,9 @@ const TURN_LAMBDA = 7
 const EAR_BACK = 0.5
 
 function RabbitFigure({ trees, palette }: { trees: Point[]; palette: Palette }) {
-  const model = useCreature(URL, palette, { cast: true })
+  // Ловит лучи ради подписи по ховеру: зверь один, мешей у него десяток —
+  // на raycast курсора это не заметно, в отличие от роя жуков.
+  const model = useCreature(URL, palette, { cast: true, clickable: true })
   const ears = useMemo(() => [node(model, 'RabbitEarL'), node(model, 'RabbitEarR')] as const, [model])
 
   const group = useRef<THREE.Group>(null)
@@ -102,7 +105,7 @@ function RabbitFigure({ trees, palette }: { trees: Point[]; palette: Palette }) 
   })
 
   return (
-    <group ref={group}>
+    <group ref={group} onPointerMove={hoverProp} onPointerOut={unhoverProp}>
       <primitive object={model} />
     </group>
   )

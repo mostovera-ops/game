@@ -22,6 +22,7 @@ import { REACH } from '../heroState'
 import { heroTarget } from '../heroTarget'
 import { setIntent } from '../intent'
 import { TOADSTOOL } from '../phrases'
+import { hoverProp, unhoverProp } from '../propHover'
 import { critterUrl, node, useCreature } from './model'
 import type { FindKind, FindSpot } from './forageSpots'
 
@@ -71,8 +72,9 @@ function Find({ spot, palette }: { spot: FindSpot; palette: Palette }) {
     if (spot.kind === 'toadstool') document.body.style.cursor = 'help'
     else document.body.style.cursor = taken ? 'not-allowed' : 'pointer'
   }
-  const onOut = () => {
+  const onOut = (e: ThreeEvent<PointerEvent>) => {
     document.body.style.cursor = ''
+    unhoverProp(e)
   }
 
   // Гриб уносят целиком; гнездо остаётся лежать и пустым, мухомор — навсегда.
@@ -85,6 +87,7 @@ function Find({ spot, palette }: { spot: FindSpot; palette: Palette }) {
       rotation={[0, spot.rotationY, 0]}
       onClick={onClick}
       onPointerOver={onOver}
+      onPointerMove={hoverProp}
       onPointerOut={onOut}
     />
   )

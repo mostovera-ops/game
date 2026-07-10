@@ -21,9 +21,8 @@ import { APPROACH, QUEUE_DIR, QUEUE_YAW, SPAWN, queueSpot, yawTo } from './truck
 
 const HERO_URL = '/assets/props/hero.glb'
 
-// Дорога из-за деревьев длинная, а стоять и смотреть на идущего клиента
-// игроку нечем: терпение до окна не тикает, но и ждать его полминуты незачем.
-const SPEED = 3.4 // м/с
+// Идти теперь недалеко — от ближней ёлки до очереди, — и торопиться незачем.
+const SPEED = 2.4 // м/с
 const STEP_RATE = 9
 const STEP_AMP = 0.5
 const AMP_LAMBDA = 8

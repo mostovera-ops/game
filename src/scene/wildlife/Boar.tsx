@@ -15,6 +15,7 @@ import type { Palette } from '../../assets/scene'
 import { hero } from '../heroState'
 import { awayFrom, nextMode, reflectAtEdge, STARTLE_SEC, type Mode } from './boarRules'
 import { critterUrl, node, useCreature } from './model'
+import { hoverProp, unhoverProp } from '../propHover'
 import { dampAngle, forestPoint, rand, yawTo, WORLD_HALF, type Point } from './roam'
 
 const URL = critterUrl('boar')
@@ -38,7 +39,9 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 }
 
 export function Boar({ trees, palette }: { trees: Point[]; palette: Palette }) {
-  const model = useCreature(URL, palette, { cast: true })
+  // Ловит лучи ради подписи по ховеру: зверь один, мешей у него десяток —
+  // на raycast курсора это не заметно, в отличие от роя жуков.
+  const model = useCreature(URL, palette, { cast: true, clickable: true })
   const legs = useMemo(() => LEGS.map((n) => node(model, n)), [model])
   const tail = useMemo(() => node(model, 'BoarTail'), [model])
 
@@ -136,7 +139,7 @@ export function Boar({ trees, palette }: { trees: Point[]; palette: Palette }) {
   })
 
   return (
-    <group ref={group}>
+    <group ref={group} onPointerMove={hoverProp} onPointerOut={unhoverProp}>
       <primitive object={model} />
     </group>
   )

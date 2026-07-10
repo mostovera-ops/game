@@ -31,6 +31,7 @@ import { SeedPacket } from './SeedPacket'
 import { Shop } from './Shop'
 import { hotkeyFor, itemCount, itemId, TOOLBAR_CELLS, type ToolbarItem } from '../game/toolbar'
 import { getHoverLabel, subscribeHoverLabel } from '../scene/hoverLabel'
+import { hoverTip } from './hoverTip'
 
 /** Клавиши ячеек тулбара в их порядке: 1…9, 0. */
 const TOOLBAR_KEYS = Array.from({ length: TOOLBAR_CELLS }, (_, i) => hotkeyFor(i))
@@ -194,7 +195,7 @@ function MusicToggle() {
   return (
     <button
       onClick={toggleMusic}
-      title={label}
+      {...hoverTip(label)}
       aria-label={label}
       aria-pressed={musicOn}
       className={`${panel} pointer-events-auto grid h-11 w-11 place-items-center text-lg transition hover:brightness-125 ${
@@ -224,7 +225,7 @@ function ToolButton({
   return (
     <button
       onClick={onClick}
-      title={hint}
+      {...hoverTip(hint)}
       className={`relative grid h-12 w-12 place-items-center rounded-md text-2xl transition ${
         active ? activeClass : 'bg-white/5 hover:bg-white/10'
       }`}
@@ -331,6 +332,7 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
         onDragOver={dragOver}
         onDragLeave={() => setOver(false)}
         onDrop={drop}
+        {...hoverTip('Пустая ячейка', ['Сюда можно перетащить предмет'])}
         className={`h-12 w-12 rounded-md bg-black/20 ${ring}`}
       />
     )
@@ -372,7 +374,7 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
   return (
     <div
       {...drag}
-      title={hint}
+      {...hoverTip(hint)}
       className={`relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl ${ring}`}
     >
       <span>{ITEM_EMOJI[cell.item]}</span>
@@ -404,7 +406,7 @@ function Toolbar({
     <div className={`${panel} flex items-center gap-2 p-2`}>
       <button
         onClick={onOpenInventory}
-        title="Инвентарь героя (I)"
+        {...hoverTip('Инвентарь героя (I)')}
         className="relative grid h-12 w-12 place-items-center rounded-md bg-white/5 transition hover:bg-white/10"
       >
         <HeroPortrait color={heroColor} className="h-9" />
@@ -413,7 +415,7 @@ function Toolbar({
 
       <button
         onClick={onOpenBook}
-        title="Книга рецептов (B)"
+        {...hoverTip('Книга рецептов (B)')}
         className="relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl transition hover:bg-white/10"
       >
         📖
@@ -471,7 +473,7 @@ function DishCard({ recipe }: { recipe: RecipeId }) {
   return (
     <button
       onClick={() => serveCustomer(recipe)}
-      title={`${RECIPE_NAME[recipe]}: можно собрать ${count}`}
+      {...hoverTip(RECIPE_NAME[recipe], [`Можно собрать порций: ${count}`])}
       className={`relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-bold text-[#241a20] transition hover:brightness-110 ${
         count > 0 ? 'bg-[#ff8b5e]/90' : 'bg-[#ff8b5e]/40'
       }`}
@@ -510,7 +512,7 @@ function TruckAction() {
         <button
           onClick={skipCustomer}
           disabled={!hasOrder}
-          title="Отпустить первого в очереди, ничего не подав"
+          {...hoverTip('Пропустить заказ', ['Отпустить первого в очереди, ничего не подав'])}
           className="rounded-md bg-white/10 px-3 py-2 text-sm font-bold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
         >
           Пропустить заказ
