@@ -20,6 +20,7 @@ import { swayUniforms } from './sway'
 import { Beds } from './Beds'
 import { Slot } from './Slot'
 import { Hero } from './Hero'
+import { Customers } from './Customers'
 import { heroTarget } from './heroTarget'
 import { hero, distanceToHero, REACH } from './heroState'
 import { intent, clearIntent } from './intent'
@@ -119,6 +120,11 @@ function Interactions() {
     // Слот мог измениться, пока герой шёл: росток погиб, сосед его полил.
     // Действие решаем по состоянию на момент прихода, а не на момент клика.
     const st = useGameStore.getState()
+    // День 7 застал героя в пути к грядке — дело отменяется, он за прилавком.
+    if (st.phase !== 'farm') {
+      clearIntent()
+      return
+    }
     const slot = st.slots.find((s) => s.id === it.id)
     if (!slot) {
       clearIntent()
@@ -388,6 +394,7 @@ function Ground({ size, color }: { size: number; color: string }) {
       receiveShadow
       onClick={(e: ThreeEvent<MouseEvent>) => {
         e.stopPropagation()
+        if (useGameStore.getState().phase !== 'farm') return // день 7 — герой за прилавком
         clearIntent() // повёл героя в другое место — прежнее дело отменено
         heroTarget.set(e.point.x, 0, e.point.z)
       }}
@@ -480,6 +487,7 @@ export function Farm({
 
       <Beds plots={layout.plots} palette={palette} />
       <Hero palette={palette} start={HERO_START} colliders={colliders} />
+      <Customers palette={palette} />
       {slotPositions.map((s) => (
         <Slot key={s.id} slotId={s.id} position={s.position} palette={palette} />
       ))}

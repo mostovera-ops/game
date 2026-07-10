@@ -108,6 +108,12 @@ export const RECIPES: Record<
 export const RECIPE_IDS = Object.keys(RECIPES) as RecipeId[]
 
 export interface Customer {
+  /**
+   * Стабильный id клиента. Нужен сцене: очередь сдвигается при каждой продаже,
+   * и без id человечек в 3D «перескакивал» бы в чужую модель вместо того,
+   * чтобы шагнуть вперёд.
+   */
+  id: number
   want: RecipeId
   patience: number
   maxPatience: number
@@ -121,6 +127,7 @@ export interface TruckState {
   spawnTimer: number
   nextSpawnIn: number
   ended: boolean
+  nextCustomerId: number
 }
 
 const TRUCK_SECONDS = 60
@@ -135,6 +142,7 @@ function initialTruck(): TruckState {
     spawnTimer: 0,
     nextSpawnIn: 2.5,
     ended: false,
+    nextCustomerId: 1,
   }
 }
 
@@ -368,13 +376,18 @@ export const useGameStore = create<GameState>()(
           if (left.length) notice = withNotice(s, { kind: 'customer-left', recipe: left[0].want })
           let spawnTimer = t.spawnTimer + dt
           let nextSpawnIn = t.nextSpawnIn
+          let nextCustomerId = t.nextCustomerId
           if (spawnTimer >= nextSpawnIn && queue.length < MAX_QUEUE) {
             spawnTimer = 0
             nextSpawnIn = 3 + Math.random() * 3
             const want = RECIPE_IDS[Math.floor(Math.random() * RECIPE_IDS.length)]
-            queue = [...queue, { want, patience: PATIENCE, maxPatience: PATIENCE }]
+            queue = [...queue, { id: nextCustomerId, want, patience: PATIENCE, maxPatience: PATIENCE }]
+            nextCustomerId++
           }
-          return { truck: { ...t, timeLeft, queue, spawnTimer, nextSpawnIn }, ...notice }
+          return {
+            truck: { ...t, timeLeft, queue, spawnTimer, nextSpawnIn, nextCustomerId },
+            ...notice,
+          }
         }),
 
       serveCustomer: (recipeId) => {
@@ -423,7 +436,9 @@ export const useGameStore = create<GameState>()(
       // v1: грядка стала 3-слотовой, появился инструмент — старые id (`bed:3`)
       //     больше не существуют, поэтому грядки сбрасываем.
       // v2: у слота появилось поле lucky; дописываем его, грядки не трогаем.
-      // v3: у героя появился цвет одежды — у старых сохранений его нет.
+      // v3: у героя появился цвет одежды, у клиента — id. Обе правки родились
+      //     параллельно и попали в одну версию: сохранения v2 чинятся сразу от
+      //     обеих, иначе половина осталась бы битой.
       // Деньги, день и инвентарь переживают все миграции.
       version: 3,
       migrate: (persisted, from) => {
@@ -432,7 +447,13 @@ export const useGameStore = create<GameState>()(
         if (from < 2) {
           s = { ...s, slots: s.slots.map((slot) => ({ ...slot, lucky: Boolean(slot.lucky) })) }
         }
-        if (from < 3) s = { ...s, heroColor: HERO_COLOR_DEFAULT }
+        if (from < 3) {
+          s = { ...s, heroColor: HERO_COLOR_DEFAULT }
+          if (s.truck) {
+            const queue = s.truck.queue.map((c, i) => ({ ...c, id: i + 1 }))
+            s = { ...s, truck: { ...s.truck, queue, nextCustomerId: queue.length + 1 } }
+          }
+        }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.

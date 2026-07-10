@@ -177,7 +177,7 @@ describe('уведомления', () => {
       phase: 'truck',
       inventory: { carrot: 0, greens: 0, tomato: 0 },
       truck: {
-        timeLeft: 60, queue: [], served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+        timeLeft: 60, queue: [], served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false, nextCustomerId: 1,
       },
     })
     S().serveCustomer('soup')
@@ -186,8 +186,8 @@ describe('уведомления', () => {
     useGameStore.setState({
       truck: {
         timeLeft: 60,
-        queue: [{ want: 'salad', patience: 16, maxPatience: 16 }],
-        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+        queue: [{ id: 1, want: 'salad', patience: 16, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false, nextCustomerId: 1,
       },
     })
     S().serveCustomer('soup')
@@ -197,8 +197,8 @@ describe('уведомления', () => {
     useGameStore.setState({
       truck: {
         timeLeft: 60,
-        queue: [{ want: 'soup', patience: 16, maxPatience: 16 }],
-        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+        queue: [{ id: 1, want: 'soup', patience: 16, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false, nextCustomerId: 1,
       },
     })
     S().serveCustomer('soup')
@@ -211,8 +211,8 @@ describe('уведомления', () => {
       inventory: { carrot: 2, greens: 0, tomato: 0 },
       truck: {
         timeLeft: 60,
-        queue: [{ want: 'soup', patience: 16, maxPatience: 16 }],
-        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false,
+        queue: [{ id: 1, want: 'soup', patience: 16, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false, nextCustomerId: 1,
       },
     })
     expect(S().serveCustomer('soup')).toBe('ok')
@@ -226,8 +226,8 @@ describe('уведомления', () => {
       phase: 'truck',
       truck: {
         timeLeft: 60,
-        queue: [{ want: 'taco', patience: 0.5, maxPatience: 16 }],
-        served: 0, spawnTimer: 0, nextSpawnIn: 99, ended: false,
+        queue: [{ id: 1, want: 'taco', patience: 0.5, maxPatience: 16 }],
+        served: 0, spawnTimer: 0, nextSpawnIn: 99, ended: false, nextCustomerId: 1,
       },
     })
     S().tickTruck(1)
@@ -235,7 +235,7 @@ describe('уведомления', () => {
 
     useGameStore.setState({
       truck: {
-        timeLeft: 0.5, queue: [], served: 0, spawnTimer: 0, nextSpawnIn: 99, ended: false,
+        timeLeft: 0.5, queue: [], served: 0, spawnTimer: 0, nextSpawnIn: 99, ended: false, nextCustomerId: 1,
       },
     })
     S().tickTruck(1)
@@ -318,11 +318,12 @@ describe('дополнительные правила', () => {
 describe('день фудтрака (Task 3)', () => {
   const mkTruck = (over = {}) => ({
     timeLeft: 60,
-    queue: [] as { want: 'salad' | 'soup' | 'taco'; patience: number; maxPatience: number }[],
+    queue: [] as { id: number; want: 'salad' | 'soup' | 'taco'; patience: number; maxPatience: number }[],
     served: 0,
     spawnTimer: 0,
     nextSpawnIn: 2.5,
     ended: false,
+    nextCustomerId: 1,
     ...over,
   })
 
@@ -340,6 +341,23 @@ describe('день фудтрака (Task 3)', () => {
     expect(S().truck!.timeLeft).toBeLessThan(60)
   })
 
+  it('каждый клиент получает свой id, и он не переиспользуется', () => {
+    useGameStore.setState({ phase: 'truck', truck: mkTruck() })
+    S().tickTruck(3) // спавн первого
+    const first = S().truck!.queue[0].id
+    S().tickTruck(7) // спавн второго
+    const ids = S().truck!.queue.map((c) => c.id)
+    expect(ids.length).toBe(2)
+    expect(new Set(ids).size).toBe(2)
+    expect(S().truck!.nextCustomerId).toBeGreaterThan(Math.max(...ids))
+
+    // Первого обслужили — его id не должен достаться следующему.
+    useGameStore.setState({ inventory: { carrot: 2, greens: 2, tomato: 2 } })
+    S().serveCustomer(S().truck!.queue[0].want)
+    S().tickTruck(7)
+    expect(S().truck!.queue.map((c) => c.id)).not.toContain(first)
+  })
+
   it('время вышло → truck.ended', () => {
     useGameStore.setState({ phase: 'truck', truck: mkTruck({ timeLeft: 0.5 }) })
     S().tickTruck(1)
@@ -351,7 +369,7 @@ describe('день фудтрака (Task 3)', () => {
       phase: 'truck',
       money: 0,
       inventory: { carrot: 2, greens: 0, tomato: 0 },
-      truck: mkTruck({ queue: [{ want: 'soup', patience: 16, maxPatience: 16 }] }),
+      truck: mkTruck({ queue: [{ id: 1, want: 'soup', patience: 16, maxPatience: 16 }] }),
     })
     expect(S().serveCustomer('soup')).toBe('ok')
     expect(S().money).toBe(RECIPES.soup.price)
@@ -362,11 +380,11 @@ describe('день фудтрака (Task 3)', () => {
   it('serveCustomer отклоняет: нет клиента / не то блюдо / нет ингредиентов', () => {
     useGameStore.setState({ phase: 'truck', inventory: { carrot: 0, greens: 0, tomato: 0 }, truck: mkTruck() })
     expect(S().serveCustomer('soup')).toBe('no-customer')
-    useGameStore.setState({ truck: mkTruck({ queue: [{ want: 'salad', patience: 16, maxPatience: 16 }] }) })
+    useGameStore.setState({ truck: mkTruck({ queue: [{ id: 1, want: 'salad', patience: 16, maxPatience: 16 }] }) })
     expect(S().serveCustomer('soup')).toBe('wrong-dish')
     useGameStore.setState({
       inventory: { carrot: 1, greens: 1, tomato: 1 },
-      truck: mkTruck({ queue: [{ want: 'soup', patience: 16, maxPatience: 16 }] }),
+      truck: mkTruck({ queue: [{ id: 1, want: 'soup', patience: 16, maxPatience: 16 }] }),
     })
     expect(S().serveCustomer('soup')).toBe('no-ingredients')
   })

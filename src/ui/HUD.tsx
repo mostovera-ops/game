@@ -12,7 +12,16 @@
  * По E открывается инвентарь героя — портрет и цвет одежды.
  */
 import { useEffect, useState } from 'react'
-import { CROPS, RECIPE_IDS, RECIPES, useGameStore, type Notice, type Tool } from '../game/store'
+import {
+  CROPS,
+  RECIPE_IDS,
+  RECIPES,
+  useGameStore,
+  type CropId,
+  type Notice,
+  type RecipeId,
+  type Tool,
+} from '../game/store'
 import { CROP_EMOJI, CROP_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
 import { HeroPortrait } from './HeroPortrait'
 import { Inventory } from './Inventory'
@@ -86,11 +95,23 @@ function Toast({ notice }: { notice: Notice }) {
   )
 }
 
+/**
+ * Тосты. На ферме — справа, чтобы не лезть в грядки. В день торговли — по
+ * центру над очередью: «не хватает ресурсов» относится к заказу, на который
+ * игрок смотрит, и читать это в углу экрана неудобно.
+ */
 function Toasts() {
   const notices = useGameStore((s) => s.notices)
+  const phase = useGameStore((s) => s.phase)
   if (!notices.length) return null
+
+  const place =
+    phase === 'truck'
+      ? 'left-1/2 top-28 -translate-x-1/2 items-center'
+      : 'right-4 top-16 w-64'
+
   return (
-    <div className="pointer-events-none absolute right-4 top-16 flex w-64 flex-col gap-1.5">
+    <div className={`pointer-events-none absolute flex flex-col gap-1.5 ${place}`}>
       {notices.map((n) => (
         <Toast key={n.id} notice={n} />
       ))}
@@ -241,30 +262,14 @@ function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
   )
 }
 
-function TruckQueue() {
-  const queue = useGameStore((s) => s.truck?.queue ?? [])
+/**
+ * Часы дня торговли. Очередь сюда больше не рисуем: клиенты стоят в сцене
+ * живыми человечками, и дублировать их иконками — значит показывать одно и то
+ * же дважды.
+ */
+function TruckClock() {
   const timeLeft = useGameStore((s) => s.truck?.timeLeft ?? 0)
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <div className={`${panel} px-4 py-1.5 text-sm`}>⏱ {Math.ceil(timeLeft)}с</div>
-      <div className="flex gap-3">
-        {queue.map((c, i) => {
-          const pct = Math.max(0, c.patience / c.maxPatience)
-          return (
-            <div key={i} className={`${panel} flex flex-col items-center gap-1 px-3 py-2`}>
-              <span className="text-2xl">{RECIPE_EMOJI[c.want]}</span>
-              <div className="h-1.5 w-10 overflow-hidden rounded bg-black/40">
-                <div
-                  className="h-full rounded"
-                  style={{ width: `${pct * 100}%`, background: pct > 0.4 ? '#9fc25f' : '#d1453a' }}
-                />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
+  return <div className={`${panel} px-4 py-1.5 text-sm`}>⏱ {Math.ceil(timeLeft)}с</div>
 }
 
 function FarmAction() {
@@ -279,23 +284,80 @@ function FarmAction() {
   )
 }
 
-function TruckAction() {
+/** Хватает ли в сумке ингредиентов на блюдо — от этого блёкнет карточка. */
+function canCook(recipe: RecipeId, inventory: Record<CropId, number>): boolean {
+  const needs = RECIPES[recipe].needs
+  return (Object.keys(needs) as CropId[]).every((c) => inventory[c] >= (needs[c] ?? 0))
+}
+
+/**
+ * Карточка блюда. Свёрнутая — эмодзи и цена; под курсором разворачивается и
+ * показывает состав. Состав нужен ровно в тот миг, когда игрок примеряется
+ * к кнопке, поэтому он живёт в ховере, а не занимает место постоянно.
+ */
+function DishCard({ recipe, hotkey }: { recipe: RecipeId; hotkey: number }) {
   const serveCustomer = useGameStore((s) => s.serveCustomer)
+  const inventory = useGameStore((s) => s.inventory)
+  const [open, setOpen] = useState(false)
+
+  const needs = RECIPES[recipe].needs
+  const enough = canCook(recipe, inventory)
+
   return (
-    <div className={`${panel} flex items-center gap-2 p-2`}>
-      {RECIPE_IDS.map((r, i) => (
-        <button
-          key={r}
-          onClick={() => serveCustomer(r)}
-          title={RECIPE_NAME[r]}
-          className="flex items-center gap-2 rounded-md bg-[#ff8b5e]/80 px-3 py-2 text-sm font-bold text-[#241a20] transition hover:brightness-110"
-        >
-          <span className="text-xl">{RECIPE_EMOJI[r]}</span>
-          <span>
-            {RECIPE_NAME[r]} · {RECIPES[r].price}💰
+    <button
+      onClick={() => serveCustomer(recipe)}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      className={`relative flex flex-col items-start gap-1 rounded-md px-3 py-2 text-sm font-bold text-[#241a20] transition hover:brightness-110 ${
+        enough ? 'bg-[#ff8b5e]/90' : 'bg-[#ff8b5e]/40'
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <span className="text-xl">{RECIPE_EMOJI[recipe]}</span>
+        <span>
+          {RECIPE_NAME[recipe]} · {RECIPES[recipe].price}💰
+        </span>
+        <span className="text-[10px] opacity-70">{hotkey}</span>
+      </span>
+
+      {open && (
+        <span className="flex w-full flex-col gap-0.5 border-t border-[#241a20]/25 pt-1 text-[11px] font-normal">
+          {(Object.keys(needs) as CropId[]).map((c) => {
+            const need = needs[c] ?? 0
+            const have = inventory[c]
+            return (
+              <span
+                key={c}
+                className={`flex items-center justify-between gap-3 ${
+                  have >= need ? '' : 'text-[#7a1f12]'
+                }`}
+              >
+                <span>
+                  {CROP_EMOJI[c]} {CROP_NAME[c]}
+                </span>
+                <span className="font-mono">
+                  {have}/{need}
+                </span>
+              </span>
+            )
+          })}
+          <span className="mt-0.5 flex items-center justify-between gap-3 border-t border-[#241a20]/25 pt-0.5">
+            <span>Выручка</span>
+            <span className="font-mono">{RECIPES[recipe].price} 💰</span>
           </span>
-          <span className="text-[10px] opacity-70">{i + 1}</span>
-        </button>
+        </span>
+      )}
+    </button>
+  )
+}
+
+function TruckAction() {
+  return (
+    <div className={`${panel} flex items-end gap-2 p-2`}>
+      {RECIPE_IDS.map((r, i) => (
+        <DishCard key={r} recipe={r} hotkey={i + 1} />
       ))}
     </div>
   )
@@ -360,13 +422,14 @@ export function HUD() {
   return (
     <div className="pointer-events-none absolute inset-0 select-none p-4 font-mono text-[#f0e4c9]">
       <WeekBar />
-      <Toasts />
 
       {phase === 'truck' && (
-        <div className="absolute left-1/2 top-20 -translate-x-1/2">
-          <TruckQueue />
+        <div className="absolute left-1/2 top-16 -translate-x-1/2">
+          <TruckClock />
         </div>
       )}
+
+      <Toasts />
 
       {/* Нижний ряд: экипировка героя слева, действие фазы справа.
           На узком экране переносится, иначе кнопка фазы уезжает за край. */}

@@ -155,6 +155,7 @@ export function Slot({
 }) {
   const slot = useGameStore((s) => s.slots.find((x) => x.id === slotId)!)
   const tool = useGameStore((s) => s.tool)
+  const phase = useGameStore((s) => s.phase)
 
   const [hover, setHover] = useState(false)
   const [splash, setSplash] = useState(false) // капля живёт отдельно от watered
@@ -181,8 +182,9 @@ export function Slot({
   const ripe = !!slot.crop && slot.stage === 2
 
   // Что произойдёт по клику этим инструментом — от этого же зависит курсор.
+  // В день 7 грядки мертвы: герой стоит за прилавком и подойти не может.
   const actionable =
-    tool === 'can' ? growing : tool === 'hand' ? ripe : !slot.crop
+    phase === 'farm' && (tool === 'can' ? growing : tool === 'hand' ? ripe : !slot.crop)
 
   // Клик только просит: герой идёт к слоту, а действие выполнит <Interactions>,
   // когда тот войдёт в радиус. Здесь ничего не меняем в игровом состоянии.
