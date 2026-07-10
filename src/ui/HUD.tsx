@@ -8,24 +8,15 @@
  * Сверху — неделя и деньги, справа внизу — действие фазы: закончить день или
  * подать блюдо. События (продал, клиент ушёл, урожай) всплывают тостами: стор
  * отдаёт вид события, текст собирается здесь.
+ *
+ * По E открывается инвентарь героя — портрет и цвет одежды.
  */
-import { useEffect } from 'react'
-import {
-  CROPS,
-  RECIPE_IDS,
-  RECIPES,
-  useGameStore,
-  type CropId,
-  type Notice,
-  type RecipeId,
-  type Tool,
-} from '../game/store'
+import { useEffect, useState } from 'react'
+import { CROPS, RECIPE_IDS, RECIPES, useGameStore, type Notice, type Tool } from '../game/store'
+import { CROP_EMOJI, CROP_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
+import { HeroPortrait } from './HeroPortrait'
+import { Inventory } from './Inventory'
 import { SeedPacket } from './SeedPacket'
-
-const CROP_EMOJI: Record<CropId, string> = { carrot: '🥕', greens: '🥬', tomato: '🍅' }
-const CROP_NAME: Record<CropId, string> = { carrot: 'Морковь', greens: 'Зелень', tomato: 'Томат' }
-const RECIPE_EMOJI: Record<RecipeId, string> = { salad: '🥗', soup: '🍲', taco: '🌮' }
-const RECIPE_NAME: Record<RecipeId, string> = { salad: 'Салат', soup: 'Суп', taco: 'Тако' }
 
 const panel = 'pointer-events-auto rounded-lg bg-[#241a20]/70 backdrop-blur'
 
@@ -172,8 +163,9 @@ function ToolButton({
 }
 
 /** Единый тулбар внизу: слева инструменты, справа сумка с ресурсами. */
-function Toolbar() {
+function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
   const phase = useGameStore((s) => s.phase)
+  const heroColor = useGameStore((s) => s.heroColor)
   const inventory = useGameStore((s) => s.inventory)
   const selectedSeed = useGameStore((s) => s.selectedSeed)
   const tool = useGameStore((s) => s.tool)
@@ -184,6 +176,17 @@ function Toolbar() {
 
   return (
     <div className={`${panel} flex flex-wrap items-center gap-2 p-2`}>
+      <button
+        onClick={onOpenInventory}
+        title="Инвентарь героя (E)"
+        className="relative grid h-12 w-12 place-items-center rounded-md bg-white/5 transition hover:bg-white/10"
+      >
+        <HeroPortrait color={heroColor} className="h-9" />
+        <span className="absolute bottom-0 right-1 text-[9px] opacity-60">E</span>
+      </button>
+
+      <div className="mx-1 h-10 w-px bg-white/15" />
+
       {farm && (
         <>
           {CROPS.map((c, i) => (
@@ -330,9 +333,16 @@ export function HUD() {
   const selectSeed = useGameStore((s) => s.selectSeed)
   const selectTool = useGameStore((s) => s.selectTool)
   const serveCustomer = useGameStore((s) => s.serveCustomer)
+  const [inventoryOpen, setInventoryOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // По code, а не по key: на кириллической раскладке это та же клавиша.
+      if (e.code === 'KeyE') {
+        setInventoryOpen((v) => !v)
+        return
+      }
+      if (inventoryOpen) return // за модалкой инструменты не переключаем
       const asTool = TOOL_KEYS[e.key]
       if (asTool) {
         if (phase === 'farm') selectTool(asTool) // лейка и рука есть только на ферме
@@ -345,7 +355,7 @@ export function HUD() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, selectSeed, selectTool, serveCustomer])
+  }, [phase, selectSeed, selectTool, serveCustomer, inventoryOpen])
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none p-4 font-mono text-[#f0e4c9]">
@@ -361,9 +371,11 @@ export function HUD() {
       {/* Нижний ряд: экипировка героя слева, действие фазы справа.
           На узком экране переносится, иначе кнопка фазы уезжает за край. */}
       <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-end justify-between gap-3">
-        <Toolbar />
+        <Toolbar onOpenInventory={() => setInventoryOpen(true)} />
         {phase === 'farm' ? <FarmAction /> : <TruckAction />}
       </div>
+
+      {inventoryOpen && <Inventory onClose={() => setInventoryOpen(false)} />}
 
       <WeekSummary />
     </div>
