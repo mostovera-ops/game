@@ -21,9 +21,9 @@ import { APPROACH, QUEUE_DIR, QUEUE_YAW, SPAWN, queueSpot, yawTo } from './truck
 
 const HERO_URL = '/assets/props/hero.glb'
 
-// Путь из-за деревьев длиннее прежнего, а терпение тикает с появления:
-// без прибавки к скорости клиент тратил бы треть его на дорогу.
-const SPEED = 2.2 // м/с
+// Дорога из-за деревьев длинная, а стоять и смотреть на идущего клиента
+// игроку нечем: терпение до окна не тикает, но и ждать его полминуты незачем.
+const SPEED = 3.4 // м/с
 const STEP_RATE = 9
 const STEP_AMP = 0.5
 const AMP_LAMBDA = 8
@@ -99,6 +99,13 @@ function CustomerFigure({
     const dz = goal.current.z - g.position.z
     const dist = Math.hypot(dx, dz)
 
+    // Дошёл до окна — только теперь придумывает заказ. Раньше он висел над ним
+    // ещё за деревьями, и кнопки выдачи предлагали подать блюдо тому, кто и не
+    // просил. Стор сам проверит, что это первый в очереди.
+    if (index === 0 && rounded.current && dist <= ARRIVE && !customer.want) {
+      useGameStore.getState().customerReady(customer.id)
+    }
+
     let moved = false
     let want: number
     if (dist > ARRIVE) {
@@ -127,11 +134,14 @@ function CustomerFigure({
   return (
     <group ref={group}>
       <primitive object={model} />
-      <OrderBubble
-        customerId={customer.id}
-        recipe={customer.want}
-        patience={customer.patience / customer.maxPatience}
-      />
+      {/* Пока клиент идёт, заказа у него нет — и облачка тоже. */}
+      {customer.want && (
+        <OrderBubble
+          customerId={customer.id}
+          recipe={customer.want}
+          patience={customer.patience / customer.maxPatience}
+        />
+      )}
     </group>
   )
 }

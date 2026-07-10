@@ -23,7 +23,8 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import { applyPalette, CROP_ASSET, type Palette, type Vec3 } from '../assets/scene'
-import { slotActionable, useGameStore, type CropId } from '../game/store'
+import { slotActionable, useGameStore, type CropId, type Slot as SlotState } from '../game/store'
+import { clearHoverLabel, setHoverLabel } from './hoverLabel'
 import { SpeechBubble } from './SpeechBubble'
 import { heroTarget } from './heroTarget'
 import { REACH } from './heroState'
@@ -146,6 +147,34 @@ function LuckyStars() {
   )
 }
 
+/** Названия культур для подсказки. Дубль ui/crops.ts: scene/ туда не ходит. */
+const CROP_TITLE: Record<CropId, string> = {
+  carrot: '🥕 Морковь',
+  greens: '🥬 Зелень',
+  tomato: '🍅 Томат',
+}
+
+/**
+ * Сколько дней до урожая. Политое растение растёт на стадию за ночь, значит
+ * до созревания ему столько ночей, сколько стадий не хватает.
+ */
+function daysLeft(stage: number): string {
+  const left = 2 - stage
+  if (left <= 0) return 'Созрело — можно собирать'
+  return left === 1 ? 'До урожая: 1 день' : `До урожая: ${left} дня`
+}
+
+/** Что показать по ховеру: пустой слот — просто грядка, занятый — карточка. */
+function slotLabel(slot: SlotState): { title: string; lines: string[] } {
+  if (!slot.crop) {
+    return { title: 'Пустая грядка', lines: [slot.watered ? 'Полито' : 'Не полито'] }
+  }
+  return {
+    title: CROP_TITLE[slot.crop],
+    lines: [daysLeft(slot.stage), slot.watered ? 'Полито' : 'Не полито'],
+  }
+}
+
 export function Slot({
   slotId,
   position,
@@ -205,8 +234,15 @@ export function Slot({
     setHover(true)
     document.body.style.cursor = actionable ? 'pointer' : 'not-allowed'
   }
+  // Подпись едет за курсором: слот маленький, и панель у его центра
+  // перекрывала бы соседей.
+  const onMove = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    setHoverLabel({ key: slotId, ...slotLabel(slot), x: e.clientX, y: e.clientY })
+  }
   const onOut = () => {
     setHover(false)
+    clearHoverLabel(slotId)
     document.body.style.cursor = ''
   }
 
@@ -231,7 +267,13 @@ export function Slot({
       {splash && <Droplet />}
 
       {/* невидимый хитбокс над слотом — рейкаст по нему, не по геометрии растения */}
-      <mesh position={[0, 0.3, 0]} onClick={onClick} onPointerOver={onOver} onPointerOut={onOut}>
+      <mesh
+        position={[0, 0.3, 0]}
+        onClick={onClick}
+        onPointerOver={onOver}
+        onPointerMove={onMove}
+        onPointerOut={onOut}
+      >
         <boxGeometry args={[0.44, 0.7, 0.44]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>

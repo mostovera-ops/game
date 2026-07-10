@@ -9,7 +9,8 @@
  * подать блюдо. События (продал, клиент ушёл, урожай) всплывают тостами: стор
  * отдаёт вид события, текст собирается здесь.
  *
- * По E открывается инвентарь героя — портрет и цвет одежды.
+ * По I открывается инвентарь героя — портрет и цвет одежды. E берёт в руки
+ * руку: сбор урожая — действие частое, и буква под ним самая удобная.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
@@ -28,7 +29,13 @@ import { HeroPortrait } from './HeroPortrait'
 import { Inventory } from './Inventory'
 import { SeedPacket } from './SeedPacket'
 import { Shop } from './Shop'
-import { buildToolbar, hotkeyFor, TOOLBAR_CELLS, type Slot } from './toolbar'
+import {
+  hotkeyFor,
+  itemCount,
+  TOOLBAR_CELLS,
+  type ToolbarItem,
+} from '../game/toolbar'
+import { getHoverLabel, subscribeHoverLabel } from '../scene/hoverLabel'
 
 /** Клавиши ячеек тулбара в их порядке: 1…9, 0. */
 const TOOLBAR_KEYS = Array.from({ length: TOOLBAR_CELLS }, (_, i) => hotkeyFor(i))
@@ -249,19 +256,17 @@ const ACTIONS: {
   {
     tool: 'hand',
     glyph: '✋',
-    hint: 'Собрать (R)',
-    hotkey: 'R',
-    code: 'KeyR',
+    hint: 'Собрать (E)',
+    hotkey: 'E',
+    code: 'KeyE',
     activeClass: 'bg-[#f4b942]',
   },
 ]
 
-/**
- * Пустая ячейка: рамка есть, содержимого нет. Цифру не пишем — нажимать нечего,
- * а подписанная клавиша обещала бы действие.
- */
-function EmptyCell() {
-  return <div className="h-12 w-12 rounded-md bg-black/20" />
+/** Подпись предмета для ховера: «Семена Томата ×3», «Морковь ×2». */
+function itemHint(item: ToolbarItem, count: number): string {
+  const name = CROP_NAME[item.crop]
+  return item.kind === 'seed' ? `Семена: ${name} ×${count}` : `${name} ×${count}`
 }
 
 /** Лейка и рука: не имущество, а действия — поэтому отдельно от ячеек. */
@@ -286,41 +291,91 @@ function Actions() {
   )
 }
 
-function ToolbarCell({ slot }: { slot: Slot }) {
+/**
+ * Ячейка тулбара. Она же цель перетаскивания: предмет держится своей ячейки,
+ * пока игрок сам его не перенесёт, а пустая ячейка остаётся пустой — соседи
+ * не сдвигаются, когда семена кончились.
+ *
+ * Дроп в занятую ячейку меняет предметы местами: промахнувшись, игрок не
+ * должен терять то, что нёс.
+ */
+function ToolbarCell({ index, item }: { index: number; item: ToolbarItem | null }) {
   const selectedSeed = useGameStore((s) => s.selectedSeed)
   const tool = useGameStore((s) => s.tool)
   const seeds = useGameStore((s) => s.seeds)
+  const inventory = useGameStore((s) => s.inventory)
   const selectSeed = useGameStore((s) => s.selectSeed)
+  const moveToolbarItem = useGameStore((s) => s.moveToolbarItem)
+  const phase = useGameStore((s) => s.phase)
+  const [over, setOver] = useState(false)
 
-  const cell = slot.cell
-  if (!cell) return <EmptyCell />
+  const drop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setOver(false)
+    const from = Number(e.dataTransfer.getData('text/toolbar-cell'))
+    if (Number.isInteger(from)) moveToolbarItem(from, index)
+  }
+  const dragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setOver(true)
+  }
 
-  if (cell.kind === 'seed') {
-    const active = tool === 'seed' && selectedSeed === cell.crop
+  const ring = over ? 'ring-2 ring-[#f4b942]' : ''
+
+  if (!item) {
+    // Пустая ячейка: рамка есть, содержимого нет. Цифру не пишем — нажимать
+    // нечего, а подписанная клавиша обещала бы действие.
     return (
-      <ToolButton
-        active={active}
-        activeClass="bg-[#9fc25f]"
-        hint={`Семена: ${CROP_NAME[cell.crop]} — ${seeds[cell.crop]} шт.`}
-        hotkey={slot.hotkey}
-        onClick={() => selectSeed(cell.crop)}
-      >
-        <SeedPacket crop={cell.crop} active={active} />
-        <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">
-          {seeds[cell.crop]}
-        </span>
-      </ToolButton>
+      <div
+        onDragOver={dragOver}
+        onDragLeave={() => setOver(false)}
+        onDrop={drop}
+        className={`h-12 w-12 rounded-md bg-black/20 ${ring}`}
+      />
+    )
+  }
+
+  const count = itemCount(item, seeds, inventory)
+  const hint = itemHint(item, count)
+  // В день торговли цифры подают блюда: подписывать ими ячейки значило бы
+  // обещать то, чего не будет.
+  const hotkey = phase === 'farm' ? hotkeyFor(index) : ''
+
+  const common = {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => e.dataTransfer.setData('text/toolbar-cell', String(index)),
+    onDragOver: dragOver,
+    onDragLeave: () => setOver(false),
+    onDrop: drop,
+  }
+
+  if (item.kind === 'seed') {
+    const active = tool === 'seed' && selectedSeed === item.crop
+    return (
+      <div {...common} className={`rounded-md ${ring}`}>
+        <ToolButton
+          active={active}
+          activeClass="bg-[#9fc25f]"
+          hint={hint}
+          hotkey={hotkey}
+          onClick={() => selectSeed(item.crop)}
+        >
+          <SeedPacket crop={item.crop} active={active} />
+          <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
+        </ToolButton>
+      </div>
     )
   }
 
   // Урожай: он не инструмент, кликать нечего — только счётчик.
   return (
     <div
-      title={CROP_NAME[cell.crop]}
-      className="relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl"
+      {...common}
+      title={hint}
+      className={`relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl ${ring}`}
     >
-      <span>{CROP_EMOJI[cell.crop]}</span>
-      <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{cell.count}</span>
+      <span>{CROP_EMOJI[item.crop]}</span>
+      <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
     </div>
   )
 }
@@ -336,26 +391,23 @@ function ToolbarCell({ slot }: { slot: Slot }) {
 function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
   const phase = useGameStore((s) => s.phase)
   const heroColor = useGameStore((s) => s.heroColor)
-  const inventory = useGameStore((s) => s.inventory)
-  const seeds = useGameStore((s) => s.seeds)
-
-  const slots = buildToolbar(phase, seeds, inventory)
+  const toolbar = useGameStore((s) => s.toolbar)
 
   return (
     <div className={`${panel} flex items-center gap-2 p-2`}>
       <button
         onClick={onOpenInventory}
-        title="Инвентарь героя (E)"
+        title="Инвентарь героя (I)"
         className="relative grid h-12 w-12 place-items-center rounded-md bg-white/5 transition hover:bg-white/10"
       >
         <HeroPortrait color={heroColor} className="h-9" />
-        <span className="absolute bottom-0 right-1 text-[9px] opacity-60">E</span>
+        <span className="absolute bottom-0 right-1 text-[9px] opacity-60">I</span>
       </button>
 
       <div className="mx-1 h-10 w-px bg-white/15" />
 
-      {slots.map((slot, i) => (
-        <ToolbarCell key={i} slot={slot} />
+      {toolbar.map((item, i) => (
+        <ToolbarCell key={i} index={i} item={item} />
       ))}
 
       {/* Действия — только на ферме: в день торговли грядки на замке. */}
@@ -423,7 +475,8 @@ function DishCard({ recipe }: { recipe: RecipeId }) {
 
 function TruckAction() {
   const skipCustomer = useGameStore((s) => s.skipCustomer)
-  const hasQueue = useGameStore((s) => (s.truck?.queue.length ?? 0) > 0)
+  // Пропускать нечего, пока первый в очереди не дошёл до окна и не заказал.
+  const hasOrder = useGameStore((s) => !!s.truck?.queue[0]?.want)
 
   return (
     <div className={`${panel} flex flex-col items-start gap-1.5 p-2`}>
@@ -437,7 +490,7 @@ function TruckAction() {
 
         <button
           onClick={skipCustomer}
-          disabled={!hasQueue}
+          disabled={!hasOrder}
           title="Отпустить первого в очереди, ничего не подав"
           className="rounded-md bg-white/10 px-3 py-2 text-sm font-bold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
         >
@@ -491,6 +544,31 @@ function OrderTooltip() {
   )
 }
 
+/**
+ * Подпись того, на что игрок навёл курсор в сцене: ёлка, дом, саженец.
+ *
+ * Панель встаёт у курсора и не ловит события — иначе она перекрыла бы тот
+ * самый объект, о котором рассказывает, и подпись мигала бы.
+ */
+function SceneTooltip() {
+  const hovered = useSyncExternalStore(subscribeHoverLabel, getHoverLabel, getHoverLabel)
+  if (!hovered) return null
+
+  return (
+    <div
+      className="pointer-events-none fixed z-10 -translate-y-full rounded-md border border-white/15 bg-[#241a20]/95 px-2.5 py-1.5 text-xs"
+      style={{ left: hovered.x + 14, top: hovered.y - 6 }}
+    >
+      <div className="font-bold text-[#f0e4c9]">{hovered.title}</div>
+      {hovered.lines?.map((line) => (
+        <div key={line} className="opacity-70">
+          {line}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function WeekSummary() {
   const truck = useGameStore((s) => s.truck)
   const money = useGameStore((s) => s.money)
@@ -517,8 +595,7 @@ function WeekSummary() {
 
 export function HUD() {
   const phase = useGameStore((s) => s.phase)
-  const seeds = useGameStore((s) => s.seeds)
-  const inventory = useGameStore((s) => s.inventory)
+  const toolbar = useGameStore((s) => s.toolbar)
   const selectSeed = useGameStore((s) => s.selectSeed)
   const selectTool = useGameStore((s) => s.selectTool)
   const serveCustomer = useGameStore((s) => s.serveCustomer)
@@ -529,7 +606,7 @@ export function HUD() {
     const onKey = (e: KeyboardEvent) => {
       if (shopOpen) return // за прилавком не до инструментов
       // По code, а не по key: на кириллической раскладке это та же клавиша.
-      if (e.code === 'KeyE') {
+      if (e.code === 'KeyI') {
         setInventoryOpen((v) => !v)
         return
       }
@@ -552,12 +629,12 @@ export function HUD() {
       // На ферме цифра — номер ячейки тулбара, ровно та, что под ней нарисована.
       const index = TOOLBAR_KEYS.indexOf(e.key)
       if (index < 0) return
-      const cell = buildToolbar(phase, seeds, inventory)[index].cell
-      if (cell?.kind === 'seed') selectSeed(cell.crop)
+      const item = toolbar[index]
+      if (item?.kind === 'seed') selectSeed(item.crop)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, seeds, inventory, selectSeed, selectTool, serveCustomer, inventoryOpen, shopOpen])
+  }, [phase, toolbar, selectSeed, selectTool, serveCustomer, inventoryOpen, shopOpen])
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none p-4 font-mono text-[#f0e4c9]">
@@ -579,6 +656,7 @@ export function HUD() {
       </div>
 
       {phase === 'truck' && <OrderTooltip />}
+      <SceneTooltip />
 
       {inventoryOpen && <Inventory onClose={() => setInventoryOpen(false)} />}
       {shopOpen && <Shop />}

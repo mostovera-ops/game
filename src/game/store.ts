@@ -9,6 +9,12 @@
  */
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import {
+  emptyToolbar,
+  moveItem,
+  reconcileToolbar,
+  type ToolbarLayout,
+} from './toolbar'
 
 export type CropId = 'carrot' | 'greens' | 'tomato'
 export type RecipeId = 'salad' | 'soup' | 'taco'
@@ -164,7 +170,14 @@ export interface Customer {
    * чтобы шагнуть вперёд.
    */
   id: number
-  want: RecipeId
+  /**
+   * Что клиент заказал. null — он ещё идёт к окну и ничего не просил.
+   *
+   * Заказ рождается у самого окна (customerReady), а не при появлении клиента:
+   * иначе кнопки выдачи предлагали бы подать блюдо тому, кто ещё за деревьями,
+   * и игрок бил бы по ним наугад.
+   */
+  want: RecipeId | null
   patience: number
   maxPatience: number
 }
@@ -237,6 +250,11 @@ interface GameData {
    * открывает её сцена — герой, дошедший до прилавка.
    */
   shopOpen: boolean
+  /**
+   * Раскладка тулбара: что в какой ячейке лежит. Персистится — игрок
+   * раскладывает предметы под себя, и после перезагрузки они там же.
+   */
+  toolbar: ToolbarLayout
   /** Цвет одежды героя, `#rrggbb`. */
   heroColor: string
   /** Играет ли музыка. Звуки и природа от этого не зависят. */
@@ -280,7 +298,11 @@ interface GameActions {
   serveCustomer: (recipeId: RecipeId) => ServeResult
   /** Отпустить первого в очереди, ничего ему не подав. */
   skipCustomer: () => void
-  /** Начать новую неделю (день 1, чистые грядки; деньги/инвентарь остаются). */
+  /** Клиент дошёл до окна — он придумывает заказ, и терпение пошло. */
+  customerReady: (id: number) => void
+  /** Перетащить предмет тулбара из ячейки в ячейку. */
+  moveToolbarItem: (from: number, to: number) => void
+  /** Начать новую неделю (день 1; грядки, деньги и инвентарь остаются). */
   nextWeek: () => void
   /** Полный сброс к первому дню. */
   resetGame: () => void
@@ -299,12 +321,22 @@ function initialData(): GameData {
     selectedSeed: 'carrot',
     tool: 'seed',
     truck: null,
+    toolbar: reconcileToolbar(emptyToolbar(), startingSeeds(), emptyInventory()),
     shopOpen: false,
     heroColor: HERO_COLOR_DEFAULT,
     musicOn: true,
     notices: [],
     nextNoticeId: 1,
   }
+}
+
+/**
+ * Патч раскладки тулбара под новые семена/инвентарь. Зовётся из каждого
+ * действия, которое их меняет: кончившийся предмет освобождает ячейку,
+ * появившийся садится в первую свободную.
+ */
+function withToolbar(layout: ToolbarLayout, seeds: Inventory, inventory: Inventory) {
+  return { toolbar: reconcileToolbar(layout, seeds, inventory) }
 }
 
 /** Добавляет тост, вытесняя самые старые. Возвращает патч для set(). */
@@ -367,9 +399,11 @@ export const useGameStore = create<GameState>()(
           const cost = SEED_PRICE[crop] * qty
           if (qty <= 0) return {}
           if (s.money < cost) return withNotice(s, { kind: 'no-money' })
+          const seeds = { ...s.seeds, [crop]: s.seeds[crop] + qty }
           return {
             money: s.money - cost,
-            seeds: { ...s.seeds, [crop]: s.seeds[crop] + qty },
+            seeds,
+            ...withToolbar(s.toolbar, seeds, s.inventory),
             ...withNotice(s, { kind: 'bought', crop, amount: qty }),
           }
         }),
@@ -380,8 +414,10 @@ export const useGameStore = create<GameState>()(
           if (!slot || slot.crop) return {}
           const crop = s.selectedSeed
           if (s.seeds[crop] < 1) return withNotice(s, { kind: 'no-seeds', crop })
+          const seeds = { ...s.seeds, [crop]: s.seeds[crop] - 1 }
           return {
-            seeds: { ...s.seeds, [crop]: s.seeds[crop] - 1 },
+            seeds,
+            ...withToolbar(s.toolbar, seeds, s.inventory),
             // Полив принадлежит земле, а не растению: посадка в мокрую грядку
             // не высушивает её.
             slots: s.slots.map((x) =>
@@ -403,12 +439,14 @@ export const useGameStore = create<GameState>()(
           if (!slot || !slot.crop || slot.stage !== 2) return {}
           const crop = slot.crop
           const amount = slot.lucky ? LUCKY_YIELD : 1
+          const inventory = { ...s.inventory, [crop]: s.inventory[crop] + amount }
           return {
             // Грядка остаётся политой: собрали растение, а не воду из земли.
             slots: s.slots.map((x) =>
               x.id === slotId ? { ...emptySlot(x.id), watered: x.watered } : x,
             ),
-            inventory: { ...s.inventory, [crop]: s.inventory[crop] + amount },
+            inventory,
+            ...withToolbar(s.toolbar, s.seeds, inventory),
             ...withNotice(s, { kind: 'harvest', crop, amount }),
           }
         }),
@@ -456,7 +494,7 @@ export const useGameStore = create<GameState>()(
         }
         const inventory = { ...s.inventory }
         for (const crop of needs) inventory[crop] -= recipe.needs[crop] ?? 0
-        set({ inventory, money: s.money + recipe.price })
+        set({ inventory, money: s.money + recipe.price, ...withToolbar(s.toolbar, s.seeds, inventory) })
         return true
       },
 
@@ -471,20 +509,23 @@ export const useGameStore = create<GameState>()(
               ...withNotice(s, { kind: 'time-up' }),
             }
           }
-          // Терпение убывает, ушедших клиентов убираем — и сообщаем о них.
-          const ticked = t.queue.map((c) => ({ ...c, patience: c.patience - dt }))
+          // Терпение убывает только у тех, кто уже сделал заказ: дорога к окну
+          // его не тратит. Ушедших клиентов убираем — и сообщаем о них.
+          const ticked = t.queue.map((c) =>
+            c.want ? { ...c, patience: c.patience - dt } : c,
+          )
           const left = ticked.filter((c) => c.patience <= 0)
           let queue = ticked.filter((c) => c.patience > 0)
           let notice = {}
-          if (left.length) notice = withNotice(s, { kind: 'customer-left', recipe: left[0].want })
+          if (left.length) notice = withNotice(s, { kind: 'customer-left', recipe: left[0].want! })
           let spawnTimer = t.spawnTimer + dt
           let nextSpawnIn = t.nextSpawnIn
           let nextCustomerId = t.nextCustomerId
           if (spawnTimer >= nextSpawnIn && queue.length < MAX_QUEUE) {
             spawnTimer = 0
             nextSpawnIn = 3 + Math.random() * 3
-            const want = RECIPE_IDS[Math.floor(Math.random() * RECIPE_IDS.length)]
-            queue = [...queue, { id: nextCustomerId, want, patience: PATIENCE, maxPatience: PATIENCE }]
+            // Без заказа: его клиент придумает, дойдя до окна.
+            queue = [...queue, { id: nextCustomerId, want: null, patience: PATIENCE, maxPatience: PATIENCE }]
             nextCustomerId++
           }
           return {
@@ -501,6 +542,11 @@ export const useGameStore = create<GameState>()(
           return 'no-customer'
         }
         const front = t.queue[0]
+        // Дошёл, но заказать не успел — подавать нечего.
+        if (!front.want) {
+          set(withNotice(s, { kind: 'no-customer' }))
+          return 'no-customer'
+        }
         if (front.want !== recipeId) {
           set(withNotice(s, { kind: 'wrong-dish', recipe: front.want }))
           return 'wrong-dish'
@@ -515,6 +561,7 @@ export const useGameStore = create<GameState>()(
         for (const crop of needs) inventory[crop] -= recipe.needs[crop] ?? 0
         set({
           inventory,
+          ...withToolbar(s.toolbar, s.seeds, inventory),
           money: s.money + recipe.price,
           truck: { ...t, served: t.served + 1, queue: t.queue.slice(1) },
           ...withNotice(s, { kind: 'served', recipe: recipeId, amount: recipe.price }),
@@ -531,19 +578,41 @@ export const useGameStore = create<GameState>()(
             return withNotice(s, { kind: 'no-customer' })
           }
           const front = t.queue[0]
+          if (!front.want) return withNotice(s, { kind: 'no-customer' })
           return {
             truck: { ...t, queue: t.queue.slice(1) },
             ...withNotice(s, { kind: 'skipped', recipe: front.want }),
           }
         }),
 
-      // Семена и деньги переезжают в новую неделю: они и есть накопленный
-      // прогресс. Даром их больше не выдают — только лавка.
+      // Заказ рождается здесь, а не при появлении клиента: сцена зовёт это,
+      // когда человечек дошёл до окна. Просить умеет только первый в очереди —
+      // остальные ещё стоят за ним и в окно не смотрят.
+      customerReady: (id) =>
+        set((s) => {
+          const t = s.truck
+          if (!t || t.ended) return {}
+          const front = t.queue[0]
+          if (!front || front.id !== id || front.want) return {}
+          const want = RECIPE_IDS[Math.floor(Math.random() * RECIPE_IDS.length)]
+          return {
+            truck: {
+              ...t,
+              queue: [{ ...front, want, patience: front.maxPatience }, ...t.queue.slice(1)],
+            },
+          }
+        }),
+
+      moveToolbarItem: (from, to) => set((s) => ({ toolbar: moveItem(s.toolbar, from, to) })),
+
+      // Семена, деньги и грядки переезжают в новую неделю: это и есть
+      // накопленный прогресс. Даром семян больше не выдают — только лавка.
+      // Грядки не подметаем: несобранный урожай и всходы — тоже труд игрока,
+      // и ярмарка не повод их выкорчёвывать.
       nextWeek: () =>
         set(() => ({
           day: 1,
           phase: 'farm',
-          slots: emptySlots(),
           truck: null,
           shopOpen: false,
           notices: [],
@@ -568,7 +637,10 @@ export const useGameStore = create<GameState>()(
       // v5: кнопка музыки в HUD. Старому сохранению включаем её — так было
       //     до появления кнопки, и молчащая после обновления игра выглядела
       //     бы поломкой, а не настройкой.
-      version: 5,
+      // v6: у тулбара появилась своя раскладка — предметы держатся ячеек и
+      //     не сдвигаются, когда сосед кончился. Старому сохранению собираем
+      //     её из того, чем герой владеет.
+      version: 6,
       migrate: (persisted, from) => {
         let s = persisted as GameData
         if (from < 1) s = { ...s, slots: emptySlots(), tool: 'seed' }
@@ -584,6 +656,7 @@ export const useGameStore = create<GameState>()(
         }
         if (from < 4) s = { ...s, seeds: startingSeeds(), money: s.money + START_MONEY }
         if (from < 5) s = { ...s, musicOn: true }
+        if (from < 6) s = { ...s, toolbar: reconcileToolbar(emptyToolbar(), s.seeds, s.inventory) }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.
@@ -597,6 +670,7 @@ export const useGameStore = create<GameState>()(
         selectedSeed: s.selectedSeed,
         tool: s.tool,
         truck: s.truck,
+        toolbar: s.toolbar,
         shopOpen: false, // лавка закрывается вместе с вкладкой
         heroColor: s.heroColor,
         musicOn: s.musicOn,

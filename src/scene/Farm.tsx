@@ -28,7 +28,8 @@ import { hero, distanceToHero, REACH } from './heroState'
 import { intent, clearIntent, setIntent } from './intent'
 import { halfExtentsXZ, type Collider } from './collision'
 import { say } from './heroSpeech'
-import { PHRASES } from './phrases'
+import { PHRASES, PROP_NAMES } from './phrases'
+import { clearAllHoverLabels, clearHoverLabel, setHoverLabel } from './hoverLabel'
 import { HATCH_LAMBDA, HATCH_OPEN } from './truckStage'
 
 export interface CamView {
@@ -254,6 +255,47 @@ function materialName(object: THREE.Object3D): string {
  * Если реплики нет (стена, крыша, теплица), событие не перехватываем: оно дойдёт
  * до земли, и герой просто пойдёт туда.
  */
+/**
+ * Ховер по пропсу: подпись у курсора с названием предмета. Имя берём из того же
+ * материала, что и реплику, — у одного пропса оно одно на все его части.
+ *
+ * Ключом подписи служит имя материала: наводя курсор с ёлки на соседнюю, мы
+ * получаем сперва over новой, потом out старой, и без ключа новая подпись
+ * гасла бы сразу после появления.
+ */
+function labelOf(e: ThreeEvent<PointerEvent>): string | null {
+  // Сверяем eventObject, а не object: у инстансов (деревья, кусты) object —
+  // это прокси drei, и его никогда нет среди пересечений. Иначе ёлка не
+  // перехватывала бы ховер, и подпись доставалась бы дому за ней.
+  if (e.intersections[0]?.eventObject !== e.eventObject) return null
+  const name = materialName(e.object) || materialName(e.eventObject)
+  return PROP_NAMES[name] ?? null
+}
+
+function hoverProp(e: ThreeEvent<PointerEvent>) {
+  const title = labelOf(e)
+  if (!title) return
+  e.stopPropagation()
+  setHoverLabel({ key: title, title, x: e.clientX, y: e.clientY })
+}
+
+function unhoverProp(e: ThreeEvent<PointerEvent>) {
+  const name = materialName(e.object) || materialName(e.eventObject)
+  const title = PROP_NAMES[name]
+  if (title) clearHoverLabel(title)
+}
+
+/** Родной raycast инстансинга — тот, что drei подменяет заглушкой. */
+const instancedRaycast = THREE.InstancedMesh.prototype.raycast
+
+/**
+ * drei гасит raycast у InstancedMesh (`raycast: () => null`) и раздаёт события
+ * прокси-объектам <Instance>. Нам это ни к чему: подпись у дерева одна на все
+ * его инстансы, а прокси не отдаёт ни материала — по нему не понять, ёлка это
+ * или куст. Свой проп перекрывает заглушку: у drei он идёт до `...props`.
+ */
+const RAYCAST_PROP = { raycast: instancedRaycast } as unknown as Record<string, never>
+
 function speak(e: ThreeEvent<MouseEvent>) {
   // Обработчик зовётся на каждом пересечении луча по очереди, а не только на
   // ближнем. Без этой проверки клик по молчаливому пропсу спереди озвучивал бы
@@ -299,6 +341,8 @@ function Singleton({
       rotation={[0, inst.rotationY, 0]}
       scale={inst.scale}
       onClick={onClick}
+      onPointerMove={hoverProp}
+      onPointerOut={unhoverProp}
     />
   )
 }
@@ -383,6 +427,40 @@ function SeedStore(props: { url: string; inst: PropInstance; palette: Palette; c
   return <Singleton {...props} onClick={onClick} />
 }
 
+/** Один материал пропса, размноженный по инстансам. */
+function InstancedPart({
+  part,
+  list,
+  cast,
+}: {
+  part: { geometry: THREE.BufferGeometry; material: THREE.Material }
+  list: PropInstance[]
+  cast: boolean
+}) {
+  return (
+    <Instances
+      {...RAYCAST_PROP}
+      limit={list.length}
+      range={list.length}
+      geometry={part.geometry}
+      material={part.material}
+      castShadow={cast}
+      onClick={speak}
+      onPointerMove={hoverProp}
+      onPointerOut={unhoverProp}
+    >
+      {list.map((inst, j) => (
+        <Instance
+          key={j}
+          position={inst.position}
+          rotation={[0, inst.rotationY, 0]}
+          scale={inst.scale}
+        />
+      ))}
+    </Instances>
+  )
+}
+
 function InstancedProp({
   url,
   list,
@@ -399,24 +477,7 @@ function InstancedProp({
   return (
     <>
       {parts.map((part, i) => (
-        <Instances
-          key={i}
-          limit={list.length}
-          range={list.length}
-          geometry={part.geometry}
-          material={part.material}
-          castShadow={cast}
-          onClick={speak}
-        >
-          {list.map((inst, j) => (
-            <Instance
-              key={j}
-              position={inst.position}
-              rotation={[0, inst.rotationY, 0]}
-              scale={inst.scale}
-            />
-          ))}
-        </Instances>
+        <InstancedPart key={i} part={part} list={list} cast={cast} />
       ))}
     </>
   )
@@ -492,6 +553,9 @@ function Ground({ size, color }: { size: number; color: string }) {
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
       receiveShadow
+      // Курсор на траве — значит ни на чём: подпись гасим. pointerOut пропса
+      // сюда не долетает, если игрок вышел на землю через его край.
+      onPointerMove={clearAllHoverLabels}
       onClick={(e: ThreeEvent<MouseEvent>) => {
         e.stopPropagation()
         if (useGameStore.getState().phase !== 'farm') return // день 7 — герой за прилавком
