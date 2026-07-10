@@ -82,7 +82,8 @@ const PANEL_TITLE: Partial<Record<UiScreenKey, Bilingual>> = {
   ui_moving_truck: { en: 'Moving Van', ru: 'Фургон переезда' },
 }
 
-function title(key: UiScreenKey, locale: Locale): string {
+/** Локализованный заголовок панели (общий с `PanelLauncher`, чтобы не дублировать `PANEL_TITLE`). */
+export function panelTitle(key: UiScreenKey, locale: Locale): string {
   const b = PANEL_TITLE[key]
   return b ? (locale === 'ru' ? b.ru : b.en) : key
 }
@@ -171,8 +172,21 @@ function KitchenPanel() {
  */
 function StorageHost() {
   const open = useStore((s) => s.ui.storageOpen)
+  const locale = useStore((s) => s.ui.locale)
   const buildingsSystem = useBuildingsSystem()
   const close = () => useStore.getState().setStorageOpen(false)
+
+  // Фикс UI-4: F4 Storage — свой backdrop (без общего `Modal`, см. докстринг выше), но
+  // ему всё равно нужны семантика диалога и Escape (как у `Modal`/`SeedPicker`).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   if (!open) return null
 
@@ -182,7 +196,12 @@ function StorageHost() {
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center"
       onClick={close}
     >
-      <div onClick={(e) => e.stopPropagation()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={locale === 'ru' ? 'Склад' : 'Storage'}
+        onClick={(e) => e.stopPropagation()}
+      >
         <StorageOverlay
           onClose={close}
           onUpgrade={(kind) => void buildingsSystem.upgradeBuilding(kind === 'silo' ? 'bld_silo' : 'bld_icehouse')}
@@ -196,7 +215,7 @@ export function PanelHost() {
   const locale = useStore((s) => s.ui.locale)
   const activePanel = useStore((s) => s.ui.activePanel)
   const close = () => useStore.getState().openPanel(null)
-  const t = (k: UiScreenKey) => title(k, locale)
+  const t = (k: UiScreenKey) => panelTitle(k, locale)
 
   /** Modal + граница ошибки одним хелпером (единый стиль для всех панелей). */
   const panel = (key: UiScreenKey, node: ReactNode, variant?: 'overlay' | 'sheet') => (

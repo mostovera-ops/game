@@ -53,5 +53,8 @@ export function failFromError(err: unknown): Response {
       return fail(code, raw, status);
     }
   }
-  return fail("server_error", raw, 500);
+  // Немаппленное исключение: сырой Postgres/PostgREST текст (типы, констрейнты, имена
+  // функций) — это утечка схемы. Логируем raw серверно, клиенту — обобщённый ответ.
+  console.error("failFromError unmapped:", raw);
+  return fail("server_error", "internal error", 500);
 }

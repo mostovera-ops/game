@@ -27,7 +27,10 @@ async function verifyReceipt(
 
   // Sandbox-конвенция: квитанция вида "sandbox_*" верифицируется детерминированно
   // (у провайдеров есть sandbox-режим). Дедуп по txn id из квитанции (B6).
-  if (receipt.startsWith("sandbox_")) {
+  // Гейт за env IAP_ALLOW_SANDBOX (дефолт off): в проде sandbox-квитанции не
+  // принимаются, иначе любой игрок минтит реальные ◉ бесплатно.
+  const allowSandbox = (Deno.env.get("IAP_ALLOW_SANDBOX") ?? "false") === "true";
+  if (allowSandbox && receipt.startsWith("sandbox_")) {
     return { ok: dimes > 0, txnId: `${provider}_${receipt}`, dimes };
   }
   // Прод-верификация у провайдера (Stripe/Apple/Google/Paddle) — секреты из env:
@@ -59,10 +62,12 @@ Deno.serve(async (req: Request) => {
     const v = await verifyReceipt(provider, receipt, sku);
     if (!v.ok) return fail("verify_failed", "receipt not verified", 402);
 
-    // Дедуп: unique (provider, provider_txn_id). Повторный колбэк → возврат прежней покупки.
+    // Дедуп: (player_id, provider, provider_txn_id). Повторный колбэк → возврат прежней покупки.
+    // player_id обязателен: без него зная чужой txn_id можно прочитать чужую покупку (кросс-аккаунт лик).
     const { data: existing } = await admin
       .from("purchases")
       .select("id, state, dimes_granted")
+      .eq("player_id", uid)
       .eq("provider", provider)
       .eq("provider_txn_id", v.txnId)
       .maybeSingle();
@@ -84,7 +89,7 @@ Deno.serve(async (req: Request) => {
       // Гонка двойного колбэка: unique-violation → покупка уже есть, читаем её.
       const { data: race } = await admin
         .from("purchases").select("id, dimes_granted")
-        .eq("provider", provider).eq("provider_txn_id", v.txnId).maybeSingle();
+        .eq("player_id", uid).eq("provider", provider).eq("provider_txn_id", v.txnId).maybeSingle();
       if (race) return ok({ purchase_id: race.id, dimes: race.dimes_granted ?? 0, deduped: true });
       throw new Error(pe.message);
     }

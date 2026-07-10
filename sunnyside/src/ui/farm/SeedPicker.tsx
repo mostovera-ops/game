@@ -14,7 +14,7 @@
  * сцены-фермы; политика заглушек AGENTS.md §5: не показываем то, что не можем нарисовать
  * по-настоящему, даже с фолбэком).
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '@/state'
 import { crops } from '@/data/catalogs/crops'
 import type { ProductKey } from '@/types'
@@ -43,9 +43,21 @@ export function SeedPicker() {
   const farmSystem = useFarmSystem()
   const [sowingKey, setSowingKey] = useState<ProductKey | null>(null)
 
-  if (slot === null) return null
-
   const close = () => useStore.getState().setSeedPickerSlot(null)
+
+  // Фикс UI-5: Escape закрывает пикер (зеркалит canon `Modal` — F1 у него свой
+  // fixed-backdrop без общего каркаса, но Escape-конвенция должна быть той же).
+  useEffect(() => {
+    if (slot === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slot])
+
+  if (slot === null) return null
 
   const options = crops.filter((c) => KNOWN_CROP_KEYS.has(c.cropKey))
 
@@ -102,7 +114,7 @@ export function SeedPicker() {
                   disabled={sowingKey !== null}
                   onClick={() => void pick(crop.seedKey)}
                   className="flex min-h-11 flex-col items-start justify-center gap-0.5 rounded-xl p-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ background: DINER.card, boxShadow: PRINT_SHADOW, color: '#2b2118' }}
+                  style={{ background: DINER.card, boxShadow: PRINT_SHADOW, color: DINER.ink }}
                 >
                   <span className="font-black uppercase tracking-wide" style={{ color: DINER.board }}>
                     {crop.name[locale]}

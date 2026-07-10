@@ -170,6 +170,14 @@ const DEFAULT_TOWN_ID = 'local-town'
 const FAIR_SALE_UNITS_PER_HOUR = 4
 /** Окно эффективности полива и продление wateredUntil. */
 const WATER_WINDOW_MS = 30 * 60 * 1000
+/**
+ * NET-6: паритет качества сбора с сервером (0011 public.harvest / game_configs.harvest_quality,
+ * 02-farm §3.6/§4.3). P(Select) = база + бонус вовремя-полива, капается сверху; при сборе —
+ * независимый бросок (Math.random). Минимальный исход всегда Normal (P3, без порчи).
+ */
+const HARVEST_SELECT_BASE_PCT = 0.1
+const HARVEST_SELECT_WATER_BONUS_PCT = 0.15
+const HARVEST_SELECT_CAP_PCT = 0.9
 /** Минимальный игровой интервал между визитами «сосед полил грядки» (S4, 11-town §пуш). */
 const NEIGHBOR_VISIT_COOLDOWN_MS = 2 * HOUR_MS
 
@@ -686,7 +694,13 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
         const crop = plot.cropKey ? cropInfo(plot.cropKey) : undefined
         const cropKey = plot.cropKey
         if (!crop || !cropKey) continue
-        const quality: Quality = plot.wateredUntil ? 2 : 1 // полив → +1★ (02-farm §3.4, гипотеза)
+        // NET-6: тот же вероятностный ролл, что и сервер (public.harvest) — не детерминированный
+        // «полив → всегда Select». База +бонус полива, кап, независимый бросок при сборе.
+        const pSelect = Math.min(
+          HARVEST_SELECT_BASE_PCT + (plot.wateredUntil ? HARVEST_SELECT_WATER_BONUS_PCT : 0),
+          HARVEST_SELECT_CAP_PCT,
+        )
+        const quality: Quality = Math.random() < pSelect ? 2 : 1
         addItem(w, cropKey, crop.yieldQty, quality)
         items.push({ key: cropKey, qty: crop.yieldQty, quality })
         plot.state = 'empty'

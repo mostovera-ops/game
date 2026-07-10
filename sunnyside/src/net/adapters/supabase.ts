@@ -82,9 +82,9 @@ import type {
   MailOrderReq, MailOrderRes,
   MailSpeedupReq, MailSpeedupRes,
   MailClaimReq, MailClaimRes,
-  ForageClaimReq, ForageCollectReq, ForageRes, FishCastRes,
+  ForageCollectReq, ForageRes, FishCastRes,
   StreakCheckRes, StreakInsureRes, VacationRes,
-  DecorPurchaseReq, DecorPlaceReq, NeonSaveReq,
+  DecorPlaceReq, NeonSaveReq,
   RecipeExperimentReq, RecipeExperimentRes,
   PrizePullReq, PrizePullRes,
   MigrationProposeReq, MigrationProposeRes,
@@ -92,7 +92,7 @@ import type {
   IapVerifyReq, IapVerifyRes,
   MigrateFarmReq, MigrateFarmRes,
   TownListing,
-  PhotoUploadReq, PhotoUploadRes,
+  PhotoUploadRes,
 } from '@/types'
 import { NET_TIMINGS } from '@/types'
 
@@ -172,12 +172,32 @@ const READ_RPC = {
   townListings: 'list_towns',
 } as const
 
-/** Edge Functions (внешние эффекты, 20-backend §3.4.2). */
+/**
+ * Edge Functions (внешние эффекты, 20-backend §3.4.2).
+ * `game` — единый шлюз игровых действий (fair_open/fair_list и т.п. живут ТОЛЬКО там,
+ * не как прямые RPC — см. supabase/functions/game). `iap-verify` — верификация покупок.
+ * (Ранее числившиеся `migrate-farm`/`photo-upload` в проекте не развёрнуты — переезд идёт
+ * прямым RPC `migration_move`, а photoUpload — серверный пробел, см. методы ниже.)
+ */
 const EDGE_FN = {
-  migrateFarm: 'migrate-farm',
+  game: 'game',
   iapVerify: 'iap-verify',
-  photoUpload: 'photo-upload',
 } as const
+
+/**
+ * NET-2: имя развёрнутой Postgres-функции отличается от клиентского `MutationKind` только там,
+ * где семантическое имя действия ≠ имя RPC. Queue-`kind` остаётся семантическим (для reconcile
+ * в onConfirm/onRollback и диспетчере), а фактический вызов/реплей идёт по этому имени.
+ * Проверено интроспекцией живой БД: mail_collect(p_order_ids), decor_set(...), migration_move(p_target_town).
+ */
+const RPC_NAME_OVERRIDE: Partial<Record<MutationKind, string>> = {
+  mail_claim: 'mail_collect',
+  decor_place: 'decor_set',
+  migrate_farm: 'migration_move',
+}
+function rpcNameFor(kind: MutationKind): string {
+  return RPC_NAME_OVERRIDE[kind] ?? kind
+}
 
 /** Все известные коды ошибок (common.ts) — для распознавания в сообщении RAISE. */
 const KNOWN_CODES: readonly RpcErrorCode[] = [
@@ -383,6 +403,12 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     if (ctx.userId) await queueStore.save(ctx.userId, queue)
     hooks.onQueueChange?.(queue.length)
   }
+  // NET-3 (ОТЛОЖЕНО, вне зоны NET): clientMutationId генерится, но на сервер как x-request-id
+  // НЕ уходит — мутации бьют прямым .rpc(), минуя game-gateway/withIdem, поэтому ретрай flush()
+  // после потерянного ответа может применить мутацию дважды. Каноничные фиксы плана — (а) гнать
+  // весь горячий путь через game-gateway с x-request-id (ломает де-факто-закрытый прямой-RPC
+  // контракт NET-1 и юнит/облачный сьюты, что явно вне мандата этой зоны), либо (б) сделать RPC
+  // идемпотентными серверно (advisory-lock + dedup-row) — зона SQL/edge, не NET. Оставлено как есть.
   async function enqueue(kind: MutationKind, payload: unknown): Promise<QueuedMutation> {
     const m: QueuedMutation = {
       clientMutationId: newMutationId(),
@@ -403,10 +429,12 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
       const { data, error } = await getClient().rpc(name, params ?? {})
       return toRpcResult<T>(data, error as RawError | null)
     } catch (e) {
-      return {
-        ok: false,
-        error: { code: monitor.isOnline() ? 'unknown' : 'offline', message: String(e) },
-      }
+      // NET-4: брошенное исключение из rpc() — это транспортный сбой (fetch/DNS/timeout/
+      // captive-portal/VPN), а НЕ «сервер ответил непонятным». Такие обрывы часто случаются
+      // при navigator.onLine===true, поэтому НЕ полагаемся на монитор: помечаем 'offline',
+      // чтобы mut() поставил мутацию в очередь на ретрай независимо от isOnline(). Код
+      // 'unknown' резервируем строго за смапленным ответом сервера (см. mapError).
+      return { ok: false, error: { code: 'offline', message: String(e) } }
     }
   }
 
@@ -420,11 +448,23 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
       })
       return toRpcResult<T>(data, error as RawError | null)
     } catch (e) {
-      return {
-        ok: false,
-        error: { code: monitor.isOnline() ? 'unknown' : 'offline', message: String(e) },
-      }
+      // NET-4: сетевое исключение при invoke — транспортный сбой, не «непонятный ответ».
+      return { ok: false, error: { code: 'offline', message: String(e) } }
     }
+  }
+
+  /** Действие через единый game-gateway (Edge). Тело = { action, ...params }. Ярмарочные
+   *  и прочие action-only точки живут ТОЛЬКО в шлюзе (не прямыми RPC). Оффлайн не буферим. */
+  function callGame<T>(action: string, params: Record<string, unknown>): Promise<RpcResult<T>> {
+    return callFn<T>(EDGE_FN.game, { action, ...params })
+  }
+
+  /** NET-2: серверная точка ещё не реализована (fair_tent_upgrade / forage_claim /
+   *  decor_purchase / photo_upload не существуют ни как RPC, ни как Edge — проверено
+   *  интроспекцией живой БД и списком функций). Не бьём «в никуда»: сразу отдаём мапабельный
+   *  not_found без round-trip и без утечки сырого PostgREST-текста. Снять, когда сервер появится. */
+  function notImplemented<T>(name: string): Promise<RpcResult<T>> {
+    return Promise.resolve({ ok: false, error: { code: 'not_found', message: `${name}: not implemented server-side` } })
   }
 
   /**
@@ -436,7 +476,7 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
       await enqueue(kind, params)
       return { ok: false, error: { code: 'offline', message: 'queued (offline)' } }
     }
-    const res = await callRpc<T>(kind, params)
+    const res = await callRpc<T>(rpcNameFor(kind), params)
     if (!res.ok && res.error.code === 'offline') {
       await enqueue(kind, params)
     }
@@ -458,7 +498,7 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
       for (const m of batch) {
         if (!monitor.isOnline()) break
         m.attempts += 1
-        const res = await callRpc(m.kind, m.payload as Record<string, unknown>)
+        const res = await callRpc(rpcNameFor(m.kind), m.payload as Record<string, unknown>)
         if (res.ok) {
           removeFromQueue(m.clientMutationId)
           hooks.onConfirm?.(m, res.data)
@@ -667,9 +707,12 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     affectionGift: (req: AffectionGiftReq) =>
       mut<AffectionGiftRes>('affection_gift', { animal_id: req.animalId, gift_key: req.giftKey }),
 
-    fairOpen: (req: FairOpenReq) => mut<FairOpenRes>('fair_open', { stall_id: req.stallId }),
-    fairList: (req: FairListReq) => mut<FairListRes>('fair_list', { stall_id: req.stallId, lots: req.lots }),
-    fairTentUpgrade: () => mut<FairTentUpgradeRes>('fair_tent_upgrade', {}),
+    // NET-2: fair_open/fair_list — action-точки game-шлюза (не прямые RPC). Идут через
+    // functions.invoke('game', { action, … }); прямой .rpc('fair_open') PostgREST не резолвит.
+    fairOpen: (req: FairOpenReq) => callGame<FairOpenRes>('fair_open', { stall_id: req.stallId }),
+    fairList: (req: FairListReq) => callGame<FairListRes>('fair_list', { stall_id: req.stallId, lots: req.lots }),
+    // NET-2: серверного апгрейда тента нет ни в RPC, ни в шлюзе — заглушка вместо мёртвого вызова.
+    fairTentUpgrade: () => notImplemented<FairTentUpgradeRes>('fair_tent_upgrade'),
     contestEnter: (req: ContestEnterReq) =>
       mut<ContestEnterRes>('contest_enter', { contest_key: req.contestKey, payload: req.payload }),
     contestVote: (req: ContestVoteReq) =>
@@ -700,8 +743,12 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
       mut<ExpeditionCollectRes>('expedition_collect', { exp_ids: req.expIds }),
     mailOrder: (req: MailOrderReq) => mut<MailOrderRes>('mail_order', { item_key: req.itemKey }),
     mailSpeedup: (req: MailSpeedupReq) => mut<MailSpeedupRes>('mail_speedup', { order_id: req.orderId }),
-    mailClaim: (req: MailClaimReq) => mut<MailClaimRes>('mail_claim', { order_ids: req.orderIds }),
-    forageClaim: (req: ForageClaimReq) => mut<ForageRes>('forage_claim', { point_id: req.pointId }),
+    // NET-2: RPC называется mail_collect(p_order_ids), а не mail_claim (той функции нет).
+    // Queue-kind остаётся 'mail_claim'; RPC-имя резолвит RPC_NAME_OVERRIDE.
+    mailClaim: (req: MailClaimReq) => mut<MailClaimRes>('mail_claim', { p_order_ids: req.orderIds }),
+    // NET-2: forage_claim серверно не реализован (есть только forage_collect ниже) — заглушка.
+    forageClaim: () => notImplemented<ForageRes>('forage_claim'),
+    // NB: forage_collect существует (RPC), имя параметра — зона NET-1 (закрыта де-факто), не трогаем.
     forageCollect: (req: ForageCollectReq) => mut<ForageRes>('forage_collect', { point_id: req.pointId }),
     fishCast: () => mut<FishCastRes>('fish_cast', {}),
 
@@ -709,9 +756,13 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     streakInsure: () => mut<StreakInsureRes>('streak_insure', {}),
     vacationStart: () => mut<VacationRes>('vacation_start', {}),
     vacationEnd: () => mut<VacationRes>('vacation_end', {}),
-    decorPurchase: (req: DecorPurchaseReq) => mut<void>('decor_purchase', { decor_key: req.decorKey }),
+    // NET-2: decor_purchase серверно не реализован (нет action «купить декор») — заглушка.
+    decorPurchase: () => notImplemented<void>('decor_purchase'),
+    // NET-2: RPC называется decor_set(p_decor_key,p_slot,p_placed,p_layout), а не decor_place
+    // (RPC-имя резолвит RPC_NAME_OVERRIDE). Свободное 3D-размещение (x/z/rot) кладём в p_layout
+    // (jsonb); p_slot=null (не зонный слот interior/yard/facade).
     decorPlace: (req: DecorPlaceReq) =>
-      mut<void>('decor_place', { decor_key: req.decorKey, x: req.x, z: req.z, rot: req.rot }),
+      mut<void>('decor_place', { p_decor_key: req.decorKey, p_slot: null, p_placed: true, p_layout: { x: req.x, z: req.z, rot: req.rot } }),
     neonSave: (req: NeonSaveReq) => mut<void>('neon_save', { config: req.config }),
     recipeExperiment: (req: RecipeExperimentReq) => mut<RecipeExperimentRes>('recipe_experiment', { inputs: req.inputs }),
 
@@ -728,12 +779,16 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     migrationVote: (req: MigrationVoteReq) =>
       mut<MigrationVoteRes>('migration_vote', { proposal_id: req.proposalId, vote: req.vote }),
 
+    // NET-2: Edge-функции `migrate-farm` в проекте нет — переезд идёт прямым RPC
+    // migration_move(p_target_town) (RPC-имя резолвит RPC_NAME_OVERRIDE). Теперь это мутация
+    // горячего пути (буферизуется оффлайн), queue-kind — семантический 'migrate_farm'.
+    migrateFarm: (req: MigrateFarmReq) => mut<MigrateFarmRes>('migrate_farm', { p_target_town: req.targetTown }),
+
     // ── Edge Functions (внешние эффекты, §3.4.2) — не буферизуются оффлайн ──
-    migrateFarm: (req: MigrateFarmReq) =>
-      callFn<MigrateFarmRes>(EDGE_FN.migrateFarm, { target_town: req.targetTown }),
     iapVerify: (req: IapVerifyReq) =>
       callFn<IapVerifyRes>(EDGE_FN.iapVerify, { provider: req.provider, receipt: req.receipt, sku: req.sku }),
-    photoUpload: (req: PhotoUploadReq) => callFn<PhotoUploadRes>(EDGE_FN.photoUpload, { image: req.image }),
+    // NET-2: Edge-функции `photo-upload` в проекте нет — заглушка вместо мёртвого вызова.
+    photoUpload: () => notImplemented<PhotoUploadRes>('photo_upload'),
   }
 
   return adapter

@@ -11,12 +11,13 @@
  * Позицию слота задаёт родитель (`PlotField`); здесь всё локально к грядке.
  */
 
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Group } from 'three'
 import type { Plot as PlotData } from '@/types'
 import { useStore } from '@/state'
 import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
+import { useHoverCursor } from '../common/useHoverCursor'
 import { cropAssetId, plotAssetId } from './assetMap'
 import { growthProgress, plotVisualState, resolvePlotAction } from './interactions'
 import { growScale, popTick, readyPulse, swayRotation } from './anim'
@@ -25,16 +26,13 @@ import { useFarmActions } from './systems'
 /** База высоты культуры над грядкой (чтобы не тонула в земле). */
 const CROP_BASE_Y = 0.28
 
-function setCursor(value: string) {
-  if (typeof document !== 'undefined') document.body.style.cursor = value
-}
-
-export function Plot({ plot }: { plot: PlotData }) {
+export const Plot = memo(function Plot({ plot }: { plot: PlotData }) {
   const actions = useFarmActions()
   const serverNow = useStore((s) => s.serverNow)
   const cropGroup = useRef<Group>(null)
   const popStart = useRef<number | null>(null)
   const collected = useRef(false)
+  const { onPointerOver, onPointerOut } = useHoverCursor()
 
   const now = serverNow()
   const vis = plotVisualState(plot, now)
@@ -94,14 +92,7 @@ export function Plot({ plot }: { plot: PlotData }) {
   }
 
   return (
-    <group
-      onClick={handleClick}
-      onPointerOver={(e) => {
-        e.stopPropagation()
-        setCursor('pointer')
-      }}
-      onPointerOut={() => setCursor('auto')}
-    >
+    <group onClick={handleClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <PlaceholderMesh id={plotAssetId(0)} />
       {cropId !== null && !collected.current && (
         <group ref={cropGroup} position={[0, CROP_BASE_Y, 0]}>
@@ -110,4 +101,4 @@ export function Plot({ plot }: { plot: PlotData }) {
       )}
     </group>
   )
-}
+})

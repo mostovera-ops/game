@@ -34,10 +34,10 @@
  *    `Stockpot` (06-recipes.md «Кастрюля», нейминг-кандидат) выровнен на существующий
  *    `mch_steam_kettle` (04-machines.md «Паровой чан») — та же роль (гамбо/чаудер/бисквит,
  *    04-machines.md §3.6 сама иллюстрирует Steam Kettle именно этими блюдами).
- *    `Prep Counter` (06-recipes.md «Стол сборки», холодная сборка сэндвичей/солений) НЕ
- *    ИМЕЕТ аналога в `machines.ts` — 04-machines.md вообще не описывает такую станцию.
- *    Использован ключ `mch_prep_counter` по конвенции `machines.ts`, но записи там нет —
- *    см. TODO(architecture) ниже и спонсируемую фоновую задачу владельцу machines.ts.
+ *    `Prep Counter` (06-recipes.md «Стол сборки», холодная сборка сэндвичей/солений) —
+ *    04-machines.md исходно не описывал такую станцию, но `mch_prep_counter` [СИНХРОНИЗИРОВАНО
+ *    — STATE-3] с тех пор заведён в `machines.ts` (Kitchen, MVP, см. git-историю machines.ts) —
+ *    `[Recipe→Machine]` в validate.test.ts зелёный по этому ключу.
  *
  * 2) Сырьё/полуфабрикаты — где это существующий `catalogs/ingredients.ts` ключ, каталог
  *    ссылается НА НЕГО НАПРЯМУЮ (а не заводит параллельное имя): Wheat→crop_wheat,
@@ -64,62 +64,23 @@
  *    Pumpkin Puree, Pecan Praline, Pie Crust Basic/Deluxe(=Pie Crust), Peach Cobbler
  *    Filling, Shrimp Bisque Base, Smoked Brisket, Cajun Butter, Refined Praline Sauce,
  *    Lobster Bisque Base, Truffle Butter, Vanilla Bean Paste, Candied Citrus Peel.
- *    ПОБОЧНАЯ НАХОДКА: `ingr_flour` (basePrice $0.35, ingredients.ts) продаётся ДЕШЕВЛЕ
- *    себестоимости своего же заявленного рецепта Wheat×2 (`crop_wheat` $0.20 × 2 = $0.40)
- *    — отрицательная маржа на самом первом полуфабрикате игры. Это цифра ingredients.ts
- *    (не моя), формула Wheat×2 зафиксирована ОБОИМИ ревью-докам (04-machines.md §4.4 и
- *    комментарий самой ingredients.ts) — менять qty вместо цены было бы искажением
- *    согласованных чисел. Флагирую владельцу ingredients.ts вместо тихой правки qty.
+ *    [СИНХРОНИЗИРОВАНО — STATE-3] `ingr_flour` (изначально basePrice $0.35, ingredients.ts)
+ *    продавался дешевле себестоимости своего же рецепта Wheat×2 (`crop_wheat` $0.20 × 2 =
+ *    $0.40) — с тех пор поднят до $0.50 (см. git-историю ingredients.ts); формула Wheat×2
+ *    не менялась. STATE-1 закрыл тот же класс проблемы для остальных 13 bridge-полуфабрикатов
+ *    ingredients.ts, ранее продававшихся ниже себестоимости входов.
  *
- * ИТОГО непройденных проверок validate.test.ts на момент сдачи (для прозрачности —
- * НЕ моя незавершённая работа, а межагентная зависимость, см. пп. 3–5 выше):
- *   [Recipe→Ingredient]: 134 dish_* (п.3) + 17 новых raw/ingr_* ключей (п.4);
- *   [Recipe→Machine]: 1 ключ, `mch_prep_counter` (п.1);
- *   [Recipe] маржа: 1 рецепт, `rcp_ingr_flour` (см. выше).
- *   Собственная валидность каталога recipes.ts — схема + уникальность ключей — ЗЕЛЕНАЯ;
- *   доп. экспорты (bluePlateSets/secretRecipes/meta/mastery) покрыты
- *   `catalogs/recipes.test.ts` — тоже зелёный.
- *
- * 3) САМЫЙ КРУПНЫЙ пробел (количественно): `ingredients.ts` пока не регистрирует ни одного
- *    ГОТОВОГО БЛЮДА (`dish_*`, itemClass:'dish') — её докстринг сознательно ограничен
- *    сырьём/полуфабрикатами 05-ingredients.md. Но `IngredientSchema.itemClass` включает
- *    `'dish'` в закрытый список — т.е. по контракту готовые блюда ТОЖЕ обязаны иметь
- *    Ingredient-запись (basePrice/demandCategory/storage), просто она ещё не написана.
- *    Итог: ВСЕ 134 `dish_*` output-ключа этого каталога (112 §4.2 + 22 секретки) сейчас
- *    не резолвятся в ingredients.ts → `[Recipe→Ingredient]` в validate.test.ts красный
- *    целиком, пока этот пробел не закрыт — это НЕ дефект recipes.ts, а недостающий этап
- *    в ingredients.ts. Он уже подготовлен для этого: `recipeCatalogMeta` /
- *    `secretRecipeCatalogMeta` (см. ниже) дают 1:1 basePrice+demandCategory на каждый
- *    `dish_*`, ровно то, что нужно ingredients-агенту, чтобы завести туда 134 записи.
- *
- * 4) TODO(architecture) — более мелкие пробелы: `ingredients.ts` НЕ содержит и не может
- *    существующим ключом покрыть следующие сырые ингредиенты, нужные §4.2 06-recipes.md
- *    для полноты Южной/Морской кухни (это ровно открытый вопрос §8.2 самой 06-recipes.md
- *    «доп. сырьё сверх канонных хайлайтов» — уже предвиденный спекой, не находка этого
- *    файла): `Lemon` (T1, лимонад/чай), `Chicken` как МЯСО (не яйцо — `animals.ts` курица
- *    даёт только `egg`), `Catfish` (T2/T3, сом округа), `Cocoa` (T2, шоколадная содовая).
- *    Эти 4 введены здесь НОВЫМИ ключами по конвенции ingredients.ts (`crop_lemon`,
- *    `chicken`, `crop_catfish`, `crop_cocoa`) — рецепты, которые их используют, НЕ
- *    пройдут проверку `[Recipe→Ingredient]` в validate.test.ts, пока владелец
- *    ingredients.ts их не добавит. `Crawfish` (Раки Луизианы, T4) замещён на
- *    `crop_gulf_shrimp` (тот же тир/тема — мелкий ракообразный залива) как временный
- *    компромисс БЕЗ нового ключа (в отличие от 4 выше) — раки и креветки играют почти
- *    одну роль в каджун-рецептах, отдельный SKU не критичен для MVP.
- *    Аналогично 12 новых полуфабрикатов (БЛОК B) введены новыми `ingr_*` ключами
- *    (Bread/Biscuit/Cornbread/Gravy/Hushpuppy Batter/Pastry Cream/BBQ Sauce/Roux/
- *    Caramel Sauce/Pickles/Coleslaw/Cocktail Sauce/Vanilla Custard) — тоже пробел
- *    ingredients.ts, тоже не пройдёт референс-проверку до синхронизации.
- *    → Флагирую отдельной фоновой задачей владельцу ingredients.ts/machines.ts (см. чат
- *      оркестратора), не редактирую их файлы напрямую (AGENTS.md §0 правило 6).
- *
- * 5) Тир сырья из ingredients.ts местами ВЫШЕ, чем 06-recipes.md неявно предполагала
- *    (Honey/Cherry/Beef/Pumpkin/Pecan — T3, не T2; Whipped Cream — T3, не T2; Corn — T2,
- *    не T1). Recipe.tier здесь оставлен РОВНО как в §4.2 (цифры блюда — из спеки, Фаза B),
- *    поэтому у части блюд (напр. #15/#31/#62 T1 с Corn=T2-сырьём) тир блюда номинально
- *    ниже максимального тира входа. `RecipeSchema`/validate.test.ts это не проверяют
- *    (нет правила «tier блюда = max(tier входов)» в zod), так что это не гейтит зелёный
- *    прогон — но это реальная дизайн-нестыковка между двумя спеками (05-ingredients vs
- *    06-recipes), не для одностороннего решения recipes-агентом.
+ * [СИНХРОНИЗИРОВАНО — STATE-3] Разделы 3–5 (ниже была история пробелов на момент
+ * первой сдачи каталога — 134 `dish_*` без Ingredient-записи, недостающие `crop_lemon`/
+ * `chicken`/`crop_catfish`/`crop_cocoa`/12 Block-B полуфабрикатов, `mch_prep_counter` без
+ * записи в `machines.ts`, `ingr_flour` дешевле себестоимости своего рецепта) — см.
+ * git-историю `ingredients.ts`/`machines.ts`: все перечисленные пробелы закрыты
+ * (134 `dish_*` заведены, 4 сырых + 12 Block-B `ingr_*` ключей на месте, `mch_prep_counter`
+ * есть в реестре с `baseCost`, `ingr_flour` поднята до $0.50). `validate.test.ts` зелёный
+ * по [Recipe→Ingredient]/[Recipe→Machine]/[Recipe] маржа целиком, не только для recipes.ts.
+ * Дизайн-нюанс тира сырья (п.5, Honey/Cherry/Beef/Pumpkin/Pecan/Whipped Cream/Corn — тир
+ * сырья выше номинального тира блюда) остаётся как есть — `RecipeSchema` не требует
+ * `tier` блюда = max(tier входов), это не баг, а сознательно неограниченный zod-контракт.
  *
  * Наименование: `rcp_*` — ключ рецепта; `dish_*` — готовое блюдо (продаётся); прочие
  * ключи (`crop_*`/`ingr_*`/без префикса для животн. продукта) — конвенция ingredients.ts.

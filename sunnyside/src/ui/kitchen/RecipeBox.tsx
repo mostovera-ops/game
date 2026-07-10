@@ -114,7 +114,7 @@ export function RecipeBox({ machineId, onClose }: RecipeBoxProps) {
             className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
             style={{
               background: tab === t ? DINER.cherry : DINER.card,
-              color: tab === t ? 'white' : '#2b2118',
+              color: tab === t ? 'white' : DINER.ink,
               border: `1px solid ${DINER.chrome}`,
             }}
           >
@@ -127,7 +127,7 @@ export function RecipeBox({ machineId, onClose }: RecipeBoxProps) {
           value={machineFilter}
           onChange={(e) => setMachineFilter(e.target.value)}
           className="ml-auto rounded-lg border px-2 py-1 text-xs"
-          style={{ borderColor: DINER.chrome, background: DINER.card, color: '#2b2118' }}
+          style={{ borderColor: DINER.chrome, background: DINER.card, color: DINER.ink }}
         >
           <option value="all">{locale === 'ru' ? 'Все станки' : 'All machines'}</option>
           {machines.map((m) => (

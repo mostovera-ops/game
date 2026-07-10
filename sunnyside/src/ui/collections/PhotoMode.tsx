@@ -47,7 +47,7 @@ function renderFramed(source: HTMLCanvasElement, filterCss: string, caption: str
   ctx.filter = filterCss
   ctx.drawImage(source, pad, pad)
   ctx.filter = 'none'
-  ctx.fillStyle = '#2b2118'
+  ctx.fillStyle = DINER.ink
   ctx.font = 'bold 22px sans-serif'
   ctx.textAlign = 'center'
   ctx.fillText(caption, out.width / 2, out.height - captionH / 2 + 8)
@@ -134,7 +134,7 @@ export function PhotoMode({ getCanvas, onUpload, onClose }: PhotoModeProps) {
             className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
             style={{
               background: filter === k ? DINER.cherry : DINER.card,
-              color: filter === k ? 'white' : '#2b2118',
+              color: filter === k ? 'white' : DINER.ink,
               border: `1px solid ${DINER.chrome}`,
             }}
           >

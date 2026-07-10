@@ -15,6 +15,13 @@
  *             §3.3/§4.3) — 4 для каждого станка; апгрейд лишь открывает эти слоты постепенно
  *             (Ур.2/Ур.4/Ур.5, см. §4.3), само поле описывает конечную ёмкость станка.
  *  - maxLevel — 5 (§3.4: «Апгрейд станка (5 уровней на станок)»).
+ *  - baseCost — цена первого апгрейда, $ (STATE-2: `14-economy.md §4.2` — «главный Bucks-синк»,
+ *             кривая ×2.2/уровень, `upgrade_cost(L→L+1) = baseCost × 2.2^(L-1)`). Значения MVP
+ *             станков — дословно таблица §4.2 «Абсолютные base_cost станков»: Grill 60 / Oven 90 /
+ *             Churn 70 / Soda Fountain 35 / Ice Cream Maker 75 / Coffee Percolator 150. Для
+ *             станков без явного числа в §4.2 (Prep Counter — MVP, но не в этой таблице; Fryer/
+ *             Mill/Smoker/Steam Kettle — «Поздние станки T4–T5») спека даёт только диапазон
+ *             «300–600» — числа ниже гипотеза внутри этого диапазона (калибровка — плейтест).
  *
  * ГРАНИЦА (AGENTS.md §3): ноль three/react/net, только структуры данных + типы `@/data/schema`.
  */
@@ -32,6 +39,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 60, // 14-economy.md §4.2 (STATE-2)
   },
   {
     key: 'mch_oven',
@@ -39,6 +47,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 90, // 14-economy.md §4.2 (STATE-2)
   },
   {
     key: 'mch_churn',
@@ -46,6 +55,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 70, // 14-economy.md §4.2 (STATE-2)
   },
   {
     key: 'mch_soda_fountain',
@@ -53,6 +63,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 35, // 14-economy.md §4.2 (STATE-2)
   },
   {
     key: 'mch_ice_cream',
@@ -60,6 +71,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 75, // 14-economy.md §4.2 (STATE-2)
   },
   {
     key: 'mch_coffee',
@@ -67,6 +79,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 150, // 14-economy.md §4.2 (STATE-2)
   },
 
   {
@@ -82,6 +95,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 300, // §4.2 не даёт явного числа для Prep Counter — низ диапазона «300–600» (STATE-2, гипотеза)
   },
 
   // ── Поздние станки (v0.2/v0.3, открываются с роуд-трипом штатов, §3.2/§3.7) ───
@@ -91,6 +105,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 350, // «Поздние станки T4–T5: 300–600» (14-economy.md §4.2, STATE-2, гипотеза внутри диапазона)
   },
   {
     key: 'mch_mill',
@@ -98,6 +113,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 400, // «Поздние станки T4–T5: 300–600» (14-economy.md §4.2, STATE-2, гипотеза внутри диапазона)
   },
   {
     key: 'mch_smoker',
@@ -105,6 +121,7 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 500, // «Поздние станки T4–T5: 300–600» (14-economy.md §4.2, STATE-2, гипотеза внутри диапазона)
   },
   {
     key: 'mch_steam_kettle',
@@ -112,5 +129,6 @@ export const machines: Machine[] = [
     post: 'Kitchen',
     slots: QUEUE_SLOTS_AT_MAX_LEVEL,
     maxLevel: MACHINE_MAX_LEVEL,
+    baseCost: 600, // «Поздние станки T4–T5: 300–600» (14-economy.md §4.2, STATE-2, гипотеза внутри диапазона)
   },
 ]

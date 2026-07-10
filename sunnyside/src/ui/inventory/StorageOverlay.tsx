@@ -117,7 +117,7 @@ export function StorageOverlay({ onGiftNeighbor, onAddPotluck, onUpgrade, onClos
             className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
             style={{
               background: kindFilter === k ? DINER.cherry : DINER.card,
-              color: kindFilter === k ? 'white' : '#2b2118',
+              color: kindFilter === k ? 'white' : DINER.ink,
               border: `1px solid ${DINER.chrome}`,
             }}
           >
@@ -130,7 +130,7 @@ export function StorageOverlay({ onGiftNeighbor, onAddPotluck, onUpgrade, onClos
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value as 'all' | ItemClass)}
           className="ml-auto rounded-lg border px-2 py-1 text-xs"
-          style={{ borderColor: DINER.chrome, background: DINER.card, color: '#2b2118' }}
+          style={{ borderColor: DINER.chrome, background: DINER.card, color: DINER.ink }}
         >
           <option value="all">{locale === 'ru' ? 'Все категории' : 'All categories'}</option>
           {(Object.keys(CATEGORY_LABEL) as ItemClass[]).map((c) => (
@@ -159,7 +159,7 @@ export function StorageOverlay({ onGiftNeighbor, onAddPotluck, onUpgrade, onClos
                 background: DINER.card,
                 borderColor: overflowing ? DINER.mustard : DINER.chrome,
                 boxShadow: PRINT_SHADOW,
-                color: '#2b2118',
+                color: DINER.ink,
               }}
             >
               <div className="flex items-center justify-between">
@@ -241,7 +241,7 @@ export function StorageOverlay({ onGiftNeighbor, onAddPotluck, onUpgrade, onClos
           <div
             data-testid="storage-overflow-buffer"
             className="rounded-xl border-2 border-dashed p-3 text-xs"
-            style={{ borderColor: DINER.mustard, background: DINER.card, color: '#2b2118' }}
+            style={{ borderColor: DINER.mustard, background: DINER.card, color: DINER.ink }}
           >
             <h3 className="font-black uppercase" style={{ color: DINER.mustard }}>
               {locale === 'ru' ? 'Буфер перелива (24ч)' : 'Overflow buffer (24h)'}

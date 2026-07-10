@@ -225,6 +225,14 @@ export const MachineSchema = z
     /** Сколько параллельных заданий (слотов очереди) держит станок. */
     slots: z.number().int().positive(),
     maxLevel: z.number().int().positive(),
+    /**
+     * Цена первого апгрейда станка (Ур.1→2), $ (`14-economy.md §4.2`). Апгрейд станков —
+     * «главный Bucks-синк» (`14-economy.md §3.3/§4.7`) и следует единой геометрической
+     * кривой ×2.2/уровень: `upgrade_cost(L→L+1) = baseCost × 2.2^(L-1)` (см. `§4.2` формула,
+     * идентичная механике `BuildingLevelSchema`, но без предвычисленной таблицы — кривая
+     * чисто геометрическая, посчитать может любой потребитель по формуле выше).
+     */
+    baseCost: z.number().positive(),
     assetKey: z.string().min(1).optional(),
   })
   .strict()

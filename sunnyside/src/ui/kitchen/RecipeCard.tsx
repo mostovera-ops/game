@@ -53,7 +53,7 @@ export function RecipeCard({
         borderColor: DINER.chrome,
         borderStyle: hidden ? 'dashed' : 'solid',
         boxShadow: PRINT_SHADOW,
-        color: '#2b2118',
+        color: DINER.ink,
       }}
     >
       <div className="flex items-start justify-between gap-2">

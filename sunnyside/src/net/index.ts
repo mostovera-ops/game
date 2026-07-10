@@ -31,6 +31,20 @@ export const createBackendAdapter: CreateBackendAdapter = (
   if (requested === 'supabase' && url && key) {
     return createSupabaseAdapter({ url, publishableKey: key })
   }
+
+  // NET-5: fail-closed. Локальный адаптер — клиент-авторитетный (минтит ресурсы в браузере,
+  // DevTimeskip). Молчаливый откат на него в прод-сборке = чит-песочница под видом прода.
+  // В проде (или при явном VITE_REQUIRE_SUPABASE=true) — бросаем громко, а не деградируем.
+  const requireSupabase = import.meta.env.PROD
+    || import.meta.env.VITE_REQUIRE_SUPABASE === 'true'
+  if (requireSupabase) {
+    throw new Error(
+      `[net] fail-closed: требуется supabase-адаптер, но requested='${requested}', `
+      + `VITE_SUPABASE_URL=${url ? 'set' : 'MISSING'}, `
+      + `VITE_SUPABASE_PUBLISHABLE_KEY=${key ? 'set' : 'MISSING'}. `
+      + `Задай VITE_BACKEND_ADAPTER=supabase и оба ключа проекта.`,
+    )
+  }
   return createLocalAdapter({ clock: storeClock })
 }
 

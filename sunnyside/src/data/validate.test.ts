@@ -187,6 +187,41 @@ describe('content catalogs: ссылочная целостность', () => {
   )
 
   testWhenPresent(
+    '[Recipe] цена продажи полуфабриката (itemClass ingredient) превышает сумму basePrice его прямых входов ' +
+      '(STATE-1: полуфабрикат не должен продаваться дешевле сырья, из которого его крафтят)',
+    [recipesSpec, ingredientsSpec],
+    () => {
+      const recipes = loadCatalog<Recipe>(recipesSpec)!
+      const ingredients = loadCatalog<Ingredient>(ingredientsSpec)!
+      const priceByKey = new Map(ingredients.map((i) => [i.key, i.basePrice]))
+      for (const recipe of recipes) {
+        if (recipe.output.itemClass !== 'ingredient') continue
+        const outputPrice = priceByKey.get(recipe.output.key)
+        if (outputPrice === undefined) continue // словит [Recipe→Ingredient]
+        // Себестоимость = рыночная стоимость ПРЯМЫХ входов (их basePrice как есть, без
+        // рекурсивного раскрытия до сырья) — именно то число, с которым игрок сравнивает
+        // цену полуфабриката при прямой продаже вместо дальнейшей переработки.
+        let inputsCost = 0
+        let missingInput = false
+        for (const input of recipe.inputs) {
+          const p = priceByKey.get(input.key)
+          if (p === undefined) {
+            missingInput = true // словит [Recipe→Ingredient]
+            break
+          }
+          inputsCost += p * input.qty
+        }
+        if (missingInput) continue
+        const perUnitCost = inputsCost / recipe.output.qty
+        expect(
+          outputPrice > perUnitCost,
+          `рецепт "${recipe.key}": цена продажи полуфабриката "${recipe.output.key}" (${outputPrice}) должна быть больше суммы basePrice его входов (${perUnitCost.toFixed(2)})`,
+        ).toBe(true)
+      }
+    },
+  )
+
+  testWhenPresent(
     '[Recipe→Machine] machineKey ссылается на существующий станок',
     [recipesSpec, machinesSpec],
     () => {

@@ -189,7 +189,7 @@ export function NeonBuilder({ onClose, onSaved }: NeonBuilderProps) {
                 maxLength={MAX_CHARS}
                 onChange={(e) => updateLine(i, e.target.value)}
                 className="rounded-lg border px-2 py-1 text-xs uppercase"
-                style={{ borderColor: DINER.chrome, background: DINER.card, color: '#2b2118' }}
+                style={{ borderColor: DINER.chrome, background: DINER.card, color: DINER.ink }}
               />
               <button
                 type="button"
@@ -234,7 +234,7 @@ export function NeonBuilder({ onClose, onSaved }: NeonBuilderProps) {
                 className="rounded-full px-3 py-1 text-xs font-bold"
                 style={{
                   background: active ? DINER.cherry : DINER.card,
-                  color: active ? 'white' : '#2b2118',
+                  color: active ? 'white' : DINER.ink,
                   border: `1px solid ${DINER.chrome}`,
                 }}
               >
@@ -261,7 +261,7 @@ export function NeonBuilder({ onClose, onSaved }: NeonBuilderProps) {
               className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold"
               style={{
                 background: config.colorIds.includes(id) ? def.hex : DINER.card,
-                color: config.colorIds.includes(id) ? '#111' : '#2b2118',
+                color: config.colorIds.includes(id) ? '#111' : DINER.ink,
                 border: `1px solid ${DINER.chrome}`,
               }}
             >
@@ -287,7 +287,7 @@ export function NeonBuilder({ onClose, onSaved }: NeonBuilderProps) {
               className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
               style={{
                 background: config.animation === k ? DINER.cherry : DINER.card,
-                color: config.animation === k ? 'white' : '#2b2118',
+                color: config.animation === k ? 'white' : DINER.ink,
                 border: `1px solid ${DINER.chrome}`,
               }}
             >

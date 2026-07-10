@@ -77,7 +77,7 @@ export function RibbonWall({ onClose }: RibbonWallProps) {
                   background: DINER.card,
                   borderColor: isLatest ? DINER.cherry : DINER.chrome,
                   boxShadow: PRINT_SHADOW,
-                  color: '#2b2118',
+                  color: DINER.ink,
                   opacity: isLatest ? 1 : 0.85,
                 }}
               >

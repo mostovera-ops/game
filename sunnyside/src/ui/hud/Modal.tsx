@@ -35,6 +35,8 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
   const openPanel = useStore((s) => s.openPanel)
   const pushedHistory = useRef(false)
   const sound = useSound()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previouslyFocused = useRef<HTMLElement | null>(null)
 
   // audio-wiring: единая точка «клик открыл панель» — Modal хостит ВСЕ canon-панели
   // (`app/PanelHost.tsx`), так что один SFX здесь покрывает «клики UI» без правки
@@ -72,6 +74,46 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
     return () => window.removeEventListener('keydown', onKey)
   }, [active, openPanel])
 
+  // Focus-management (фикс UI-1): при открытии — запомнить элемент, откуда пришёл фокус,
+  // и переместить фокус внутрь диалога (первый focusable, иначе сам контейнер); Tab/Shift+Tab
+  // держит фокус в пределах диалога (focus-trap, canon `role="dialog" aria-modal="true"`);
+  // при закрытии/анмаунте — вернуть фокус туда, откуда открыли.
+  useEffect(() => {
+    if (!active) return
+    previouslyFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const node = dialogRef.current
+    if (!node) return
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    const getFocusable = () => Array.from(node.querySelectorAll<HTMLElement>(focusableSelector))
+    const focusables = getFocusable()
+    ;(focusables[0] ?? node).focus()
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const items = getFocusable()
+      if (items.length === 0) {
+        e.preventDefault()
+        node.focus()
+        return
+      }
+      const first = items[0] ?? node
+      const last = items[items.length - 1] ?? node
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    node.addEventListener('keydown', onKeyDown)
+    return () => {
+      node.removeEventListener('keydown', onKeyDown)
+      previouslyFocused.current?.focus()
+    }
+  }, [active])
+
   if (!active) return null
 
   if (variant === 'fullscreen') {
@@ -83,11 +125,13 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
     // fullscreen>` покрывает весь вьюпорт корректно (тот же приём, что раньше был у ShiftScreen).
     return (
       <div
+        ref={dialogRef}
         data-testid={`modal-${panelKey}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="absolute inset-0 z-50 pointer-events-auto"
+        tabIndex={-1}
+        className="absolute inset-0 z-50 pointer-events-auto outline-none"
       >
         <button
           type="button"
@@ -122,11 +166,13 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
        * и не мешает этому внешнему скроллу; панели без своего скролла получают его бесплатно.
        */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className={
-          'hud-receipt pointer-events-auto flex w-full max-w-lg flex-col p-4 ' +
+          'hud-receipt pointer-events-auto flex w-full max-w-lg flex-col p-4 outline-none ' +
           (sheet
             ? 'max-h-[85vh] rounded-t-2xl'
             : 'm-4 max-h-[calc(100vh-2rem)] rounded-[var(--radius-diner)]')

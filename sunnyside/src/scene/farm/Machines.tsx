@@ -4,39 +4,41 @@
  * (Recipe Box / очереди станков, 19-ui-ux §3.3) через `useFarmActions.openKitchen`.
  */
 
+import { memo } from 'react'
 import { useStore } from '@/state'
+import type { MachineInstance } from '@/types'
 import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
+import { useHoverCursor } from '../common/useHoverCursor'
 import { machineAssetId } from './assetMap'
 import { machinePosition } from './layout'
 import { useFarmActions } from './systems'
 
-function setCursor(value: string) {
-  if (typeof document !== 'undefined') document.body.style.cursor = value
-}
+const MachineProp = memo(function MachineProp({ machine, index }: { machine: MachineInstance; index: number }) {
+  const actions = useFarmActions()
+  const { onPointerOver, onPointerOut } = useHoverCursor()
+  return (
+    <group
+      position={machinePosition(index)}
+      onClick={(e) => {
+        e.stopPropagation()
+        actions.openKitchen(machine.id)
+      }}
+      onPointerOver={onPointerOver}
+      onPointerOut={onPointerOut}
+    >
+      <PlaceholderMesh id={machineAssetId(machine.key)} />
+    </group>
+  )
+})
 
 export function Machines() {
   const machines = useStore((s) => s.farm?.machines)
-  const actions = useFarmActions()
   if (!machines || machines.length === 0) return null
 
   return (
     <group>
       {machines.map((machine, i) => (
-        <group
-          key={machine.id}
-          position={machinePosition(i)}
-          onClick={(e) => {
-            e.stopPropagation()
-            actions.openKitchen(machine.id)
-          }}
-          onPointerOver={(e) => {
-            e.stopPropagation()
-            setCursor('pointer')
-          }}
-          onPointerOut={() => setCursor('auto')}
-        >
-          <PlaceholderMesh id={machineAssetId(machine.key)} />
-        </group>
+        <MachineProp key={machine.id} machine={machine} index={i} />
       ))}
     </group>
   )

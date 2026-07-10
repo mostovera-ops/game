@@ -8,7 +8,7 @@
  * (топики, доставка broadcast, отложенное открытие канала до резолва town/street).
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   createSupabaseAdapter,
@@ -127,7 +127,15 @@ function setup(overrides: Partial<SupabaseAdapterConfig> = {}) {
   return { adapter, mock, monitor, confirms, rollbacks, queueLens }
 }
 
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 5))
+/**
+ * Дренаж `flush()` из `monitor.onChange` — fire-and-forget (TEST-4). Вместо магической
+ * `setTimeout(5ms)` детерминированно ждём наблюдаемый побочный эффект дренажа (через
+ * `vi.waitFor`, который поллит условие до успеха или таймаута) — не гоняется с реальной
+ * длительностью промиса `flush()`.
+ */
+async function waitFor(assertion: () => void): Promise<void> {
+  await vi.waitFor(assertion, { timeout: 1000, interval: 5 })
+}
 
 describe('SupabaseBackendAdapter — сессия', () => {
   it('kind = supabase', () => {
@@ -251,9 +259,8 @@ describe('SupabaseBackendAdapter — оффлайн-очередь и рекон
     await adapter.sow({ slot: 0, seedKey: 'seed_x' as never })
     mock.state.handlers.set('sow', () => ({ data: { ok: true, data: { plot: { id: 'p9' } } }, error: null }))
     monitor.set(true)
-    await tick()
+    await waitFor(() => { expect(confirms).toHaveLength(1) })
     expect(mock.state.rpcCalls.some((c) => c.name === 'sow')).toBe(true)
-    expect(confirms).toHaveLength(1)
     expect(confirms[0]?.kind).toBe('sow')
   })
 
@@ -264,8 +271,7 @@ describe('SupabaseBackendAdapter — оффлайн-очередь и рекон
     await adapter.harvest({ plotIds: ['a'] })
     mock.state.handlers.set('harvest', () => ({ data: { ok: false, error: { code: 'conflict', message: 'stale' } }, error: null }))
     monitor.set(true)
-    await tick()
-    expect(rollbacks).toHaveLength(1)
+    await waitFor(() => { expect(rollbacks).toHaveLength(1) })
     expect(rollbacks[0]?.code).toBe('conflict')
     expect(queueLens.at(-1)).toBe(0)
   })
@@ -279,8 +285,7 @@ describe('SupabaseBackendAdapter — оффлайн-очередь и рекон
     let calls = 0
     mock.state.handlers.set('water', () => { calls += 1; return { data: null, error: { message: 'rate limited', status: 429 } } })
     monitor.set(true)
-    await tick()
-    expect(calls).toBe(1)
+    await waitFor(() => { expect(calls).toBe(1) })
     // rate_limited — транзиентно: очередь не очищена, повтор позже
     const res2 = await adapter.getServerTime() // no-op read, just ensure no throw
     expect(res2).toBeDefined()
@@ -345,9 +350,10 @@ describe('SupabaseBackendAdapter — Edge Functions', () => {
   })
 
   it('Edge оффлайн → offline без вызова invoke (внешний эффект не буферизуем)', async () => {
+    // iapVerify — настоящая Edge-функция (migrateFarm с NET-2 стал RPC migration_move).
     const { adapter, mock, monitor } = setup()
     monitor.set(false)
-    const res = await adapter.migrateFarm({ targetTown: 't2' })
+    const res = await adapter.iapVerify({ provider: 'apple', receipt: 'r', sku: 'sku1' })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.error.code).toBe('offline')
     expect(mock.state.fnCalls).toHaveLength(0)

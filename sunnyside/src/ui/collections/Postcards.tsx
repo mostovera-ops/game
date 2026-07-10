@@ -89,7 +89,7 @@ export function Postcards({ onClose }: PostcardsProps) {
                 background: have ? DINER.card : '#EFE6D2',
                 borderColor: DINER.chrome,
                 boxShadow: PRINT_SHADOW,
-                color: have ? '#2b2118' : '#8a8070',
+                color: have ? DINER.ink : DINER.inkMuted,
                 opacity: have ? 1 : 0.6,
               }}
             >
@@ -116,7 +116,7 @@ export function Postcards({ onClose }: PostcardsProps) {
               background: DINER.card,
               borderColor: p.complete ? DINER.teal : DINER.chrome,
               boxShadow: PRINT_SHADOW,
-              color: '#2b2118',
+              color: DINER.ink,
             }}
           >
             <span className="font-bold uppercase">{p.set.key.replace('postcards_', '').replace(/_/g, ' ')}</span>

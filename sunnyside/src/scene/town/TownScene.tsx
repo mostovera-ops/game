@@ -27,17 +27,26 @@ import { Billboard, Html, Text } from '@react-three/drei'
 import { Lights, Ground, CameraRig } from '../common/Rig'
 import { PerfHud } from '../common/PerfHud'
 import { useStore } from '@/state'
-import type { HelpActionType } from '@/types'
+import type { HelpActionType, Street, TownProject, TownProjectKey } from '@/types'
 import { TownProjects } from './TownProjects'
 import { Streets, type VisitTarget } from './Streets'
 import { ForagePoints } from './ForagePoints'
 import { FarmVisitPanel } from './FarmVisitPanel'
-import { layoutForagePoints } from './layout'
+import { layoutForagePoints, type RosterEntry } from './layout'
 import { NOOP_TOWN_SYSTEMS, type TownSystems } from './townSystemsFallback'
 
 /** Дневной лимит помощи — гипотеза 11-town §3.3.2/§4.1 (20/день). Локальная UX-подсказка,
  *  истина лимита — серверная (не считаем награду сами, AGENTS.md §0.3). */
 const HELP_DAILY_LIMIT_HYPOTHESIS = 20
+
+// SCN-3: стабильные module-level пустышки для `town?.projects/streets/roster` до гидрации.
+// `?? {}`/`?? []` инлайн в JSX создавали бы новый объект/массив КАЖДЫЙ рендер — это ломает
+// `React.memo` на `TownProjects`/`Streets`/`ForagePoints` (см. их memo-докстринги), вызывая
+// лишний пересчёт `orderedStreets`/`FarmWithPosition`/`useFrustumCulledItems` на каждый ре-рендер
+// сцены (например, тик `useFrame` в детях), а не только когда `town` реально меняется.
+const EMPTY_PROJECTS: Partial<Record<TownProjectKey, TownProject>> = {}
+const EMPTY_STREETS: readonly Street[] = []
+const EMPTY_ROSTER: readonly RosterEntry[] = []
 
 export function TownScene({ systems }: { systems?: TownSystems } = {}) {
   const town = useStore((s) => s.town)
@@ -148,10 +157,10 @@ export function TownScene({ systems }: { systems?: TownSystems } = {}) {
       <CameraRig />
       <PerfHud />
 
-      <TownProjects projects={town?.projects ?? {}} />
+      <TownProjects projects={town?.projects ?? EMPTY_PROJECTS} />
       <Streets
-        streets={town?.streets ?? []}
-        roster={town?.roster ?? []}
+        streets={town?.streets ?? EMPTY_STREETS}
+        roster={town?.roster ?? EMPTY_ROSTER}
         ownFarmId={ownFarmId}
         onSelectFarm={handleSelectFarm}
       />

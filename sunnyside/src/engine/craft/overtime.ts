@@ -7,12 +7,16 @@
  * вызывающего слайса, здесь только предикаты).
  */
 import type { EpochMs } from '@/types'
+import { canActivatePoolBoost } from '@/engine/econ/boostCaps'
 
 /** Длительность овертайм-слота — 24 часа (§3.8/§4.5). */
 export const OVERTIME_DURATION_MS = 24 * 60 * 60 * 1000
 
-/** Дневной кэп активаций овертайма на игрока, суммарно по станкам (§4.5, 14-economy.md §4.7). */
-export const OVERTIME_DAILY_CAP = 3
+/**
+ * Дневной кэп активаций овертайма (=3), суммарно по станкам. Мастер-число — в
+ * `@/engine/econ/boostCaps` (14-economy §4.7); здесь только ре-экспорт, локальной копии нет.
+ */
+export { OVERTIME_DAILY_CAP } from '@/engine/econ/boostCaps'
 
 /** Стоимость активации овертайма в Даймах `◉` по уровню станка (§4.5). */
 export function overtimeCost(machineLevel: number): number {
@@ -39,7 +43,12 @@ export function overtimeExpiresAt(slot: OvertimeSlot): EpochMs {
   return slot.activatedAt + OVERTIME_DURATION_MS
 }
 
-/** Можно ли купить ещё овертайм сегодня (кэп 3/сутки на игрока, суммарно по станкам, §4.5). */
-export function canActivateOvertime(activationsToday: number): boolean {
-  return activationsToday < OVERTIME_DAILY_CAP
+/**
+ * Можно ли купить ещё овертайм сегодня. Проверяет И штучный кэп овертайма (3/сутки), И
+ * общий пул бустеров (6/день, §4.7) — делегирует мастер-предикату `canActivatePoolBoost`.
+ * @param overtimesToday — активаций овертайма уже сегодня.
+ * @param poolUsedToday — активаций из общего пула бустеров уже сегодня (fertilizer+overtime+rush).
+ */
+export function canActivateOvertime(overtimesToday: number, poolUsedToday: number): boolean {
+  return canActivatePoolBoost('overtime', overtimesToday, poolUsedToday)
 }

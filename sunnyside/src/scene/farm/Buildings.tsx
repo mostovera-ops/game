@@ -5,15 +5,13 @@
  * заглушки (апгрейд-панель F3 — ui-агент).
  */
 
+import { memo } from 'react'
 import { useStore } from '@/state'
 import type { BuildingKey } from '@/types'
 import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
+import { useHoverCursor } from '../common/useHoverCursor'
 import { BUILDING_LAYOUT, KITCHEN_BUILDINGS, STORAGE_BUILDINGS } from './layout'
 import { useFarmActions, type FarmActions } from './systems'
-
-function setCursor(value: string) {
-  if (typeof document !== 'undefined') document.body.style.cursor = value
-}
 
 /** Обработчик клика по постройке данного ключа — `undefined`, если постройка пассивна. */
 function clickHandlerFor(key: BuildingKey, actions: FarmActions): (() => void) | undefined {
@@ -21,6 +19,37 @@ function clickHandlerFor(key: BuildingKey, actions: FarmActions): (() => void) |
   if (STORAGE_BUILDINGS.includes(key)) return () => actions.openStorage()
   return undefined
 }
+
+const BuildingProp = memo(function BuildingProp({
+  buildingKey,
+  position,
+  onClick,
+}: {
+  buildingKey: BuildingKey
+  position: [number, number, number]
+  onClick: (() => void) | undefined
+}) {
+  // SCN-2: hook всегда вызывается (правила хуков) — cleanup на unmount снимает курсор
+  // независимо от того, интерактивна ли эта конкретная постройка.
+  const { onPointerOver, onPointerOut } = useHoverCursor()
+  return (
+    <group
+      position={position}
+      onClick={
+        onClick
+          ? (e) => {
+              e.stopPropagation()
+              onClick()
+            }
+          : undefined
+      }
+      onPointerOver={onClick ? onPointerOver : undefined}
+      onPointerOut={onClick ? onPointerOut : undefined}
+    >
+      <PlaceholderMesh id={buildingKey} />
+    </group>
+  )
+})
 
 export function Buildings() {
   const buildings = useStore((s) => s.farm?.buildings)
@@ -35,31 +64,7 @@ export function Buildings() {
         const position = BUILDING_LAYOUT[key]
         if (!position) return null
         const onClick = clickHandlerFor(key, actions)
-        return (
-          <group
-            key={key}
-            position={position}
-            onClick={
-              onClick
-                ? (e) => {
-                    e.stopPropagation()
-                    onClick()
-                  }
-                : undefined
-            }
-            onPointerOver={
-              onClick
-                ? (e) => {
-                    e.stopPropagation()
-                    setCursor('pointer')
-                  }
-                : undefined
-            }
-            onPointerOut={onClick ? () => setCursor('auto') : undefined}
-          >
-            <PlaceholderMesh id={key} />
-          </group>
-        )
+        return <BuildingProp key={key} buildingKey={key} position={position} onClick={onClick} />
       })}
     </group>
   )

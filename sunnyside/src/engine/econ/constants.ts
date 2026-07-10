@@ -31,7 +31,7 @@ export const TIER_ECON_REF: readonly TierEconRefRow[] = [
   { tier: 2, pRef: 22, cycleMin: 15, grossPerHour: 88, rBase: 3.0 },
   { tier: 3, pRef: 75, cycleMin: 45, grossPerHour: 100, rBase: 1.2 },
   { tier: 4, pRef: 260, cycleMin: 120, grossPerHour: 130, rBase: 0.4 },
-  { tier: 5, pRef: 900, cycleMin: 300, grossPerHour: 180, rBase: 0.15 },
+  { tier: 5, pRef: 900, cycleMin: 300, grossPerHour: 180, rBase: 0.133 },
 ] as const
 
 /** Дизайн-цель отношений T1→T5 (canon §2.2). */

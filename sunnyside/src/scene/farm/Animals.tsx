@@ -3,23 +3,21 @@
  * дворе (`layout.ts`). Клик по животному → покормить (`useFarmActions.feed`). Лёгкий idle-bob.
  */
 
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Group } from 'three'
 import type { Animal } from '@/types'
 import { useStore } from '@/state'
 import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
+import { useHoverCursor } from '../common/useHoverCursor'
 import { animalAssetId } from './assetMap'
 import { animalPosition } from './layout'
 import { useFarmActions } from './systems'
 
-function setCursor(value: string) {
-  if (typeof document !== 'undefined') document.body.style.cursor = value
-}
-
-function AnimalProp({ animal, index }: { animal: Animal; index: number }) {
+const AnimalProp = memo(function AnimalProp({ animal, index }: { animal: Animal; index: number }) {
   const actions = useFarmActions()
   const ref = useRef<Group>(null)
+  const { onPointerOver, onPointerOut } = useHoverCursor()
 
   useFrame((state) => {
     const g = ref.current
@@ -38,17 +36,14 @@ function AnimalProp({ animal, index }: { animal: Animal; index: number }) {
           e.stopPropagation()
           actions.feed([animal.id])
         }}
-        onPointerOver={(e) => {
-          e.stopPropagation()
-          setCursor('pointer')
-        }}
-        onPointerOut={() => setCursor('auto')}
+        onPointerOver={onPointerOver}
+        onPointerOut={onPointerOut}
       >
         <PlaceholderMesh id={animalAssetId(animal.kind)} />
       </group>
     </group>
   )
-}
+})
 
 export function Animals() {
   const animals = useStore((s) => s.farm?.animals)

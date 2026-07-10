@@ -38,7 +38,7 @@ export function TownBrowser({ onMoved }: TownBrowserProps) {
   const town = useStore((s) => s.town)
   const serverNow = useStore((s) => s.serverNow)
   const townSystem = useTownSystem()
-  const { listings, loading } = useTownListings()
+  const { listings, loading, error, refetch } = useTownListings()
 
   const [onlyRecommended, setOnlyRecommended] = useState(false)
   const [onlyFriends, setOnlyFriends] = useState(false)
@@ -149,6 +149,23 @@ export function TownBrowser({ onMoved }: TownBrowserProps) {
 
       {loading ? (
         <p className="py-6 text-center italic opacity-70">{ru ? 'Загружаем города…' : 'Loading towns…'}</p>
+      ) : error ? (
+        <div data-testid="town-browse-error" className="flex flex-col items-center gap-2 py-6 text-center">
+          <p className="italic opacity-70">
+            {ru
+              ? 'Не получилось загрузить города. Попробуй ещё раз.'
+              : "Couldn't load towns. Give it another try."}
+          </p>
+          <button
+            type="button"
+            data-testid="town-browse-retry"
+            onClick={refetch}
+            className="rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white"
+            style={{ background: DINER.cherry }}
+          >
+            {ru ? 'Повторить' : 'Retry'}
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
         <p data-testid="town-browse-empty" className="py-6 text-center italic opacity-70">
           {ru ? 'Ничего не найдено по фильтрам.' : 'No towns match these filters.'}

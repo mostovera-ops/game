@@ -1,12 +1,14 @@
 /**
  * App.tsx — корень приложения (21-client §3.2, интегратор C3). Собирает играбельное целое:
  *
- *  ┌ <Canvas key=scene> … ActiveScene ┐  ← ровно ОДИН 3D-канвас на активную сцену
- *  │ (смена scene.active → размонтаж графа, освобождение GPU)                       │
- *  └───────────────────────────────────────────────────────────────────────────────┘
+ *  ┌ <Canvas> … <ActiveScene key=scene> ┐  ← ровно ОДИН персистентный 3D-канвас (рендерер
+ *  │  живёт всё приложение); key на ВНУТРЕННЕМ графе → смена scene.active размонтирует       │
+ *  │  scene-граф (освобождение GPU-объектов), но НЕ рендерер (WebGL-контекст сохраняется).   │
+ *  └───────────────────────────────────────────────────────────────────────────────────────┘
  *  Поверх канваса — DOM-оверлеи, обёрнутые в <SystemsProvider> (DI систем движка):
- *    · <Hud/>        — marquee/навигация/тосты/колокол/net-плашка (зона hud-nav)
- *    · <PanelHost/>  — все канон-панели `ui_*` в модальном каркасе (ui.activePanel)
+ *    · <Hud/>          — marquee/навигация/тосты/колокол/net-плашка (зона hud-nav)
+ *    · <PanelHost/>    — все канон-панели `ui_*` в модальном каркасе (ui.activePanel)
+ *    · <PanelLauncher/>— HUD-индекс всех смонтированных панелей (достижимость из прод-UI)
  *    · <OnboardingHost/> — FTUE поверх всего, пока не пройден (18-onboarding)
  *
  * БУТСТРАП (§3.2): при монтировании — init адаптера → сессия → serverOffset → гидрация
@@ -25,6 +27,7 @@ import { color } from '@/scene/assets/palette'
 import { isDebugEnabled } from '@/bootstrap/debug'
 import { SystemsProvider } from './app/SystemsProvider'
 import { PanelHost } from './app/PanelHost'
+import { PanelLauncher } from './app/PanelLauncher'
 import { bootstrap, getAdapter, createSystemContext, createSystems, type AppSystems } from './app/backend'
 import { subscribeNotifications } from './app/notifications'
 
@@ -46,8 +49,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
  * SceneBoundary — граница ошибки ВНУТРИ Canvas вокруг активной сцены. Без неё исключение
  * при рендере сцены (напр. drei <Text> не смог подгрузить шрифт в оффлайне/под CSP)
  * всплывает наружу Canvas и гасит ВСЁ приложение вместе с HUD. С границей — падает только
- * сцена (пустой кадр), HUD жив, а переключение сцены (`key` на Canvas меняется) поднимает
- * свежий граф. `sceneKey` сбрасывает границу при смене сцены.
+ * сцена (пустой кадр), HUD жив, а переключение сцены (`key` на внутреннем графе меняется)
+ * поднимает свежий граф. `sceneKey` сбрасывает границу при смене сцены.
  */
 class SceneBoundary extends Component<{ sceneKey: string; children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -100,6 +103,10 @@ export function App() {
   const liteMode = useStore((s) => s.ui.perf.liteMode)
   const locale = useStore((s) => s.ui.locale)
   const streetJoined = useFtueStore((s) => s.streetJoined)
+  // APP-4: личный день игрока (1..7, §3.5 — счётчик активных дней) для пост-FTUE карточки
+  // цели дня. Ближайший источник в сторе — стрик завсегдатая (`progression.streak.streakDays`,
+  // счётчик дней активности); вне 1..7 `DailyGoalCard` сам вернёт `null`. Нет прогрессии → undefined.
+  const personalDay = useStore((s) => s.progression?.streak.streakDays)
 
   useBootstrap()
 
@@ -129,8 +136,10 @@ export function App() {
   return (
     <div className="relative h-full w-full">
       <Canvas
-        // key по сцене → полный размонтаж графа при переходе (освобождение GPU-памяти).
-        key={active}
+        // APP-3: НЕ ключуем сам <Canvas> по сцене — иначе каждый свитч Farm/Town/Fair
+        // диспозил рендерер и терял WebGL-контекст («Context Lost» → пустой канвас после
+        // нескольких переходов). Рендерер теперь персистентен; освобождение GPU-объектов
+        // берёт на себя размонтаж ВНУТРЕННЕГО scene-графа (`key={active}` на <ActiveScene>).
         shadows={!liteMode}
         dpr={liteMode ? 1 : ([1, 1.5] as [number, number])}
         camera={{ position: [10, 9, 12], fov: 42 }}
@@ -143,6 +152,9 @@ export function App() {
         <Suspense fallback={null}>
           <SceneBoundary sceneKey={active}>
             <ActiveScene
+              // key на внутреннем графе (APP-3): смена сцены размонтирует scene-граф
+              // (drei/r3f авто-диспозят его объекты), рендерер выше — переживает.
+              key={active}
               active={active}
               farmSystems={{ farm: systems.farm, animals: systems.animals }}
               townSystems={{ social: systems.social, mailForaging: systems.mailForaging }}
@@ -156,9 +168,11 @@ export function App() {
       <SystemsProvider systems={systems}>
         <Hud />
         <PanelHost />
+        <PanelLauncher />
         <OnboardingHost
           locale={locale}
           canSkip={streetJoined}
+          personalDay={personalDay}
           onStreetJoin={() => useFtueStore.getState().joinStreet()}
         />
       </SystemsProvider>

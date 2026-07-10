@@ -73,7 +73,19 @@ export function ContestGallery() {
     setBusy(entryId)
     try {
       const res = await contest.vote(c.id, entryId)
-      if (res.ok) setVotedEntryIds((prev) => new Set(prev).add(entryId))
+      if (res.ok) {
+        setVotedEntryIds((prev) => new Set(prev).add(entryId))
+      } else {
+        // Фикс UI-6: зеркалим тёплый тост `handleEnter` — молчаливый провал голосования
+        // (кулдаун/окно закрыто/уже голосовал на сервере) не был виден игроку (канон P3).
+        useStore.getState().pushToast({
+          id: `contest_vote_err_${Date.now()}`,
+          kind: 'info',
+          message: ru ? 'Голос пока не засчитать — попробуй позже.' : "Can't count that vote right now — try later.",
+          createdAt: Date.now(),
+          ttlMs: 5000,
+        })
+      }
     } finally {
       setBusy(null)
     }

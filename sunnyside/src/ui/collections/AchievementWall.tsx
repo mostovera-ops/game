@@ -77,7 +77,7 @@ export function AchievementWall({ onClose }: AchievementWallProps) {
         value={categoryFilter}
         onChange={(e) => setCategoryFilter(e.target.value)}
         className="w-fit rounded-lg border px-2 py-1 text-xs"
-        style={{ borderColor: DINER.chrome, background: DINER.card, color: '#2b2118' }}
+        style={{ borderColor: DINER.chrome, background: DINER.card, color: DINER.ink }}
       >
         <option value="all">{locale === 'ru' ? 'Все разделы' : 'All categories'}</option>
         {categories.map((c) => (
@@ -102,12 +102,12 @@ export function AchievementWall({ onClose }: AchievementWallProps) {
                 background: isUnlocked ? '#3a2f1f' : DINER.card,
                 borderColor: isUnlocked ? DINER.mustard : DINER.chrome,
                 boxShadow: PRINT_SHADOW,
-                color: isUnlocked ? '#F2E9D8' : '#8a8070',
+                color: isUnlocked ? '#F2E9D8' : DINER.inkMuted,
                 opacity: isUnlocked ? 1 : 0.65,
               }}
             >
               <div>
-                <p className="font-black uppercase" style={{ color: isUnlocked ? DINER.mustard : '#8a8070' }}>
+                <p className="font-black uppercase" style={{ color: isUnlocked ? DINER.mustard : DINER.inkMuted }}>
                   {a.rewardTitle}
                 </p>
                 <p className="opacity-80">{a.condition[locale]}</p>

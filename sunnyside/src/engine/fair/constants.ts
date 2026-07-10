@@ -10,48 +10,59 @@
  */
 
 import type { Tier } from '@/types/common'
+import {
+  TIER_ECON_REF,
+  PRICE_ELASTICITY as ECON_PRICE_ELASTICITY,
+  PRICE_SLIDER_MIN,
+  PRICE_SLIDER_MAX,
+  QUALITY_PER_STAR as ECON_QUALITY_PER_STAR,
+  S_SAT_EXP,
+  S_SAT_FLOOR,
+  S_SAT_CEIL,
+  D_CAT_FLOOR,
+  D_CAT_CEIL,
+  GRAND_OPENING_MULT as ECON_GRAND_OPENING_MULT,
+} from '@/engine/econ/constants'
 
 // ════════════════════════════════════════════════════════════════════════════
 // Fair Stall — пассивный прилавок (§3.3, §4.1, §4.3)
 // ════════════════════════════════════════════════════════════════════════════
+//
+// ДЕДУП (ENG-3): общие эконом-числа (R_base/p_ref-кривая, эластичность, качество,
+// насыщение, коридор спроса) — из мастер-таблицы `@/engine/econ/constants`
+// (14-economy). Здесь они лишь пере-экспортируются под fair-именами, чтобы устранить
+// класс дрейфа (ENG-1). Fair-специфичное (STACK_CAP, палатка, смена, конкурсы) — ниже.
 
-/** §4.1: базовая скорость продаж по тиру (ед/ч при p_ref, ★0, D=1). */
-export const R_BASE: Record<Tier, number> = {
-  1: 8.0, // T1 Garden — объём
-  2: 3.0, // T2 Farm
-  3: 1.2, // T3 County
-  4: 0.4, // T4 States
-  5: 0.133, // T5 Legends — штучный сбыт
-}
+/** §4.1: базовая скорость продаж по тиру (ед/ч при p_ref, ★0, D=1). Из TIER_ECON_REF. */
+export const R_BASE: Record<Tier, number> = Object.fromEntries(
+  TIER_ECON_REF.map((r) => [r.tier, r.rBase]),
+) as Record<Tier, number>
 
-/** §4.1: референс-цена блюда по тиру ($, канон §2.2). */
-export const P_REF: Record<Tier, number> = {
-  1: 6,
-  2: 22,
-  3: 75,
-  4: 260,
-  5: 900,
-}
+/** §4.1: референс-цена блюда по тиру ($, канон §2.2). Из TIER_ECON_REF. */
+export const P_REF: Record<Tier, number> = Object.fromEntries(
+  TIER_ECON_REF.map((r) => [r.tier, r.pRef]),
+) as Record<Tier, number>
 
 /** §3.3/§4.3: эластичность цены ε в `P = (p_ref/p_set)^ε`. */
-export const PRICE_ELASTICITY = 1.8
+export const PRICE_ELASTICITY = ECON_PRICE_ELASTICITY
 
 /** §3.3: допустимый коридор ползунка цены относительно p_ref. */
-export const PRICE_MIN_MULT = 0.7
-export const PRICE_MAX_MULT = 1.5
+export const PRICE_MIN_MULT = PRICE_SLIDER_MIN
+export const PRICE_MAX_MULT = PRICE_SLIDER_MAX
 
 /** §3.3/§4.4: качество от Mastery ★ — `Q = 1 + 0.08 × stars` (★0→1.0 … ★5→1.40). */
-export const QUALITY_PER_STAR = 0.08
+export const QUALITY_PER_STAR = ECON_QUALITY_PER_STAR
+/** Fair-specific: потолок ★ для клампа качества (★0..5). */
 export const QUALITY_MAX_STARS = 5
 
 /** §3.3: городское насыщение `S = clamp((Demand/max(Listed,1))^0.5, 0.40, 1.15)`. */
-export const SAT_EXPONENT = 0.5
-export const SAT_FLOOR = 0.4
-export const SAT_CEIL = 1.15
+export const SAT_EXPONENT = S_SAT_EXP
+export const SAT_FLOOR = S_SAT_FLOOR
+export const SAT_CEIL = S_SAT_CEIL
 
 /** §3.3: границы множителя спроса категории D_cat с Demand Board (±15–30%). */
-export const DEMAND_MIN = 0.7
-export const DEMAND_MAX = 1.3
+export const DEMAND_MIN = D_CAT_FLOOR
+export const DEMAND_MAX = D_CAT_CEIL
 
 /** §3.2: cap стека в слоте по тиру (единиц). */
 export const STACK_CAP: Record<Tier, number> = {
@@ -69,8 +80,8 @@ export const TICK_HOURS = TICK_MINUTES / 60
 /** §4.5: ценовой бонус Blue Plate Special к сумме p_ref компонентов. */
 export const BLUE_PLATE_PRICE_BONUS = 0.15
 
-/** F10: Grand Opening — ×2 к доходу прилавка первую неделю новичка. */
-export const GRAND_OPENING_MULT = 2
+/** F10: Grand Opening — ×2 к доходу прилавка первую неделю новичка (из econ-мастера). */
+export const GRAND_OPENING_MULT = ECON_GRAND_OPENING_MULT
 
 // ════════════════════════════════════════════════════════════════════════════
 // Fair Tent — апгрейды палатки (§3.6). 5 уровней, качают пассив и смену.

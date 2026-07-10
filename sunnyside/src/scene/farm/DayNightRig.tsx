@@ -36,38 +36,46 @@ export function DayNight() {
   const targetBg = useMemo(() => new Color(tone.background), [tone.background])
   const targetDirColor = useMemo(() => new Color(tone.dirColor), [tone.dirColor])
   const currentBg = useRef<Color | null>(null)
+  // SCN-1: цвет солнца — свой ref (клон), а не reactive JSX-prop на `dirRef`. Если color/
+  // intensity передавать как props на ref-нутом свете, r3f переустанавливает их напрямую на
+  // каждый ре-рендер (смена `tone` при флипе фазы), и последующий `useFrame`-lerp стартует
+  // заново от уже-целевого значения → визуальный щелчок вместо плавного дотягивания.
+  const currentDirColor = useRef<Color | null>(null)
   const currentAmbient = useRef(tone.ambient)
   const currentDirIntensity = useRef(tone.dirIntensity)
 
   useEffect(() => {
     if (!currentBg.current) currentBg.current = targetBg.clone()
     scene.background = currentBg.current
+    if (!currentDirColor.current) currentDirColor.current = targetDirColor.clone()
+    if (dirRef.current) {
+      dirRef.current.color.copy(currentDirColor.current)
+      dirRef.current.intensity = currentDirIntensity.current
+    }
+    if (ambientRef.current) ambientRef.current.intensity = currentAmbient.current
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene])
 
   useFrame((_, delta) => {
-    if (!currentBg.current) return
+    if (!currentBg.current || !currentDirColor.current) return
     const t = Math.min(1, Math.max(0, delta) / TONE_TWEEN_SECONDS)
     currentBg.current.lerp(targetBg, t)
+    currentDirColor.current.lerp(targetDirColor, t)
     currentAmbient.current = lerpNum(currentAmbient.current, tone.ambient, t)
     currentDirIntensity.current = lerpNum(currentDirIntensity.current, tone.dirIntensity, t)
     if (ambientRef.current) ambientRef.current.intensity = currentAmbient.current
     if (dirRef.current) {
       dirRef.current.intensity = currentDirIntensity.current
-      dirRef.current.color.lerp(targetDirColor, t)
+      dirRef.current.color.copy(currentDirColor.current)
     }
   })
 
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={tone.ambient} />
-      <directionalLight
-        ref={dirRef}
-        position={[6, 10, 4]}
-        intensity={tone.dirIntensity}
-        color={tone.dirColor}
-        castShadow
-      />
+      {/* SCN-1: `intensity`/`color` НЕ передаются реактивными JSX-props — единственный писатель
+          этих полей на смонтированных лампах — `useFrame` выше (+ mount-only init в useEffect). */}
+      <ambientLight ref={ambientRef} />
+      <directionalLight ref={dirRef} position={[6, 10, 4]} castShadow />
     </>
   )
 }

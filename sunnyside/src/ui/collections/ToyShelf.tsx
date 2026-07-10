@@ -108,7 +108,7 @@ export function ToyShelf({ onClose }: ToyShelfProps) {
             className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
             style={{
               background: activeSeries === s ? DINER.cherry : DINER.card,
-              color: activeSeries === s ? 'white' : '#2b2118',
+              color: activeSeries === s ? 'white' : DINER.ink,
               border: `1px solid ${DINER.chrome}`,
             }}
           >
@@ -164,7 +164,7 @@ export function ToyShelf({ onClose }: ToyShelfProps) {
                   background: have ? DINER.card : '#EFE6D2',
                   borderColor: DINER.chrome,
                   boxShadow: PRINT_SHADOW,
-                  color: have ? '#2b2118' : '#8a8070',
+                  color: have ? DINER.ink : DINER.inkMuted,
                   opacity: have ? 1 : 0.5,
                 }}
               >
