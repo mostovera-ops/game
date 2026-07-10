@@ -25,6 +25,7 @@ import { applyPalette, CROP_ASSET, type Palette, type Vec3 } from '../assets/sce
 import { useGameStore, type CropId } from '../game/store'
 import { SpeechBubble } from './SpeechBubble'
 import { heroTarget } from './heroTarget'
+import { REACH } from './heroState'
 import { setIntent } from './intent'
 
 // Ростки крупные: слот читается с дефолтного зума, без приближения камеры.
@@ -156,6 +157,9 @@ export function Slot({
   const slot = useGameStore((s) => s.slots.find((x) => x.id === slotId)!)
   const tool = useGameStore((s) => s.tool)
   const phase = useGameStore((s) => s.phase)
+  // Семена кончились — сажать нечего, и слот об этом говорит курсором,
+  // а не заставляет героя сходить впустую.
+  const hasSeed = useGameStore((s) => s.seeds[s.selectedSeed] > 0)
 
   const [hover, setHover] = useState(false)
   const [splash, setSplash] = useState(false) // капля живёт отдельно от watered
@@ -184,14 +188,15 @@ export function Slot({
   // Что произойдёт по клику этим инструментом — от этого же зависит курсор.
   // В день 7 грядки мертвы: герой стоит за прилавком и подойти не может.
   const actionable =
-    phase === 'farm' && (tool === 'can' ? growing : tool === 'hand' ? ripe : !slot.crop)
+    phase === 'farm' &&
+    (tool === 'can' ? growing : tool === 'hand' ? ripe : !slot.crop && hasSeed)
 
   // Клик только просит: герой идёт к слоту, а действие выполнит <Interactions>,
   // когда тот войдёт в радиус. Здесь ничего не меняем в игровом состоянии.
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
     if (!actionable) return
-    setIntent({ kind: 'slot', id: slotId, x: position[0], z: position[2] })
+    setIntent({ kind: 'slot', id: slotId, x: position[0], z: position[2], reach: REACH })
     heroTarget.set(position[0], 0, position[2])
   }
   const onOver = (e: ThreeEvent<PointerEvent>) => {

@@ -48,6 +48,10 @@ export type NoticeKind =
   | 'harvest'
   | 'withered'
   | 'too-far'
+  | 'no-seeds'
+  | 'no-money'
+  | 'bought'
+  | 'sold'
 
 export interface Notice {
   id: number
@@ -104,6 +108,33 @@ export const RECIPES: Record<
   soup: { needs: { carrot: 2 }, price: 6 },
   taco: { needs: { carrot: 1, tomato: 1, greens: 1 }, price: 14 },
 }
+
+/**
+ * Экономика лавки.
+ *
+ * Купля дороже продажи по каждой культуре — иначе игрок крутил бы деньги из
+ * воздуха, покупая и тут же сбывая семена обратно урожаем.
+ *
+ * Продать урожай в лавку всегда невыгоднее, чем сварить из него блюдо
+ * (морковь: 1 за штуку против 3 в супе). Лавка — это способ добыть деньги на
+ * семена в дни фермы, когда фудтрак ещё не открылся, а не второй источник
+ * дохода.
+ *
+ * Маржа блюда за вычетом семян: суп +2, салат +3, тако +7. Тако — цель недели,
+ * суп — способ не остаться без денег.
+ */
+export const SEED_PRICE: Record<CropId, number> = { carrot: 2, greens: 2, tomato: 3 }
+export const SELL_PRICE: Record<CropId, number> = { carrot: 1, greens: 1, tomato: 2 }
+
+/** По три семени каждой культуры — ровно на все девять слотов. */
+export const START_SEEDS = 3
+
+/**
+ * Стартовый капитал. Полная пересадка всех девяти слотов стоит 21, так что
+ * после первого урожая двадцатки чуть-чуть не хватает: одну морковку придётся
+ * продать. Это и знакомит игрока с правой половиной лавки.
+ */
+export const START_MONEY = 20
 
 export const RECIPE_IDS = Object.keys(RECIPES) as RecipeId[]
 
@@ -162,6 +193,10 @@ function emptyInventory(): Inventory {
   return { carrot: 0, greens: 0, tomato: 0 }
 }
 
+function startingSeeds(): Inventory {
+  return { carrot: START_SEEDS, greens: START_SEEDS, tomato: START_SEEDS }
+}
+
 /** Результат подачи блюда клиенту. */
 export type ServeResult = 'ok' | 'no-customer' | 'wrong-dish' | 'no-ingredients'
 
@@ -171,9 +206,18 @@ interface GameData {
   money: number
   slots: Slot[]
   inventory: Inventory
+  /** Семена на руках. Посадка тратит одно, лавка продаёт новые. */
+  seeds: Inventory
   selectedSeed: CropId
   tool: Tool
   truck: TruckState | null
+  /**
+   * Открыта ли лавка. Не персистится: это состояние экрана.
+   *
+   * Живёт в сторе, а не в useState HUD (как инвентарь по E), потому что
+   * открывает её сцена — герой, дошедший до прилавка.
+   */
+  shopOpen: boolean
   /** Цвет одежды героя, `#rrggbb`. */
   heroColor: string
   /** Очередь тостов. Не персистится: события живут только в текущей сессии. */
@@ -192,7 +236,14 @@ interface GameActions {
   dismissNotice: (id: number) => void
   /** Сообщить о событии без данных. Подряд один и тот же вид не дублируется. */
   notify: (kind: NoticeKind) => void
-  /** Посадить выбранное семя в пустой слот. */
+  /** Открыть лавку — зовёт сцена, когда герой дошёл до прилавка. */
+  openShop: () => void
+  closeShop: () => void
+  /** Купить семена. Не хватает денег — ничего не меняется, летит тост. */
+  buySeeds: (crop: CropId, qty: number) => void
+  /** Продать урожай лавке. Продать больше, чем есть, нельзя. */
+  sellCrops: (crop: CropId, qty: number) => void
+  /** Посадить выбранное семя в пустой слот. Тратит одно семя. */
   plant: (slotId: SlotId) => void
   /** Полить растущий слот (stage < 2). */
   water: (slotId: SlotId) => void
@@ -218,12 +269,14 @@ function initialData(): GameData {
   return {
     day: 1,
     phase: 'farm',
-    money: 0,
+    money: START_MONEY,
     slots: emptySlots(),
     inventory: emptyInventory(),
+    seeds: startingSeeds(),
     selectedSeed: 'carrot',
     tool: 'seed',
     truck: null,
+    shopOpen: false,
     heroColor: HERO_COLOR_DEFAULT,
     notices: [],
     nextNoticeId: 1,
@@ -279,14 +332,47 @@ export const useGameStore = create<GameState>()(
           return withNotice(s, { kind })
         }),
 
+      openShop: () => set({ shopOpen: true }),
+
+      closeShop: () => set({ shopOpen: false }),
+
+      buySeeds: (crop, qty) =>
+        set((s) => {
+          const cost = SEED_PRICE[crop] * qty
+          if (qty <= 0) return {}
+          if (s.money < cost) return withNotice(s, { kind: 'no-money' })
+          return {
+            money: s.money - cost,
+            seeds: { ...s.seeds, [crop]: s.seeds[crop] + qty },
+            ...withNotice(s, { kind: 'bought', crop, amount: qty }),
+          }
+        }),
+
+      sellCrops: (crop, qty) =>
+        set((s) => {
+          if (qty <= 0 || s.inventory[crop] < qty) return {}
+          return {
+            money: s.money + SELL_PRICE[crop] * qty,
+            inventory: { ...s.inventory, [crop]: s.inventory[crop] - qty },
+            ...withNotice(s, { kind: 'sold', crop, amount: SELL_PRICE[crop] * qty }),
+          }
+        }),
+
       plant: (slotId) =>
-        set((s) => ({
-          slots: s.slots.map((slot) =>
-            slot.id === slotId && !slot.crop
-              ? { ...slot, crop: s.selectedSeed, stage: 0, watered: false, lucky: false }
-              : slot,
-          ),
-        })),
+        set((s) => {
+          const slot = s.slots.find((x) => x.id === slotId)
+          if (!slot || slot.crop) return {}
+          const crop = s.selectedSeed
+          if (s.seeds[crop] < 1) return withNotice(s, { kind: 'no-seeds', crop })
+          return {
+            seeds: { ...s.seeds, [crop]: s.seeds[crop] - 1 },
+            slots: s.slots.map((x) =>
+              x.id === slotId
+                ? { ...x, crop, stage: 0 as Stage, watered: false, lucky: false }
+                : x,
+            ),
+          }
+        }),
 
       water: (slotId) =>
         set((s) => ({
@@ -419,12 +505,15 @@ export const useGameStore = create<GameState>()(
         return 'ok'
       },
 
+      // Семена и деньги переезжают в новую неделю: они и есть накопленный
+      // прогресс. Даром их больше не выдают — только лавка.
       nextWeek: () =>
         set(() => ({
           day: 1,
           phase: 'farm',
           slots: emptySlots(),
           truck: null,
+          shopOpen: false,
           notices: [],
         })),
 
@@ -439,8 +528,11 @@ export const useGameStore = create<GameState>()(
       // v3: у героя появился цвет одежды, у клиента — id. Обе правки родились
       //     параллельно и попали в одну версию: сохранения v2 чинятся сразу от
       //     обеих, иначе половина осталась бы битой.
-      // Деньги, день и инвентарь переживают все миграции.
-      version: 3,
+      // v4: семена стали ресурсом. Старому сохранению выдаём стартовый набор
+      //     и стартовые деньги сверху: раньше семена были бесплатны и копить
+      //     на них было незачем, так что честного баланса из него не достать.
+      // День и инвентарь переживают все миграции.
+      version: 4,
       migrate: (persisted, from) => {
         let s = persisted as GameData
         if (from < 1) s = { ...s, slots: emptySlots(), tool: 'seed' }
@@ -454,6 +546,7 @@ export const useGameStore = create<GameState>()(
             s = { ...s, truck: { ...s.truck, queue, nextCustomerId: queue.length + 1 } }
           }
         }
+        if (from < 4) s = { ...s, seeds: startingSeeds(), money: s.money + START_MONEY }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.
@@ -463,9 +556,11 @@ export const useGameStore = create<GameState>()(
         money: s.money,
         slots: s.slots,
         inventory: s.inventory,
+        seeds: s.seeds,
         selectedSeed: s.selectedSeed,
         tool: s.tool,
         truck: s.truck,
+        shopOpen: false, // лавка закрывается вместе с вкладкой
         heroColor: s.heroColor,
         notices: [],
         nextNoticeId: 1,

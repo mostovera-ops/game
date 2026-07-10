@@ -1,5 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BEDS, RECIPES, SLOTS_PER_BED, SLOT_IDS, bedOf, useGameStore } from './store'
+import {
+  BEDS,
+  CROPS,
+  RECIPES,
+  RECIPE_IDS,
+  SEED_PRICE,
+  SELL_PRICE,
+  SLOTS_PER_BED,
+  SLOT_IDS,
+  START_MONEY,
+  START_SEEDS,
+  bedOf,
+  useGameStore,
+} from './store'
 
 /** Доводит слот до stage 2, подсовывая нужный бросок удачи при созревании. */
 function ripen(id: string, luckyRoll: number) {
@@ -301,7 +314,7 @@ describe('дополнительные правила', () => {
     const ok = S().serve('soup')
     expect(ok).toBe(true)
     expect(S().inventory.carrot).toBe(0)
-    expect(S().money).toBe(RECIPES.soup.price)
+    expect(S().money).toBe(START_MONEY + RECIPES.soup.price)
   })
 
   it('serve не проходит без ингредиентов', () => {
@@ -311,7 +324,88 @@ describe('дополнительные правила', () => {
     })
     const ok = S().serve('soup')
     expect(ok).toBe(false)
-    expect(S().money).toBe(0)
+    expect(S().money).toBe(START_MONEY)
+  })
+})
+
+describe('семена и лавка', () => {
+  it('на старте по три семени каждой культуры — ровно на девять слотов', () => {
+    expect(S().seeds).toEqual({ carrot: START_SEEDS, greens: START_SEEDS, tomato: START_SEEDS })
+    expect(SLOT_IDS.length).toBe(3 * START_SEEDS)
+  })
+
+  it('посадка тратит семя', () => {
+    S().selectSeed('carrot')
+    S().plant(SLOT_IDS[0])
+    expect(S().seeds.carrot).toBe(START_SEEDS - 1)
+    expect(S().seeds.greens).toBe(START_SEEDS)
+  })
+
+  it('без семян слот остаётся пустым, летит тост', () => {
+    S().selectSeed('carrot')
+    useGameStore.setState({ seeds: { carrot: 0, greens: 3, tomato: 3 } })
+    S().plant(SLOT_IDS[0])
+    expect(slot(SLOT_IDS[0]).crop).toBeNull()
+    expect(S().notices.at(-1)?.kind).toBe('no-seeds')
+  })
+
+  it('посадка в занятый слот семя не тратит', () => {
+    S().plant(SLOT_IDS[0])
+    const left = S().seeds[S().selectedSeed]
+    S().plant(SLOT_IDS[0])
+    expect(S().seeds[S().selectedSeed]).toBe(left)
+  })
+
+  it('покупка снимает деньги и добавляет семена', () => {
+    S().buySeeds('tomato', 3)
+    expect(S().money).toBe(START_MONEY - SEED_PRICE.tomato * 3)
+    expect(S().seeds.tomato).toBe(START_SEEDS + 3)
+  })
+
+  it('не хватает денег — ничего не меняется', () => {
+    useGameStore.setState({ money: 1 })
+    S().buySeeds('tomato', 1)
+    expect(S().money).toBe(1)
+    expect(S().seeds.tomato).toBe(START_SEEDS)
+    expect(S().notices.at(-1)?.kind).toBe('no-money')
+  })
+
+  it('продажа урожая даёт деньги', () => {
+    useGameStore.setState({ inventory: { carrot: 2, greens: 0, tomato: 0 } })
+    S().sellCrops('carrot', 2)
+    expect(S().inventory.carrot).toBe(0)
+    expect(S().money).toBe(START_MONEY + SELL_PRICE.carrot * 2)
+  })
+
+  it('нельзя продать больше, чем есть', () => {
+    useGameStore.setState({ inventory: { carrot: 1, greens: 0, tomato: 0 } })
+    S().sellCrops('carrot', 2)
+    expect(S().inventory.carrot).toBe(1)
+    expect(S().money).toBe(START_MONEY)
+  })
+
+  it('купить дороже, чем продать: прогнать деньги через лавку нельзя', () => {
+    for (const crop of CROPS) expect(SEED_PRICE[crop]).toBeGreaterThan(SELL_PRICE[crop])
+  })
+
+  it('каждое блюдо окупает свои семена', () => {
+    for (const id of RECIPE_IDS) {
+      const recipe = RECIPES[id]
+      const seedCost = CROPS.reduce((sum, c) => sum + SEED_PRICE[c] * (recipe.needs[c] ?? 0), 0)
+      expect(recipe.price).toBeGreaterThan(seedCost)
+    }
+  })
+
+  it('сырьё выгоднее готовить, чем сдавать в лавку', () => {
+    // Суп — худший случай: две морковки за 6 против 1 за штуку на прилавке.
+    expect(RECIPES.soup.price / 2).toBeGreaterThan(SELL_PRICE.carrot)
+  })
+
+  it('новая неделя не выдаёт семян даром', () => {
+    useGameStore.setState({ seeds: { carrot: 0, greens: 0, tomato: 0 }, money: 7 })
+    S().nextWeek()
+    expect(S().seeds).toEqual({ carrot: 0, greens: 0, tomato: 0 })
+    expect(S().money).toBe(7)
   })
 })
 

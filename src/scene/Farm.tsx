@@ -2,7 +2,7 @@
  * <Farm /> — читает scene-layout.json и раскладывает пропсы. Только рендер.
  * Растения и грядки в Task 1 не рисуем, покачивания нет.
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useGLTF, Instances, Instance } from '@react-three/drei'
@@ -23,7 +23,7 @@ import { Hero } from './Hero'
 import { Customers } from './Customers'
 import { heroTarget } from './heroTarget'
 import { hero, distanceToHero, REACH } from './heroState'
-import { intent, clearIntent } from './intent'
+import { intent, clearIntent, setIntent } from './intent'
 import { halfExtentsXZ, type Collider } from './collision'
 import { say } from './heroSpeech'
 import { PHRASES } from './phrases'
@@ -120,29 +120,33 @@ function Interactions() {
     // Слот мог измениться, пока герой шёл: росток погиб, сосед его полил.
     // Действие решаем по состоянию на момент прихода, а не на момент клика.
     const st = useGameStore.getState()
-    // День 7 застал героя в пути к грядке — дело отменяется, он за прилавком.
+    // День 7 застал героя в пути — дело отменяется, он за прилавком фудтрака.
+    // Это верно и для грядки, и для лавки: та в день ярмарки закрыта.
     if (st.phase !== 'farm') {
       clearIntent()
       return
     }
-    const slot = st.slots.find((s) => s.id === it.id)
-    if (!slot) {
-      clearIntent()
-      return
-    }
-    const can =
-      st.tool === 'can'
-        ? !!slot.crop && slot.stage < 2
-        : st.tool === 'hand'
-          ? !!slot.crop && slot.stage === 2
-          : !slot.crop
-    if (!can) {
-      clearIntent()
-      return
+    if (it.kind === 'slot') {
+      const slot = st.slots.find((s) => s.id === it.id)
+      if (!slot) {
+        clearIntent()
+        return
+      }
+      const can =
+        st.tool === 'can'
+          ? !!slot.crop && slot.stage < 2
+          : st.tool === 'hand'
+            ? !!slot.crop && slot.stage === 2
+            : !slot.crop
+      if (!can) {
+        clearIntent()
+        return
+      }
     }
 
-    if (distanceToHero(it.x, it.z) <= REACH) {
-      if (st.tool === 'can') st.water(it.id)
+    if (distanceToHero(it.x, it.z) <= it.reach) {
+      if (it.kind === 'shop') st.openShop()
+      else if (st.tool === 'can') st.water(it.id)
       else if (st.tool === 'hand') st.harvest(it.id)
       else st.plant(it.id)
       clearIntent()
@@ -260,11 +264,13 @@ function Singleton({
   inst,
   palette,
   cast,
+  onClick = speak,
 }: {
   url: string
   inst: PropInstance
   palette: Palette
   cast: boolean
+  onClick?: (e: ThreeEvent<MouseEvent>) => void
 }) {
   const { scene } = useGLTF(url)
   const object = useMemo(() => {
@@ -278,9 +284,44 @@ function Singleton({
       position={inst.position}
       rotation={[0, inst.rotationY, 0]}
       scale={inst.scale}
-      onClick={speak}
+      onClick={onClick}
     />
   )
+}
+
+/**
+ * Лавка семян: тот же Singleton, но клик по ней — не реплика, а поход за
+ * семенами. Торговлю откроет <Interactions>, когда герой дойдёт.
+ *
+ * Цель — центр пропса, а лавка сама себе коллайдер: вплотную к центру герой не
+ * подойдёт и обычного REACH не хватит. Поэтому радиус — REACH плюс полкорпуса,
+ * снятые с bbox самой GLB, как и у коллайдеров: лавка вырастет в Blender —
+ * вырастет и он.
+ *
+ * В день фудтрака лавка закрыта: продавец уехал на ярмарку вместе с игроком.
+ */
+function SeedStore(props: { url: string; inst: PropInstance; palette: Palette; cast: boolean }) {
+  const { inst, url } = props
+  const { scene } = useGLTF(url)
+
+  const reach = useMemo(() => {
+    const { hx, hz } = halfExtentsXZ(scene)
+    return REACH + Math.max(hx * inst.scale[0], hz * inst.scale[2])
+  }, [scene, inst])
+
+  const onClick = useCallback(
+    (e: ThreeEvent<MouseEvent>) => {
+      if (e.intersections[0]?.object !== e.object) return
+      e.stopPropagation()
+      if (useGameStore.getState().phase !== 'farm') return
+      const [x, , z] = inst.position
+      setIntent({ kind: 'shop', x, z, reach })
+      heroTarget.set(x, 0, z)
+    },
+    [inst, reach],
+  )
+
+  return <Singleton {...props} onClick={onClick} />
 }
 
 function InstancedProp({
@@ -459,17 +500,18 @@ export function Farm({
 
       <Ground size={layout.ground.size} color={palette[layout.ground.material] ?? '#5a8f33'} />
 
-      {SINGLETON_ASSETS.flatMap((asset) =>
-        (byAsset[asset] ?? []).map((inst, i) => (
-          <Singleton
+      {SINGLETON_ASSETS.flatMap((asset) => {
+        const Prop = asset === 'seed_store' ? SeedStore : Singleton
+        return (byAsset[asset] ?? []).map((inst, i) => (
+          <Prop
             key={`${asset}-${i}`}
             url={propUrl(asset)}
             inst={inst}
             palette={palette}
             cast={CASTERS.has(asset)}
           />
-        )),
-      )}
+        ))
+      })}
 
       {INSTANCED_ASSETS.map((asset) => {
         const list = byAsset[asset] ?? []

@@ -12,6 +12,7 @@ import { HeroPortrait } from './HeroPortrait'
 
 export function Inventory({ onClose }: { onClose: () => void }) {
   const inventory = useGameStore((s) => s.inventory)
+  const seeds = useGameStore((s) => s.seeds)
   const money = useGameStore((s) => s.money)
   const heroColor = useGameStore((s) => s.heroColor)
   const setHeroColor = useGameStore((s) => s.setHeroColor)
@@ -81,16 +82,20 @@ export function Inventory({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-[9px] uppercase tracking-wide opacity-50">Сумка</span>
+              <span className="text-[9px] uppercase tracking-wide opacity-50">
+                Сумка — урожай и семена
+              </span>
               <div className="flex flex-wrap gap-2">
                 {CROPS.map((c) => (
                   <div
                     key={c}
+                    title={`${CROP_NAME[c]}: урожай ${inventory[c]}, семян ${seeds[c]}`}
                     className="flex items-center gap-2 rounded bg-white/5 px-3 py-2 text-sm"
                   >
                     <span>{CROP_EMOJI[c]}</span>
-                    <span className="opacity-60">{CROP_NAME[c]}</span>
                     <span className="font-bold">{inventory[c]}</span>
+                    <span className="opacity-40">·</span>
+                    <span className="opacity-60">🌱 {seeds[c]}</span>
                   </div>
                 ))}
                 <div className="flex items-center gap-2 rounded bg-white/5 px-3 py-2 text-sm font-bold text-[#f4b942]">

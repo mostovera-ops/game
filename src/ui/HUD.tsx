@@ -26,6 +26,7 @@ import { CROP_EMOJI, CROP_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
 import { HeroPortrait } from './HeroPortrait'
 import { Inventory } from './Inventory'
 import { SeedPacket } from './SeedPacket'
+import { Shop } from './Shop'
 
 const panel = 'pointer-events-auto rounded-lg bg-[#241a20]/70 backdrop-blur'
 
@@ -66,6 +67,17 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
       }
     case 'too-far':
       return { text: 'Слишком далеко — подойдите к грядке', tone: 'warn' }
+    case 'no-seeds':
+      return {
+        text: `${CROP_NAME[n.crop!]}: семена кончились — купите в лавке`,
+        tone: 'warn',
+      }
+    case 'no-money':
+      return { text: 'Не хватает денег', tone: 'bad' }
+    case 'bought':
+      return { text: `Куплено семян: ${CROP_EMOJI[n.crop!]} ×${n.amount}`, tone: 'good' }
+    case 'sold':
+      return { text: `${CROP_EMOJI[n.crop!]} продан · +${n.amount}💰`, tone: 'good' }
   }
 }
 
@@ -188,6 +200,7 @@ function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
   const phase = useGameStore((s) => s.phase)
   const heroColor = useGameStore((s) => s.heroColor)
   const inventory = useGameStore((s) => s.inventory)
+  const seeds = useGameStore((s) => s.seeds)
   const selectedSeed = useGameStore((s) => s.selectedSeed)
   const tool = useGameStore((s) => s.tool)
   const selectSeed = useGameStore((s) => s.selectSeed)
@@ -215,11 +228,21 @@ function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
               key={c}
               active={tool === 'seed' && selectedSeed === c}
               activeClass="bg-[#9fc25f]"
-              hint={`Семена: ${CROP_NAME[c]}`}
+              hint={
+                seeds[c]
+                  ? `Семена: ${CROP_NAME[c]} — ${seeds[c]} шт.`
+                  : `Семена: ${CROP_NAME[c]} — кончились, купите в лавке`
+              }
               hotkey={String(i + 1)}
               onClick={() => selectSeed(c)}
             >
-              <SeedPacket crop={c} active={tool === 'seed' && selectedSeed === c} />
+              {/* Пустой пакетик приглушён: сажать нечем, пока не сходишь в лавку. */}
+              <span className={seeds[c] ? '' : 'opacity-30'}>
+                <SeedPacket crop={c} active={tool === 'seed' && selectedSeed === c} />
+              </span>
+              <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">
+                {seeds[c]}
+              </span>
             </ToolButton>
           ))}
 
@@ -395,10 +418,12 @@ export function HUD() {
   const selectSeed = useGameStore((s) => s.selectSeed)
   const selectTool = useGameStore((s) => s.selectTool)
   const serveCustomer = useGameStore((s) => s.serveCustomer)
+  const shopOpen = useGameStore((s) => s.shopOpen)
   const [inventoryOpen, setInventoryOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (shopOpen) return // за прилавком не до инструментов
       // По code, а не по key: на кириллической раскладке это та же клавиша.
       if (e.code === 'KeyE') {
         setInventoryOpen((v) => !v)
@@ -417,7 +442,7 @@ export function HUD() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, selectSeed, selectTool, serveCustomer, inventoryOpen])
+  }, [phase, selectSeed, selectTool, serveCustomer, inventoryOpen, shopOpen])
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none p-4 font-mono text-[#f0e4c9]">
@@ -439,6 +464,7 @@ export function HUD() {
       </div>
 
       {inventoryOpen && <Inventory onClose={() => setInventoryOpen(false)} />}
+      {shopOpen && <Shop />}
 
       <WeekSummary />
     </div>
