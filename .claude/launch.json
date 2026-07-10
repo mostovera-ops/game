@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "pnpm@9", "dev"],
       "port": 5173
+    },
+    {
+      "name": "sunnyside-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "sunnyside", "dev", "--port", "5174", "--strictPort"],
+      "port": 5174
     }
   ]
 }

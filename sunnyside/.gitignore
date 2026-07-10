@@ -1,0 +1,23 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# env (21-client §3.5 — ключи не коммитим)
+.env
+.env.*
+!.env.sunnyside.example
+
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# coverage
+/coverage/
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store

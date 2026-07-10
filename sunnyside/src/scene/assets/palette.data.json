@@ -1,0 +1,46 @@
+{
+  "_note": "Плоская палитра Sunnyside (21-client §3.7). MeshLambertMaterial, ноль PBR — как Blender solid viewport. Наследует прототип farm-truck. Именованные цвета — не hex в компонентах. Меняем настроение сцены — правим ЭТОТ файл, не код.",
+
+  "diner_red": "#e2523b",
+  "diner_cream": "#f5ecd6",
+  "chrome": "#d9dde1",
+  "chrome_dark": "#9aa2a8",
+  "neon_pink": "#f9779f",
+  "neon_teal": "#3fd0c9",
+  "neon_yellow": "#f9dd76",
+
+  "barn_red": "#b8473a",
+  "roof_red": "#c47669",
+  "wall_yellow": "#f8ee66",
+  "door_brown": "#896950",
+  "window_blue": "#5af5fa",
+
+  "field_soil": "#907661",
+  "bed_wood": "#ad906f",
+  "grass": "#a0c47c",
+  "grass_dark": "#69aa6f",
+  "leaves": "#55a069",
+  "trunk": "#997c61",
+
+  "crop_tomato": "#e75950",
+  "crop_greens": "#89cb7c",
+  "crop_carrot": "#edad59",
+  "crop_wheat": "#e6c667",
+  "crop_corn": "#f4cf4a",
+
+  "road_asphalt": "#4a4a52",
+  "road_line": "#f3f3f1",
+  "sky_dusk": "#f6b8a0",
+  "sky_day": "#bfe3f2",
+  "water_blue": "#7fb8d6",
+
+  "toy_a": "#f995aa",
+  "toy_b": "#f9ed7c",
+  "toy_c": "#cb95e7",
+  "toy_d": "#81cec4",
+  "toy_e": "#ed897c",
+
+  "ribbon_blue": "#3f6fd0",
+  "ticket_gold": "#f2b544",
+  "shadow": "#303030"
+}
