@@ -35,8 +35,14 @@ import { setIntent } from './intent'
 // Ростки крупные: слот читается с дефолтного зума, без приближения камеры.
 const STAGE_SCALE = [0.32, 0.8, 1.35]
 
-/** Глушит рейкаст меша: в планировке хитбокс слота пропускает клик к грядке. */
-const nullRaycast = () => null
+/**
+ * Рейкаст хитбокса слота. В планировке глушим (клик уходит к грядке под ним),
+ * в игре — штатный рейкаст меша. Именно функцией, а не `undefined`: r3f не
+ * возвращает прототипный рейкаст, если проп стал undefined, и слот навсегда
+ * оставался бы «прозрачным» для кликов после выхода из режима.
+ */
+const nullRaycast: THREE.Mesh['raycast'] = () => {}
+const meshRaycast: THREE.Mesh['raycast'] = THREE.Mesh.prototype.raycast
 
 /** Сколько капля висит над слотом после полива. */
 const DROP_MS = 1000
@@ -268,7 +274,7 @@ export function Slot({
           В планировке отключаем рейкаст, чтобы клик доставался грядке. */}
       <mesh
         position={[0, 0.3, 0]}
-        raycast={buildMode ? nullRaycast : undefined}
+        raycast={buildMode ? nullRaycast : meshRaycast}
         onClick={onClick}
         onPointerOver={onOver}
         onPointerMove={onMove}
