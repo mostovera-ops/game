@@ -14,7 +14,18 @@
 
 **Итог: все фикс-зоны применены (ENG/NET/SCN/UI/SQL/EDGE/STATE/TEST/APP), кроме одного
 осознанно отложенного пункта NET-3 (skipped, вне мандата зоны — см. ниже). BACKLOG (BL-1…BL-4)
-не трогали — это отдельные не-построенные фичи, не фиксы.**
+на финальном гейте C8 ПОСТРОЕН ЦЕЛИКОМ и помечен [x] (см. секцию BACKLOG ниже) — это уже не
+отложенные фичи.**
+
+**Post-C7b — `ui-daily-club` (16-retention):** `ui_daily_specials` (Доска Sheriff Roy) и
+`ui_regulars_club` (Блокнот завсегдатая) больше не в TODO — смонтированы (`src/ui/retention/*`,
+`PanelHost`/`PanelLauncher` MORE_PANELS, `e2e/shared.ts` PANELS). `ui_regulars_club` читает
+`progression.streak` и наконец зовёт `RetentionSystem.streakCheck()`/`streakInsure()` (до этого
+не вызывались ни из одного компонента). `ui_daily_specials` генерирует набор задач дня НА
+КЛИЕНТЕ чистой функцией `generateDailySpecials` (сервер этот RPC ещё не отдаёт — см. докстринг
+`ui/retention/shared.ts`); живого прогресса «сколько уже сделано» нет — требует событийного
+учёта действий игрока, которого нигде в сторе ещё нет (TODO(daily-specials-progress),
+`DailySpecials.tsx`).
 
 **Финальный гейт C7b — зелёный (точные числа):**
 - `tsc -b --noEmit` — **0 ошибок**; `node scripts/check-boundaries.mjs` — границы соблюдены.
@@ -68,8 +79,8 @@
   `<ActiveScene>` — рендерер переживает смену сцены), APP-4 (`personalDay` из
   `progression.streak.streakDays` в `OnboardingHost`). tsc чист, app-сьют 20/20.
 
-**BACKLOG (BL-1…BL-4)** — оставлен без изменений: отдельные не-построенные фичи
-`08-mail-foraging`, не фиксы существующего кода.
+**BACKLOG (BL-1…BL-4)** — на C8 построен целиком и помечен [x]: рыбалка-QTE (0019),
+каталог почтой + доставка/ускорение, мир фуражинга (0018). См. секцию BACKLOG ниже.
 
 ## Решения по спорному (оркестратор)
 
@@ -582,25 +593,43 @@
 
 ---
 
-## BACKLOG — механики из x-spec-gaps (СЛИШКОМ крупно для фикс-фазы, не фиксы)
+## BACKLOG — механики из x-spec-gaps (были СЛИШКОМ крупно для фикс-фазы) — ЗАКРЫТЫ на C8
 
-Это отсутствующие целиком фичи `08-mail-foraging`, а не правки существующего кода. Требуют
-новых панелей/сцен/движковых модулей и продуктового согласования — выносятся из фикс-фазы.
+Изначально — отсутствующие целиком фичи `08-mail-foraging` (новые панели/сцены/движковые
+модули), вынесенные из фикс-фазы. **Все четыре построены отдельной волной агентов и приняты
+финальным гейтом C8** (миграции `0018_forage.sql` + `0019_fishing_qte.sql` применены и
+проверены вживую; клиентский путь — через `MailForagingSystem`/адаптер; прод-preview: панели
+достижимы из UI). Ниже — что именно было закрыто.
 
-- **BL-1 · Рыбалка-QTE (`08-mail-foraging §3.2.4`).** Нет оверлея `ui_fishing_qte` (Catch Bar,
-  3 попытки), ветки fishing в `TownScene`, детерминированной редкости по попаданиям (0→Common /
-  1→Good / 2–3→Prime), 2% Legend Fish, бонуса ширины зоны от удочки. Константы
-  (`FISHING_ATTEMPTS_PER_CAST`, `LEGEND_FISH_CHANCE`, `FISHING_ROD_ZONE_BONUS`) мёртвые;
-  `fishCast()` всегда фикс `crop_catfish/common`. → Новая мини-игра + контракт `fish()`.
-- **BL-2 · Каталог почтой: ротация/заказ (`§3.1`).** Нет `ui_mail_catalog`/`ui_mailbox`,
-  взаимодействия с ящиком, `rotation.ts` (недельный оффер 12 позиций, anti-repeat, тир-гарантии,
-  Last Call), снапшота `getMailCatalog`, недельных лимитов по категории. RPC order/speedup/claim
-  мёртвые (никто не зовёт). → Новый движок ротации + панели.
-- **BL-3 · Доставка/ускорение почты (`§3.1.3`).** Нет `delivery.ts`: `mailOrder()` хардкодит
-  deliverAt=t+8ч для всех (игнор `DELIVERY_DELAY_HOURS_BY_CATEGORY`), `mailSpeedup()` — фикс 5◉
-  (игнор «1◉/начатые 4ч, кап 5◉»). *(Меньше BL-2, но зависит от него — потреблять существующие
-  константы при реализации каталога.)*
-- **BL-4 · Фуражинг: респавн/лимиты/микс точек (`§3.2.2/3.2.3/3.2.6`).** Нет ежедневного
-  респавна 06:00 UTC (`FORAGE_RESPAWN_OFFSET_MS`), персональных суточных кэпов по типу точки,
-  спека-микса (6 Mushroom/10 Berry/4 Beehive/3 Fishing). `starterForage()` — 6 обобщённых точек
-  с одноразовым `remaining=5`, точки исчерпываются навсегда. → Тик мира + счётчики.
+- **[x] BL-1 · Рыбалка-QTE (`08-mail-foraging §3.2.4`) — СДЕЛАНО (fishing-qte).** Оверлей
+  `ui_fishing_qte` (`src/ui/fishing/FishingQte.tsx`, контекстный `POI → SHEET` без canon-ключа,
+  как F1/F4) — Catch Bar (маркер/зона — чистые функции `engine/mail-foraging/fishing.ts`,
+  node-тестируемо), заброс 2с + 3 попытки «Тяни!». Ветка `fishing` в `TownScene.handleForageCollect`
+  (открывает оверлей вместо `forageCollect`, точка не гасится — репрезентует пруд). Контракт
+  `fish(hits)` (`FishCastReq`/`MailForagingSystem.fish`) — `local` и `supabase` (SQL
+  `0019_fishing_qte.sql`, задеплоено) РОЛЛЯЮТ РЕЗУЛЬТАТ САМИ; `hits` — только вероятностный
+  МОДИФИКАТОР шансов (`CATCH_ODDS_BY_HITS`), не гарантия (честная серверная проверка тайминга
+  QTE невозможна — см. докстринг `resolveFishCast`/`0019_fishing_qte.sql`, анти-чит решение
+  задокументировано явно). Редкость — `common`/`good`/`prime` + независимый 2% `legendary`.
+  Бонус ширины зоны от удочки (`greenZoneWidth(rodTier)`) подключён с дефолтом Bamboo (tier 0) —
+  реальное владение/покупка удочки осталась TODO (зависит от Каталога почтой, BL-2, открытый
+  вопрос ОВ-3 спеки). `FORAGE_KINDS`/`FORAGE_POINT_MIX` фуражинга (BL-4) уже несут `fishing` —
+  переиспользовано без правок BL-4-зоны.
+- **[x] BL-2 · Каталог почтой: ротация/заказ (`§3.1`) — СДЕЛАНО.** Движок недельной ротации
+  `engine/mail-foraging/rotation.ts` (детерминированный оффер 12 позиций = 5 rare_seeds/4 decor/
+  3 tools, anti-repeat ≥1 неделя, тир-гарантии rare_seeds ≥1 T3 и ≥1 T4–T5, 2 позиции Last Call;
+  детерминизм от абсолютного индекса недели, не от `Date.now()`). Панели `ui_mail_catalog`
+  (`src/ui/mail/MailCatalog.tsx`, вызывает `mail.order(key)`) и `ui_mailbox`
+  (`MailboxPanel.tsx`) смонтированы (`PanelHost`), достижимы (`PanelLauncher` MORE + сцена +
+  контекстная кнопка «в ящик» из каталога). RPC order/speedup/claim теперь ЗОВУТСЯ из UI.
+- **[x] BL-3 · Доставка/ускорение почты (`§3.1.3`) — СДЕЛАНО.** `engine/mail-foraging/delivery.ts`:
+  `deliverAtFor(category)` по `DELIVERY_DELAY_HOURS_BY_CATEGORY` (Rare 20ч/Decor 16ч/Tools 8ч,
+  конец хардкода t+8ч), `speedupCostDimes()` — `◉1` за каждые НАЧАТЫЕ 4ч оставшегося времени с
+  капом `◉5` (конец фикс-5◉). Клиент не считает цену сам — берёт из движка (`MailboxPanel`);
+  время — аргументом (`serverNow()`), не `Date.now()`.
+- **[x] BL-4 · Фуражинг: респавн/лимиты/микс точек (`§3.2.2/3.2.3/3.2.6`) — СДЕЛАНО.** Миграция
+  `0018_forage.sql` (применена, проверена вживую): `instance_index` + уникальность
+  `(town_id, point_type, instance_index)`, спека-микс на Город = 6 Mushroom/10 Berry/4 Wild
+  Beehive/3 Fishing = 23 инстанса (подтверждено `select point_type, count(*)` на проде),
+  пер-тип пулы/дневные кэпы в `game_configs.caps` (`forage_pool_by_type`/`forage_daily_cap_by_type`),
+  респавн 06:00 UTC (`engine/mail-foraging/forage.ts::forageDayIndex`, cron `sunny_foraging_respawn`).

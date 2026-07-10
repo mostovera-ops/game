@@ -37,6 +37,8 @@ import {
   RetentionSystemProvider,
 } from '@/ui/social'
 import { TownSystemProvider } from '@/ui/migration'
+import { ExpeditionSystemProvider } from '@/ui/expeditions'
+import { MailSystemProvider } from '@/ui/mail'
 import { getAdapter, createSystemContext, createSystems, type AppSystems } from './backend'
 
 /** Собрать системы один раз (адаптер-синглтон + SystemContext поверх стора). */
@@ -72,7 +74,11 @@ export function SystemsProvider({
                             <ContestSystemProvider value={sys.contest}>
                               <RetentionSystemProvider value={sys.retention}>
                                 <TownSystemProvider value={sys.town}>
-                                  {children}
+                                  <ExpeditionSystemProvider value={sys.expedition}>
+                                    <MailSystemProvider value={sys.mailForaging}>
+                                      {children}
+                                    </MailSystemProvider>
+                                  </ExpeditionSystemProvider>
                                 </TownSystemProvider>
                               </RetentionSystemProvider>
                             </ContestSystemProvider>

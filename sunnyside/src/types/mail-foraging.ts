@@ -41,11 +41,16 @@ export interface ForagePoint {
   respawnAt?: EpochMs
 }
 
-/** Улов рыбалки (fish_cast). Гарантированный минимум Common (P3, «нет провала»). */
+/**
+ * Улов рыбалки (fish_cast). Гарантированный минимум Common (P3, «нет провала»).
+ * Редкость — словарь Catch Bar мини-игры (08 §3.2.4 п.5): `common`/`good`/`prime` по числу
+ * попаданий за заброс (0/1/2-3), `legendary` — независимый ролл 2% (Legend Fish), подменяет
+ * обычный улов целиком. См. `engine/mail-foraging/fishing.ts` (BL-1).
+ */
 export interface FishCatch {
   itemKey: ProductKey
   quality: Quality
-  rarity: 'common' | 'uncommon' | 'rare' | 'legendary'
+  rarity: 'common' | 'good' | 'prime' | 'legendary'
 }
 
 /** Снапшот почты/фуражинга (mail/foraging часть town-слайса или отдельно). */

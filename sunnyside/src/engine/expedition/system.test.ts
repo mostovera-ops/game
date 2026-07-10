@@ -64,3 +64,16 @@ describe('createExpeditionSystem().collect', () => {
     expect(ctx.applyMutation).toHaveBeenCalledWith('expedition_collect', { expIds: ['exp-1', 'exp-2'] })
   })
 })
+
+describe('createExpeditionSystem().list', () => {
+  it('delegates to adapter.getExpeditions (чистое чтение, без applyMutation)', async () => {
+    const ctx = makeCtx()
+    const getExpeditions = vi.fn(async () => ({ ok: true, data: { expeditions: [] } }))
+    ctx.adapter = { getExpeditions } as unknown as SystemContext['adapter']
+    const system = createExpeditionSystem(ctx)
+    const result = await system.list()
+    expect(result.ok).toBe(true)
+    expect(getExpeditions).toHaveBeenCalledTimes(1)
+    expect(ctx.applyMutation).not.toHaveBeenCalled()
+  })
+})

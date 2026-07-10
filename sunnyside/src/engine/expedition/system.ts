@@ -35,5 +35,11 @@ export function createExpeditionSystem(ctx: SystemContext): ExpeditionSystem {
       }
       return ctx.applyMutation<ExpeditionCollectRes>('expedition_collect', { expIds })
     },
+
+    // Чтение по требованию (не часть общего бутстрап-снапшота) — как `TownSystem.listTowns`:
+    // чистый снапшот без оптимистики/патча, UI вызывает на открытии панели и после мутаций.
+    list() {
+      return ctx.adapter.getExpeditions()
+    },
   }
 }

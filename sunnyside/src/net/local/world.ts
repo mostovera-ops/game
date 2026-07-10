@@ -52,6 +52,13 @@ import { weekNumberOf, DAY_MS } from '@/engine/clock'
 import { generateWeeklyDemand } from '@/engine/econ/demand'
 import { goal100 } from '@/engine/event/milestones'
 import { hashSeed, seededRng } from '@/engine/econ/rng'
+import { forageDayIndex } from '@/engine/mail-foraging/forage'
+import {
+  FORAGE_KINDS as FORAGE_POINT_KINDS,
+  INSTANCES_PER_TOWN,
+  POOL_PER_INSTANCE_PER_DAY,
+  type ForagePointKind,
+} from '@/engine/mail-foraging/constants'
 
 /** Мин. срок в текущем городе перед первым переездом (12-migration §3.1.2, гипотеза). */
 export const MIN_TOWN_TENURE_MS = 3 * DAY_MS
@@ -81,8 +88,10 @@ export function makeDemandBoard(weekIndex: number, townId: UUID): DemandBoard {
 /**
  * Схема-версия мира: bump при ломающем изменении формы → persist.ts сбросит кэш.
  * v2 (ui-migration): добавлены `movingVan`/`grandReopening` (12-migration).
+ * v3 (foraging-world, BL-4): `foragePoints` — спека-микс 23 инстансов (6/10/4/3,
+ * §3.2.6) вместо 6 обобщённых точек; добавлены `forageDay`/`forageDailyCounts`.
  */
-export const WORLD_SCHEMA_VERSION = 2
+export const WORLD_SCHEMA_VERSION = 3
 
 /** Симулированный сосед города (для кооп/ивент-ботов и ростера town). */
 export interface LocalNpc {
@@ -157,6 +166,10 @@ export interface LocalWorld {
   expeditions: Expedition[]
   mailOrders: MailOrder[]
   foragePoints: ForagePoint[]
+  /** Индекс суток фуражинга (`forageDayIndex`) последнего респавна (§3.2.2, 06:00 UTC). */
+  forageDay: number
+  /** Личные суточные счётчики сборов/забросов, суммарно по типу точки (не по инстансу), §3.2.3. */
+  forageDailyCounts: Partial<Record<ForagePointKind, number>>
 
   // ── Прогрессия ──
   knowHow: KnowHowState
@@ -278,24 +291,64 @@ function starterAnimals(prefix: string): Animal[] {
 }
 
 /**
- * Точки фуражинга обочины (mech_foraging, 08-mail-foraging §3.2). ID-схема `forage-<townId>-
- * <i>` НАМЕРЕННО зеркалит `scene/town/layout.ts` `layoutForagePoints(townId)` (adapter-seams):
- * сцена не гидрирует реальный `MailForagingSnapshot.foragePoints` (нет ещё net-bootstrap
- * подписки на снапшот в этой зоне), а рисует детерминированный клиентский плейсхолдер той же
- * формы — но с ЭТИМ ЖЕ id, чтобы клик реально резолвил ту же точку на сервере вместо честного
- * always-404. Число точек (`count`) должно совпадать с дефолтом `layoutForagePoints` (6).
+ * Реальный продукт-ключ (существующий каталог, `data/catalogs/ingredients.ts`) по типу точки
+ * фуражинга (08-mail-foraging §3.2.1/§3.2.5). `wild_beehive` реюзает обычный `honey` (нет
+ * отдельного «дикого» SKU в каталоге — спека §8 ОВ-4 оставляет тег `Wild` открытым вопросом,
+ * не заводим новую каталожную позицию только ради этого). Mushroom Patch отдаёт common-гриб;
+ * редкий Truffle (§3.2.5, шанс) — вне скоупа BL-4 (RNG-улов не входит в респавн/лимиты).
  */
-function starterForage(townId: UUID, count = 6): ForagePoint[] {
-  const kinds: { kind: ForagePoint['kind']; itemKey: string }[] = [
-    { kind: 'mushroom', itemKey: 'crop_mushroom' },
-    { kind: 'berry', itemKey: 'crop_wild_berry' },
-    { kind: 'herb', itemKey: 'crop_wild_herb' },
-    { kind: 'flower', itemKey: 'crop_wildflower' },
-  ]
-  return Array.from({ length: count }, (_, i) => {
-    const k = kinds[i % kinds.length]!
-    return { id: `forage-${townId}-${i}`, kind: k.kind, itemKey: k.itemKey, remaining: 5 }
-  })
+const FORAGE_ITEM_BY_KIND: Record<ForagePointKind, string> = {
+  mushroom: 'crop_field_mushroom',
+  berry: 'crop_blackberry',
+  wild_beehive: 'honey',
+  fishing: 'crop_catfish',
+}
+
+/**
+ * Точки фуражинга обочины (mech_foraging, 08-mail-foraging §3.2): спека-микс §3.2.6 — 6
+ * Mushroom Patch / 10 Berry Bush / 4 Wild Beehive / 3 Fishing Spot = 23 инстанса на Город
+ * (`INSTANCES_PER_TOWN`), пул/инстанс/день из `POOL_PER_INSTANCE_PER_DAY` (§3.2.2).
+ *
+ * ID-схема `forage-<townId>-<i>` (глобальный индекс по всем 4 типам, в порядке
+ * `FORAGE_POINT_KINDS`) НАМЕРЕННО зеркалит `scene/town/layout.ts` `layoutForagePoints(townId)`
+ * (adapter-seams): сцена не гидрирует реальный `MailForagingSnapshot.foragePoints` (нет ещё
+ * net-bootstrap подписки на снапшот в этой зоне), а рисует детерминированный клиентский
+ * плейсхолдер той же формы — но с ЭТИМИ ЖЕ id, чтобы клик реально резолвил ту же точку на
+ * сервере вместо честного always-404. Суммарное число точек должно совпадать с дефолтом
+ * `layoutForagePoints` (23, см. её докстринг).
+ */
+function starterForage(townId: UUID): ForagePoint[] {
+  const out: ForagePoint[] = []
+  let i = 0
+  for (const kind of FORAGE_POINT_KINDS) {
+    const count = INSTANCES_PER_TOWN[kind]
+    const pool = POOL_PER_INSTANCE_PER_DAY[kind]
+    for (let k = 0; k < count; k++) {
+      out.push({ id: `forage-${townId}-${i}`, kind, itemKey: FORAGE_ITEM_BY_KIND[kind], remaining: pool })
+      i += 1
+    }
+  }
+  return out
+}
+
+/**
+ * Респавн точек фуражинга + сброс личных суточных лимитов (08-mail-foraging §3.2.2/§3.2.3):
+ * ежедневно в 06:00 UTC (`forageDayIndex`) пул каждого инстанса восстанавливается до
+ * `POOL_PER_INSTANCE_PER_DAY`, личные счётчики (`forageDailyCounts`) обнуляются. Идемпотентно
+ * за сутки — повторный вызов в те же сутки фуражинга не мутирует мир (`false`). Тихое событие
+ * (§4.4: респавн — без пуша), поэтому не эмитит realtime-уведомление — вызывающий (`sync`) это
+ * не делает намеренно.
+ */
+export function respawnForageIfNeeded(world: LocalWorld, t: EpochMs): boolean {
+  const day = forageDayIndex(t)
+  if (world.forageDay === day) return false
+  world.forageDay = day
+  world.forageDailyCounts = {}
+  for (const point of world.foragePoints) {
+    const pool = POOL_PER_INSTANCE_PER_DAY[point.kind as ForagePointKind]
+    if (pool !== undefined) point.remaining = pool
+  }
+  return true
 }
 
 const ZERO_FARM_VALUE: FarmValueAxes = { production: 0, buildings: 0, collections: 0, cosmetics: 0, total: 0 }
@@ -375,6 +428,8 @@ export function createInitialWorld(userId: UUID, townId: UUID, now: EpochMs): Lo
     expeditions: [],
     mailOrders: [],
     foragePoints: starterForage(townId),
+    forageDay: forageDayIndex(now),
+    forageDailyCounts: {},
 
     knowHow: { points: 0, activeSlots: 1, nodes: {} },
     staff: {},

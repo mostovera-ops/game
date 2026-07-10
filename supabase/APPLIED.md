@@ -187,3 +187,49 @@ curl -4 -s -X POST \
 
 **Локальный гейт `sunnyside/`:** `pnpm typecheck` ✅, `pnpm lint:boundary` ✅,
 `pnpm test` — **1246 passed / 22 skipped** (22 skipped = gated cloud-сьют).
+
+## Обновление fishing-qte (BL-1, FIXPLAN-CODE.md BACKLOG) — 2026-07-10
+
+Миграция `0019_fishing_qte.sql` применена (`scripts/db-apply.mjs`, `curl -4`, токен из
+`"Supabase Sunnyside PAT"`). Шлюз `game` (Edge Function) редеплоен —
+`pnpm dlx supabase@latest functions deploy game --project-ref pvautnecztynbnzrrdra --use-api`
+→ `Deployed Functions.`.
+
+| # | Файл | Статус | applied_at (UTC) |
+|---|------|--------|------------------|
+| 19 | `0019_fishing_qte.sql` | OK | см. `_sunnyside_migrations` |
+
+**Что сделано:**
+1. **`fish_cast()` → `fish_cast(p_hits int default 0)`.** Старый ноль-арность overload
+   `drop function`-нут явно (иначе `create or replace` с другим числом параметров завёл бы
+   ВТОРОЙ overload, а старый остался бы мёртвым). Подтверждено интроспекцией `pg_proc` после
+   деплоя: ровно один overload, `p_hits integer DEFAULT 0`.
+2. **Формат ответа исправлен на camelCase.** Старая версия возвращала
+   `{ catch: { item_key, rarity } }` (snake_case) — НЕСОВМЕСТИМО с клиентским
+   `FishCatch.itemKey` (`sunnyside/src/net/adapters/supabase.ts::toRpcResult` пробрасывает
+   JSON конверта как есть, без camelCase-конверсии — конвенция всего проекта camelCase,
+   сверено с `jsonb_build_object('serverNow', ...)`/`farmId` в 0011). Теперь
+   `{ catch: { itemKey: 'crop_catfish', quality, rarity } }`.
+3. **Редкость — новый словарь.** `common`/`good`/`prime` (по Catch Bar, было
+   `common`/`uncommon`/`rare`) + независимый `legendary` (2%, `legendary_pct` конфиг,
+   без изменений). `itemKey` унифицирован на `crop_catfish` (было ad hoc `fish_common`/
+   `fish_rare`/`fish_legendary` — несуществующие в каталоге ингредиентов ключи; теперь
+   совпадает с `net/local/world.ts` `starterForage`/`net/adapters/local.ts` fishCast).
+4. **АНТИ-ЧИТ — РЕШЕНИЕ (документируется по прямому требованию задачи fishing-qte).**
+   Честно проверить на сервере, что игрок ДЕЙСТВИТЕЛЬНО попал в тайминг Catch Bar
+   (`08-mail-foraging.md §3.2.4`), невозможно — сервер не видит кадров анимации, только
+   присланное клиентом число попаданий. Поэтому `p_hits` (0..3, кламп `greatest`/`least`)
+   используется ТОЛЬКО как вероятностный МОДИФИКАТОР порогов (`v_p_common`/`v_p_good`,
+   зеркалят `CATCH_ODDS_BY_HITS` в `sunnyside/src/engine/mail-foraging/fishing.ts` — держать
+   оба места в синхроне при правке), НЕ как гарантия редкости: финальный `random()`-бросок
+   (включая независимый Legend-ролл в тех же кумулятивных порогах) всегда делает сервер.
+   Клиент не может форсировать Prime/Legend, отправив «выгодное» число — только сдвинуть шансы.
+5. **Edge gateway `game/index.ts`** `RPC_ACTIONS.fish_cast` тоже принимает `p_hits` (для
+   симметрии/будущих вызывающих — прямой адаптер бьёт `.rpc()` напрямую, минуя шлюз, NET-3).
+
+**Живая проверка:** `pg_proc` интроспекция подтвердила единственный overload
+`fish_cast(p_hits integer DEFAULT 0)` после деплоя. Клиентский гейт (`sunnyside/`) —
+`pnpm exec vitest run src/engine/mail-foraging/fishing.test.ts src/scene/town
+src/app/integration.test.ts` зелёный (см. отчёт задачи fishing-qte); полный `pnpm test`/
+`pnpm build` не гоняются здесь повторно — гейт общий для параллельной волны BL-1..BL-4
+(см. индивидуальный отчёт агента).

@@ -23,9 +23,12 @@ export const SCENES = ['farm', 'town', 'fair', 'shift'] as const
 
 /**
  * Канон-панели `ui_*`, реально смонтированные в модальном каркасе (PanelHost + OverlayHost
- * для ui_notif_log). Четыре ключа (ui_daily_specials/ui_moving_truck/ui_regulars_club/
- * ui_expeditions) — задокументированный TODO профильных ui-агентов, ещё не монтируются,
- * поэтому в смоук не включены.
+ * для ui_notif_log). wire-sanity (аудит смоук-проводки, гейт после C7b): каждый ключ
+ * `UI_SCREEN_KEYS` (`types/ui.ts`) сверен с `PanelHost`/`PanelLauncher` — на момент
+ * аудита ВСЕ ключи смонтированы и достижимы (прямым пунктом `PanelLauncher`, своим
+ * лаунчером, сценой или контекстной навигацией из другой панели, напр. `ui_mailbox`
+ * кнопкой из `ui_mail_catalog`), поэтому список ниже покрывает `UI_SCREEN_KEYS` целиком
+ * за вычетом `ui_shift` (см. отдельный кейс ниже).
  *
  * `ui_shift` — унифицирован на общем `Modal`/`ui.activePanel` (modal-unify), но своя Modal
  * смонтирована не в `PanelHost`, а в `ui/shift/ShiftHost` (вариант `fullscreen`), которую
@@ -38,6 +41,7 @@ export const PANELS = [
   'ui_demand_board',
   'ui_coop_orders',
   'ui_potluck',
+  'ui_chat',
   'ui_recipe_box',
   'ui_fair_stall',
   'ui_appetite_meter',
@@ -48,4 +52,14 @@ export const PANELS = [
   'ui_ribbon_wall',
   'ui_postcards',
   'ui_photo_mode',
+  'ui_daily_specials',
+  'ui_regulars_club',
+  'ui_expeditions',
+  'ui_mentor',
+  'ui_vacation_toggle',
+  'ui_pet_card',
+  'ui_contest_gallery',
+  'ui_moving_truck',
+  'ui_mail_catalog',
+  'ui_mailbox',
 ] as const

@@ -49,6 +49,7 @@ import type {
   ProgressionSnapshot,
   CollectionsSnapshot,
   MailForagingSnapshot,
+  ExpeditionsSnapshot,
   MachineJob,
   FairLot,
   Expedition,
@@ -86,7 +87,7 @@ import type {
   MailOrderReq, MailOrderRes,
   MailSpeedupReq, MailSpeedupRes,
   MailClaimReq, MailClaimRes,
-  ForageClaimReq, ForageCollectReq, ForageRes, FishCastRes,
+  ForageClaimReq, ForageCollectReq, ForageRes, FishCastReq, FishCastRes,
   StreakCheckRes, StreakInsureRes, VacationRes,
   DecorPurchaseReq, DecorPlaceReq, NeonSaveReq,
   RecipeExperimentReq, RecipeExperimentRes,
@@ -109,6 +110,15 @@ import {
   DAY_MS,
   HOUR_MS,
 } from '@/engine/clock'
+import {
+  catalogItemOf,
+  deliverAtFor,
+  speedupCostDimes,
+  WEEKLY_ORDER_LIMIT_BY_CATEGORY,
+  MAX_ORDERS_IN_TRANSIT,
+  resolveFishCast,
+  clampHits,
+} from '@/engine/mail-foraging'
 import { salePrice } from '@/engine/econ/pricing'
 import { grandOpeningMultiplier, type GrandOpeningState } from '@/engine/econ/grandOpening'
 import { siloCapacity, icehouseCapacity, storageUpgradeCost } from '@/engine/inventory'
@@ -148,10 +158,12 @@ import {
 import {
   createInitialWorld,
   nextId,
+  respawnForageIfNeeded,
   MOVING_VAN_COOLDOWN_MS,
   GRAND_REOPENING_MS,
   type LocalWorld,
 } from '../local/world'
+import { PERSONAL_DAILY_LIMIT, type ForagePointKind } from '@/engine/mail-foraging/constants'
 import { createWorldStore, type WorldStore } from '../local/persist'
 import {
   simulateTown,
@@ -328,6 +340,9 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
   function sync(w: LocalWorld): void {
     const t = now()
     catchUpRollover(w, weekNumberOf(t))
+    // Фуражинг: респавн пула + сброс личных суточных лимитов, ежедневно 06:00 UTC
+    // (08-mail-foraging §3.2.2/§3.2.3). Тихое событие (§4.4) — без realtime-эмита.
+    respawnForageIfNeeded(w, t)
     processBuildingTimers(w, t)
     processFairSales(w, t)
     simulateTown(w, t)
@@ -635,6 +650,21 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
     async getMailForaging() {
       const w = await ensureWorld(); sync(w)
       return ok<MailForagingSnapshot>({ orders: w.mailOrders, foragePoints: w.foragePoints })
+    },
+    async getExpeditions() {
+      const w = await ensureWorld(); sync(w)
+      // Апгрейды грузовика (Speed/Capacity/Route Slots, §3.4) пока не персистятся в
+      // LocalWorld (нет ветки покупки) — отдаём базовые уровни + бонус стаффа, тем же
+      // способом, что использует `expeditionStart` (см. TODO там). `en_route`→`ready`
+      // UI выводит сам из `returnAt` vs `serverNow()` (state остаётся `en_route` до collect).
+      const hasStaffGus = w.staff.staff_gus?.hired === true && w.staff.staff_gus?.assignedPost === 'Yard'
+      const hasStaffBuck = w.staff.staff_buck?.hired === true && w.staff.staff_buck?.assignedPost === 'Yard'
+      return ok<ExpeditionsSnapshot>({
+        expeditions: w.expeditions.filter((e) => e.state !== 'collected').map((e) => ({ ...e })),
+        speedLevel: 0,
+        routeSlots: totalRouteSlots(1, hasStaffBuck),
+        hasStaffGus,
+      })
     },
     async listTowns() {
       const w = await ensureWorld()
@@ -1179,10 +1209,26 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
     },
     async mailOrder(req: MailOrderReq) {
       const w = await ensureWorld(); sync(w)
-      if (w.mailOrders.filter((o) => o.state === 'in_transit').length >= 5) {
-        return err('cap_reached', 'уже 5 заказов в пути')
+      // Позиция каталога: категория (тайминг доставки §3.1.3) + цена/валюта (§3.1.4).
+      const item = catalogItemOf(req.itemKey)
+      if (!item) return err('not_found', 'нет такой позиции каталога')
+      // Кап заказов «в пути» на игрока (§3.1.3, MAX_ORDERS_IN_TRANSIT).
+      if (w.mailOrders.filter((o) => o.state === 'in_transit').length >= MAX_ORDERS_IN_TRANSIT) {
+        return err('cap_reached', `уже ${MAX_ORDERS_IN_TRANSIT} заказов в пути`)
       }
       const t = now()
+      const week = weekNumberOf(t)
+      // Недельный лимит по категории (§3.1.2): считаем ВСЕ заказы этой недели/категории
+      // (in_transit/claimed) — claimed текущей недели держим ради корректного счёта.
+      const usedThisWeek = w.mailOrders.filter(
+        (o) => weekNumberOf(o.orderedAt) === week && catalogItemOf(o.itemKey)?.category === item.category,
+      ).length
+      if (usedThisWeek >= WEEKLY_ORDER_LIMIT_BY_CATEGORY[item.category]) {
+        return err('cap_reached', 'исчерпан недельный лимит по категории')
+      }
+      if (!debit(w, item.currency, item.price, 'mail_order')) {
+        return err('insufficient_funds', 'не хватает средств')
+      }
       const order: MailOrder = {
         version: 1,
         id: nextId(w, 'mail'),
@@ -1190,7 +1236,7 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
         qty: 1,
         state: 'in_transit',
         orderedAt: t,
-        deliverAt: t + 8 * HOUR_MS,
+        deliverAt: deliverAtFor(item.category, t),
       }
       w.mailOrders.push(order)
       await persist()
@@ -1200,7 +1246,12 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
       const w = await ensureWorld(); sync(w)
       const order = w.mailOrders.find((o) => o.id === req.orderId)
       if (!order) return err('not_found', 'нет заказа')
-      if (!debit(w, 'dimes', 5, 'mail_speedup')) return err('insufficient_funds', 'не хватает ◉')
+      if (order.state !== 'in_transit') return err('not_ready', 'заказ уже получен')
+      // Цена ускорения: 1◉/начатые 4ч оставшегося, кап 5◉ (§3.1.3, speedupCostDimes).
+      const cost = speedupCostDimes(order.deliverAt, now())
+      if (cost > 0 && !debit(w, 'dimes', cost, 'mail_speedup')) {
+        return err('insufficient_funds', 'не хватает ◉')
+      }
       order.deliverAt = now()
       order.version += 1
       await persist()
@@ -1217,7 +1268,12 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
         items.push({ key: order.itemKey, qty: order.qty, quality: 1 })
         order.state = 'claimed'
       }
-      w.mailOrders = w.mailOrders.filter((o) => o.state !== 'claimed')
+      // Claimed текущей недели держим (недельный лимит по категории считает их, §3.1.2);
+      // claimed прошлых недель подчищаем, чтобы список не рос бесконечно.
+      const week = weekNumberOf(t)
+      w.mailOrders = w.mailOrders.filter(
+        (o) => !(o.state === 'claimed' && weekNumberOf(o.orderedAt) < week),
+      )
       if (items.length === 0) return err('not_ready', 'заказ ещё не доставлен')
       await persist()
       return ok<MailClaimRes>({ items })
@@ -1230,10 +1286,15 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
       const w = await ensureWorld(); sync(w)
       return claimForage(w, req.pointId)
     },
-    async fishCast() {
+    async fishCast(req: FishCastReq) {
       const w = await ensureWorld(); sync(w)
-      const catchItem = { itemKey: 'crop_catfish', quality: 1 as Quality, rarity: 'common' as const }
-      addItem(w, catchItem.itemKey, 1, 1)
+      // АНТИ-ЧИТ ПАРИТЕТ (докстринг файла + FishCastReq/resolveFishCast, BL-1): `req.hits`
+      // клампится и используется только как вероятностный модификатор — итоговый бросок
+      // (включая независимый Legend-ролл) делает `resolveFishCast` здесь, не клиент.
+      const { rarity } = resolveFishCast(clampHits(req.hits), Math.random)
+      const quality: Quality = rarity === 'legendary' ? 5 : rarity === 'prime' ? 4 : rarity === 'good' ? 2 : 1
+      const catchItem = { itemKey: 'crop_catfish', quality, rarity }
+      addItem(w, catchItem.itemKey, 1, quality)
       await persist()
       return ok<FishCastRes>({ catch: catchItem })
     },
@@ -1422,11 +1483,24 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
   }
 
   // ── Общий фуражинг (claim/collect идентичны локально) ──
+  /**
+   * Личный дневной лимит — СУММАРНО по типу точки (не по конкретному инстансу), §3.2.3:
+   * сбор на Mushroom Patch №1 и №2 расходует один общий счётчик `mushroom`. Проверяется
+   * ДО декремента пула инстанса — превышение личного лимита не блокирует сам пул для
+   * других игроков (F3, мягкий фрейминг «Заходи завтра утром», не «опоздал»/«украли»).
+   */
   function claimForage(w: LocalWorld, pointId: UUID): RpcResult<ForageRes> {
     const point = w.foragePoints.find((p) => p.id === pointId)
     if (!point) return err('not_found', 'нет точки фуражинга')
+    const kind = point.kind as ForagePointKind
+    const limit = PERSONAL_DAILY_LIMIT[kind]
+    const used = w.forageDailyCounts[kind] ?? 0
+    if (limit !== undefined && used >= limit) {
+      return err('cap_reached', 'Заходи завтра утром')
+    }
     if (point.remaining <= 0) return err('cap_reached', 'точка исчерпана на сегодня')
     point.remaining -= 1
+    if (limit !== undefined) w.forageDailyCounts[kind] = used + 1
     addItem(w, point.itemKey, 1, 1)
     void persist()
     return ok<ForageRes>({ item: { key: point.itemKey, qty: 1, quality: 1 } })

@@ -56,6 +56,7 @@ export function createStubAdapter(kind: BackendAdapterKind): BackendAdapter {
     getProgression: () => stubResult(),
     getCollections: () => stubResult(),
     getMailForaging: () => stubResult(),
+    getExpeditions: () => stubResult(),
     listTowns: () => stubResult(),
 
     // realtime

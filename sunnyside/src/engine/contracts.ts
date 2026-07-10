@@ -34,6 +34,7 @@ import type {
   ProgressionSnapshot,
   CollectionsSnapshot,
   MailForagingSnapshot,
+  ExpeditionsSnapshot,
   // net
   RealtimeChannelKind,
   MutationKind,
@@ -70,7 +71,7 @@ import type {
   MailOrderReq, MailOrderRes,
   MailSpeedupReq, MailSpeedupRes,
   MailClaimReq, MailClaimRes,
-  ForageClaimReq, ForageCollectReq, ForageRes, FishCastRes,
+  ForageClaimReq, ForageCollectReq, ForageRes, FishCastReq, FishCastRes,
   StreakCheckRes, StreakInsureRes, VacationRes,
   DecorPurchaseReq, DecorPlaceReq, NeonSaveReq,
   RecipeExperimentReq, RecipeExperimentRes,
@@ -132,6 +133,7 @@ export interface BackendAdapter {
   getProgression(): Promise<RpcResult<ProgressionSnapshot>>
   getCollections(): Promise<RpcResult<CollectionsSnapshot>>
   getMailForaging(): Promise<RpcResult<MailForagingSnapshot>>
+  getExpeditions(): Promise<RpcResult<ExpeditionsSnapshot>>
   /** Town Browser (12-migration §3.1.3) — города, открытые для переезда. Не часть `TownSnapshot`. */
   listTowns(): Promise<RpcResult<TownListing[]>>
 
@@ -179,7 +181,7 @@ export interface BackendAdapter {
   mailClaim(req: MailClaimReq): Promise<RpcResult<MailClaimRes>>
   forageClaim(req: ForageClaimReq): Promise<RpcResult<ForageRes>>
   forageCollect(req: ForageCollectReq): Promise<RpcResult<ForageRes>>
-  fishCast(): Promise<RpcResult<FishCastRes>>
+  fishCast(req: FishCastReq): Promise<RpcResult<FishCastRes>>
 
   streakCheck(): Promise<RpcResult<StreakCheckRes>>
   streakInsure(): Promise<RpcResult<StreakInsureRes>>
@@ -371,15 +373,22 @@ export interface ProgressionSystem {
 export interface ExpeditionSystem {
   start(req: ExpeditionStartReq): Promise<RpcResult<ExpeditionStartRes>>
   collect(expIds: UUID[]): Promise<RpcResult<ExpeditionCollectRes>>
+  /** Снапшот роуд-трипа для `ui_expeditions` (чтение по требованию, как `listTowns`). */
+  list(): Promise<RpcResult<ExpeditionsSnapshot>>
 }
 
 export interface MailForagingSystem {
   order(itemKey: string): Promise<RpcResult<MailOrderRes>>
   speedup(orderId: UUID): Promise<RpcResult<MailSpeedupRes>>
   claim(orderIds: UUID[]): Promise<RpcResult<MailClaimRes>>
+  /** Снапшот почты/фуражинга (заказы + точки) по требованию — mail-нет-слайса, панели
+   *  каталога/ящика читают отсюда (как `TownSystem.listTowns`), без общей гидрации. */
+  snapshot(): Promise<RpcResult<MailForagingSnapshot>>
   forageClaim(pointId: UUID): Promise<RpcResult<ForageRes>>
   forageCollect(pointId: UUID): Promise<RpcResult<ForageRes>>
-  fish(): Promise<RpcResult<FishCastRes>>
+  /** `hits` — попадания Catch Bar за заброс (0..`FISHING_ATTEMPTS_PER_CAST`); см. `FishCastReq`
+   *  докстринг (types/rpc.ts) — анти-чит модификатор шансов, не гарантия редкости. */
+  fish(hits: number): Promise<RpcResult<FishCastRes>>
 }
 
 export interface CollectionSystem {

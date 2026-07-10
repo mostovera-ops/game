@@ -34,6 +34,7 @@ import { ForagePoints } from './ForagePoints'
 import { FarmVisitPanel } from './FarmVisitPanel'
 import { layoutForagePoints, type RosterEntry } from './layout'
 import { NOOP_TOWN_SYSTEMS, type TownSystems } from './townSystemsFallback'
+import { FishingQte } from '@/ui/fishing'
 
 /** Дневной лимит помощи — гипотеза 11-town §3.3.2/§4.1 (20/день). Локальная UX-подсказка,
  *  истина лимита — серверная (не считаем награду сами, AGENTS.md §0.3). */
@@ -59,6 +60,11 @@ export function TownScene({ systems }: { systems?: TownSystems } = {}) {
   const [selectedFarm, setSelectedFarm] = useState<VisitTarget | null>(null)
   const [collectedForageIds, setCollectedForageIds] = useState<ReadonlySet<string>>(new Set())
   const [helpsUsedToday, setHelpsUsedToday] = useState(0)
+  // BL-1 (fishing-qte): точка `kind==='fishing'` открывает Catch Bar вместо обычного
+  // одноразового `forageCollect` (см. `handleForageCollect` ниже) — Fishing Spot не гасится
+  // после заброса (репрезентует пруд, не разовый куст), поэтому её id никогда не попадает в
+  // `collectedForageIds`.
+  const [fishingActive, setFishingActive] = useState(false)
 
   const foragePoints = useMemo(() => layoutForagePoints(town?.townId ?? 'town-default'), [town?.townId])
 
@@ -127,6 +133,15 @@ export function TownScene({ systems }: { systems?: TownSystems } = {}) {
 
   const handleForageCollect = useCallback(
     async (pointId: string) => {
+      // BL-1 (fishing-qte): Fishing Spot (`kind==='fishing'`) — не обычный однократный
+      // сбор, а Catch Bar мини-игра (§3.2.4). Открываем оверлей вместо RPC здесь; сам
+      // `mailForaging.fish(hits)` зовёт `handleFishComplete` ПОСЛЕ Catch Bar (см. ниже) —
+      // точка НЕ гасится/не попадает в `collectedForageIds` (репрезентует пруд, не куст).
+      const point = foragePoints.find((p) => p.id === pointId)
+      if (point?.kind === 'fishing') {
+        setFishingActive(true)
+        return
+      }
       const res = await mailForaging.forageCollect(pointId)
       if (res.ok) {
         setCollectedForageIds((prev) => new Set(prev).add(pointId))
@@ -143,6 +158,41 @@ export function TownScene({ systems }: { systems?: TownSystems } = {}) {
         id: `forage-${pointId}-fail-${serverNow()}`,
         kind: 'info',
         message: 'Не получилось собрать — попробуй ещё раз',
+        createdAt: serverNow(),
+        ttlMs: 3000,
+      })
+    },
+    [foragePoints, mailForaging, pushToast, serverNow],
+  )
+
+  /** Русские подписи редкости улова (§3.2.4 п.5) — тёплый тост, не механика. */
+  function catchLabel(rarity: string): string {
+    switch (rarity) {
+      case 'legendary': return 'рыба-легенда! 🏆'
+      case 'prime': return 'знатный улов'
+      case 'good': return 'хороший улов'
+      default: return 'обычный улов'
+    }
+  }
+
+  const handleFishComplete = useCallback(
+    async (hits: number) => {
+      const res = await mailForaging.fish(hits)
+      setFishingActive(false)
+      if (res.ok) {
+        pushToast({
+          id: `fish-${serverNow()}`,
+          kind: 'success',
+          message: `Клюёт! Поймал(а): ${catchLabel(res.data.catch.rarity)}`,
+          createdAt: serverNow(),
+          ttlMs: 4000,
+        })
+        return
+      }
+      pushToast({
+        id: `fish-fail-${serverNow()}`,
+        kind: 'info',
+        message: 'Не получилось забросить — попробуй ещё раз',
         createdAt: serverNow(),
         ttlMs: 3000,
       })
@@ -184,6 +234,12 @@ export function TownScene({ systems }: { systems?: TownSystems } = {}) {
             helpsLeftToday={Math.max(0, HELP_DAILY_LIMIT_HYPOTHESIS - helpsUsedToday)}
             giftDisabled={!inventory?.stacks.some((s) => s.qty > 0)}
           />
+        </Html>
+      )}
+
+      {fishingActive && (
+        <Html fullscreen>
+          <FishingQte onClose={() => setFishingActive(false)} onCastComplete={handleFishComplete} />
         </Html>
       )}
     </>

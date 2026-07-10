@@ -17,11 +17,16 @@
  *
  * Лаунчер показывается только после выпуска из FTUE (`phase === 'done'`), чтобы не заслонять
  * туториальный оверлей; во время открытой панели `Modal` рисуется поверх — конфликта z нет.
+ *
+ * Бейдж пункта `ui_daily_specials` (`ui-daily-club`, 16-retention §3.1): «новые спецблюда
+ * дня, ещё не открыты» — `useDailySpecialsUnseen` (`ui/retention/shared.ts`), тот же приём,
+ * что бейдж `NotificationBell` (снимается открытием панели, не персистится).
  */
 
 import { useEffect, useState } from 'react'
 import { useStore } from '@/state'
 import { useFtueStore } from '@/ui/onboarding'
+import { useDailySpecialsUnseen } from '@/ui/retention'
 import type { UiScreenKey } from '@/types'
 import { panelTitle } from './PanelHost'
 
@@ -38,6 +43,9 @@ const CORE_PANELS: readonly UiScreenKey[] = [
 
 /** Мета-панели (APP-2): прогрессия, коллекции, соц-механики, миграция. */
 const MORE_PANELS: readonly UiScreenKey[] = [
+  'ui_expeditions',
+  'ui_daily_specials',
+  'ui_regulars_club',
   'ui_route_pass',
   'ui_prize_machine',
   'ui_neon_builder',
@@ -50,12 +58,14 @@ const MORE_PANELS: readonly UiScreenKey[] = [
   'ui_mentor',
   'ui_vacation_toggle',
   'ui_moving_truck',
+  'ui_mail_catalog',
 ] as const
 
 export function PanelLauncher() {
   const locale = useStore((s) => s.ui.locale)
   const openPanel = useStore((s) => s.openPanel)
   const phase = useFtueStore((s) => s.phase)
+  const dailySpecialsUnseen = useDailySpecialsUnseen()
   const [open, setOpen] = useState(false)
 
   // Escape закрывает меню (как у Modal) — вешаем слушатель только пока открыто.
@@ -85,10 +95,18 @@ export function PanelLauncher() {
         openPanel(key)
         setOpen(false)
       }}
-      className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition hover:bg-black/10"
+      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition hover:bg-black/10"
       style={{ color: 'var(--ink)' }}
     >
-      {panelTitle(key, locale)}
+      <span>{panelTitle(key, locale)}</span>
+      {key === 'ui_daily_specials' && dailySpecialsUnseen && (
+        <span
+          data-testid="panel-launcher-badge-ui_daily_specials"
+          aria-hidden
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ background: 'var(--cherry)' }}
+        />
+      )}
     </button>
   )
 

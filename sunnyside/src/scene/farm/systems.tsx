@@ -46,6 +46,10 @@ export interface FarmActions {
   openKitchen: (machineId?: UUID) => void
   /** Открыть Storage (F4, клик по Silo/Icehouse в сцене). */
   openStorage: () => void
+  /** Открыть экран экспедиций (клик по Гаражу/грузовику, 07-expeditions §5). */
+  openExpeditions: () => void
+  /** Открыть почтовый ящик (клик по ящику у входа, 08-mail-foraging §3.1.3). */
+  openMailbox: () => void
 }
 
 const NOOP_ACTIONS: FarmActions = {
@@ -56,6 +60,8 @@ const NOOP_ACTIONS: FarmActions = {
   feed: () => {},
   openKitchen: () => {},
   openStorage: () => {},
+  openExpeditions: () => {},
+  openMailbox: () => {},
 }
 
 const FarmActionsContext = createContext<FarmActions>(NOOP_ACTIONS)
@@ -181,6 +187,14 @@ export function FarmActionsProvider({
 
       openStorage() {
         s().setStorageOpen(true)
+      },
+
+      openExpeditions() {
+        s().openPanel('ui_expeditions')
+      },
+
+      openMailbox() {
+        s().openPanel('ui_mailbox')
       },
     }
   }, [systems, sound])

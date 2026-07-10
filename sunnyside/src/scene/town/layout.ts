@@ -14,6 +14,7 @@
 import { hashString, seededRng } from '@/engine/econ/rng'
 import { TOWN_PROJECT_KEYS } from '@/types'
 import type { ForageKind, Street, TownProject, TownProjectKey } from '@/types'
+import { FORAGE_KINDS as FORAGE_POINT_KINDS, INSTANCES_PER_TOWN } from '@/engine/mail-foraging/constants'
 
 export type Vec3 = [number, number, number]
 
@@ -121,12 +122,31 @@ export interface ForageLayoutPoint {
   position: Vec3
 }
 
-const FORAGE_KINDS: readonly ForageKind[] = ['mushroom', 'berry', 'herb', 'flower']
+// BL-1 (fishing-qte): `fishing` в ротации раскладки — обочина рисует Fishing Spot
+// (лужа-заглушка `env_puddle`), клик по которому в `TownScene` открывает `FishingQte`
+// (Catch Bar), а не обычный однократный сбор `forageCollect` (см. `TownScene.tsx`
+// `handleForageCollect` — там же комментарий про ветвление по `kind`).
+//
+// BL-4 (foraging-world): вид точки i — НЕ равновероятный случайный пик по 5 видам, а
+// фиксированный спека-микс §3.2.6 (`FORAGE_POINT_MIX` ниже) — 6 Mushroom Patch / 10
+// Berry Bush / 4 Wild Beehive / 3 Fishing Spot, тот же состав/порядок, что и
+// `starterForage` (net/local/world.ts, adapter-seams) — иначе клик по точке i из
+// дефолтной раскладки не резолвил бы ту же точку сервера. `herb`/`flower` — легаси
+// виды вне канон-4 типов 08-mail-foraging §3.2.1, в спека-микс не входят.
+const FORAGE_POINT_MIX: readonly ForageKind[] = FORAGE_POINT_KINDS.flatMap((kind) =>
+  Array.from({ length: INSTANCES_PER_TOWN[kind] }, () => kind as ForageKind),
+)
+
+/** Суммарное число точек спека-микса на Город (23) — дефолт `layoutForagePoints`. */
+export const DEFAULT_FORAGE_POINT_COUNT = FORAGE_POINT_MIX.length
 
 /**
  * Детерминированная раскладка `count` точек фуражинга по кольцу обочины, seed'ed от
  * `townId` (тот же город → та же раскладка между рендерами/загрузками — 08-mail-foraging
  * "точки обновляются ежедневно" покрывает СОСТАВ пула на сервере, не визуальные позиции).
+ * Вид (`kind`) точки i — фиксированный по спека-миксу (`FORAGE_POINT_MIX[i % ...]`), НЕ
+ * случайный: у каждого Города один и тот же состав 6/10/4/3 (§3.2.6). Позиция на кольце —
+ * единственное, что зависит от rng.
  *
  * TODO(mail-foraging-owner + net-bootstrap): реальный пул точек — `MailForagingSnapshot.
  * foragePoints` через `adapter.getMailForaging()` (engine/contracts.ts `MailForagingSystem`).
@@ -135,13 +155,13 @@ const FORAGE_KINDS: readonly ForageKind[] = ['mushroom', 'berry', 'herb', 'flowe
  * плейсхолдер-набор той же формы (`id/kind/position`), чтобы точка карты не пустовала и
  * клик-взаимодействие было демонстрируемо; см. TownScene.tsx для реального wiring-шва.
  */
-export function layoutForagePoints(seedKey: string, count = 6): ForageLayoutPoint[] {
+export function layoutForagePoints(seedKey: string, count = DEFAULT_FORAGE_POINT_COUNT): ForageLayoutPoint[] {
   const rng = seededRng(hashString(`forage:${seedKey}`))
   const out: ForageLayoutPoint[] = []
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2 + rng.uniform(-0.2, 0.2)
     const r = ROADSIDE_RADIUS + rng.uniform(-1.5, 1.5)
-    const kind = FORAGE_KINDS[Math.floor(rng.uniform(0, FORAGE_KINDS.length))] ?? 'mushroom'
+    const kind = FORAGE_POINT_MIX[i % FORAGE_POINT_MIX.length] ?? 'mushroom'
     out.push({
       id: `forage-${seedKey}-${i}`,
       kind,

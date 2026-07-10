@@ -28,6 +28,7 @@ import { PlotField } from './PlotField'
 import { Buildings } from './Buildings'
 import { Machines } from './Machines'
 import { Animals } from './Animals'
+import { Mailbox } from './Mailbox'
 import { FarmActionsProvider, type InjectedSystems } from './systems'
 import { ENV_BUSH_POSITIONS, ENV_TREE_POSITIONS, BUILDING_LAYOUT } from './layout'
 import { buildingWindowPositions } from './windowGlow'
@@ -82,6 +83,7 @@ export function FarmScene({ systems }: { systems?: InjectedSystems } = {}) {
         <PlotField />
         <Machines />
         <Animals />
+        <Mailbox />
         <EnvProps />
         <NeonAndGlow />
       </FarmActionsProvider>

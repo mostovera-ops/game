@@ -41,6 +41,13 @@ export interface UiSlice {
     notifications: NotificationItem[]
     notifLastSeenAt: number
     /**
+     * UTC день-индекс (`ui/retention/shared.ts` `utcDayIndex`), на который игрок последний
+     * раз открывал `ui_daily_specials` — `null` до первого открытия. Как `notifLastSeenAt`,
+     * рантайм-only (не персистится): даёт бейдж «новые спецблюда дня» в `PanelLauncher`,
+     * снимается открытием панели (`DailySpecials.tsx`).
+     */
+    dailySpecialsSeenDay: number | null
+    /**
      * Слот грядки, для которого сцена (клик по пустой грядке, farm-ui-seams) запросила
      * Seed Picker (F1, 19-ui-ux §3.2). `null` — оверлей закрыт. F1 — контекстный `SHEET`
      * без canon `ui_*` ключа (AGENTS.md §0.7), поэтому НЕ идёт через `activePanel`/`Modal` —
@@ -75,6 +82,8 @@ export interface UiSlice {
   pushNotification: (item: NotificationItem) => void
   /** Отмечает всё прочитанным (снимает бейдж колокола) на момент `now`. */
   markNotificationsSeen: (now: number) => void
+  /** Отмечает Daily Specials текущего UTC-дня просмотренными (снимает бейдж лаунчера). */
+  markDailySpecialsSeen: (dayIndex: number) => void
   /** Открыть/закрыть Seed Picker для слота грядки (`null` — закрыть). */
   setSeedPickerSlot: (slot: number | null) => void
   /** Запомнить станок-фокус Kitchen-панели (`null` — без фокуса). */
@@ -97,6 +106,7 @@ const initial: UiSlice['ui'] = {
   perf: { liteMode: false, showHud: false, fps: 60 },
   notifications: [],
   notifLastSeenAt: 0,
+  dailySpecialsSeenDay: null,
   seedPickerSlot: null,
   kitchenMachineId: null,
   storageOpen: false,
@@ -123,6 +133,8 @@ export const createUiSlice: SliceCreator<UiSlice> = (set) => ({
     })),
   markNotificationsSeen: (notifLastSeenAt) =>
     set((s) => ({ ui: { ...s.ui, notifLastSeenAt } })),
+  markDailySpecialsSeen: (dailySpecialsSeenDay) =>
+    set((s) => ({ ui: { ...s.ui, dailySpecialsSeenDay } })),
   setSeedPickerSlot: (seedPickerSlot) => set((s) => ({ ui: { ...s.ui, seedPickerSlot } })),
   setKitchenMachine: (kitchenMachineId) => set((s) => ({ ui: { ...s.ui, kitchenMachineId } })),
   setStorageOpen: (storageOpen) => set((s) => ({ ui: { ...s.ui, storageOpen } })),

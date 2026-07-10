@@ -36,6 +36,7 @@ export const NOOP_TOWN_SYSTEMS: TownSystems = {
     order: () => offline(),
     speedup: () => offline(),
     claim: () => offline(),
+    snapshot: () => offline(),
     forageClaim: () => offline(),
     forageCollect: () => offline(),
     fish: () => offline(),

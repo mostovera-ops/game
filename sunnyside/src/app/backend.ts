@@ -114,7 +114,7 @@ async function dispatch(
     case 'mail_claim': return a.mailClaim(p)
     case 'forage_claim': return a.forageClaim(p)
     case 'forage_collect': return a.forageCollect(p)
-    case 'fish_cast': return a.fishCast()
+    case 'fish_cast': return a.fishCast(p)
     case 'streak_check': return a.streakCheck()
     case 'streak_insure': return a.streakInsure()
     case 'vacation_start': return a.vacationStart()
@@ -262,9 +262,11 @@ export function createSystems(ctx: SystemContext): AppSystems {
     order: (itemKey) => ctx.applyMutation('mail_order', { itemKey }),
     speedup: (orderId) => ctx.applyMutation('mail_speedup', { orderId }),
     claim: (orderIds) => ctx.applyMutation('mail_claim', { orderIds }),
+    // Чтение снапшота по требованию (как `town.listTowns`) — без оптимистики/патча.
+    snapshot: () => ctx.adapter.getMailForaging(),
     forageClaim: (pointId) => ctx.applyMutation('forage_claim', { pointId }),
     forageCollect: (pointId) => ctx.applyMutation('forage_collect', { pointId }),
-    fish: () => ctx.applyMutation('fish_cast', {}),
+    fish: (hits) => ctx.applyMutation('fish_cast', { hits }),
   }
 
   // `TownSystem` (12-migration): propose/vote — оптимистичные мутации (`applyMutation`);

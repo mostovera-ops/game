@@ -17,6 +17,8 @@ import { useFarmActions, type FarmActions } from './systems'
 function clickHandlerFor(key: BuildingKey, actions: FarmActions): (() => void) | undefined {
   if (KITCHEN_BUILDINGS.includes(key)) return () => actions.openKitchen()
   if (STORAGE_BUILDINGS.includes(key)) return () => actions.openStorage()
+  // Гараж (`bld_garage`) — вход на экран экспедиций/роуд-трипа (07-expeditions §5).
+  if (key === 'bld_garage') return () => actions.openExpeditions()
   return undefined
 }
 

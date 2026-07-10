@@ -51,3 +51,22 @@ export interface Expedition extends Versioned {
   returnAt: EpochMs
   loot?: { key: ProductKey; qty: number }[]
 }
+
+/**
+ * Снапшот роуд-трипа для экрана `ui_expeditions` (07-expeditions §5). Истина — сервер:
+ * активные/вернувшиеся рейсы + текущие уровни апгрейдов грузовика + число слотов маршрута.
+ *
+ * Апгрейд-ветки (Speed/Capacity/Route Slots, §3.4) в MVP отдаются как есть (покупка —
+ * отдельная ветка вне UI-задачи); снапшот несёт `speedLevel`/`hasStaffGus`, чтобы превью
+ * длительности рейса (§4.1) в UI совпадало с тем, что посчитает сервер на `expedition_start`.
+ */
+export interface ExpeditionsSnapshot {
+  /** Активные (`en_route`) и вернувшиеся-несобранные рейсы (собранные сервер отсеивает). */
+  expeditions: Expedition[]
+  /** Уровень апгрейда Speed 0..5 (§3.4.1) — вход превью длительности. */
+  speedLevel: number
+  /** Всего слотов маршрута = апгрейд Route Slots + `staff_buck` (§3.4.3). */
+  routeSlots: number
+  /** Пост Yard занят Mechanic Gus — −15% времени рейса (§3.4.1). */
+  hasStaffGus: boolean
+}

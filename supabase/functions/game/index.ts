@@ -60,7 +60,12 @@ const RPC_ACTIONS: Record<string, [string, (b: Record<string, unknown>) => Recor
   mail_claim: ["mail_collect", (b) => ({ p_order_ids: b.order_ids })], // алиас спеки → mail_collect
   mail_speedup: ["mail_speedup", (b) => ({ p_order_id: b.order_id })],
   forage_collect: ["forage_collect", (b) => ({ p_point_id: b.point_id })],
-  fish_cast: ["fish_cast", () => ({})],
+  // p_hits: BL-1 fishing-qte — модификатор шансов (кламп 0..3 на сервере), не гарантия
+  // редкости (см. 0019_fishing_qte.sql докстринг). NB: адаптер (`supabase.ts::fishCast`)
+  // бьёт напрямую `.rpc('fish_cast', ...)`, минуя этот gateway (NET-3 — известный
+  // де-факто-закрытый прямой-RPC контракт), так что эта ветка — для совместимости
+  // прочих вызывающих (если появятся) и симметрии с остальными RPC_ACTIONS.
+  fish_cast: ["fish_cast", (b) => ({ p_hits: b.hits ?? 0 })],
   recipe_experiment: ["recipe_experiment", (b) => ({ p_inputs: b.inputs ?? [] })],
   rename_pet: ["rename_pet", (b) => ({ p_animal_id: b.animal_id, p_name: b.name })],
   affection_gift: ["affection_gift", (b) => ({ p_animal_id: b.animal_id, p_gift_key: b.gift_key })],

@@ -127,6 +127,15 @@ export interface MailClaimRes { items: CollectedItem[] }
 export interface ForageClaimReq { pointId: UUID }
 export interface ForageCollectReq { pointId: UUID }
 export interface ForageRes { item: CollectedItem }
+/**
+ * `hits` — число попаданий Catch Bar за заброс (0..`FISHING_ATTEMPTS_PER_CAST`, клиент
+ * считает через `engine/mail-foraging/fishing.ts`). АНТИ-ЧИТ (08 §3.2.4, BL-1 — см.
+ * докстринг `resolveFishCast`): честно проверить на сервере, что игрок реально попал в
+ * тайминг, нельзя (сервер не видит кадров) — `hits` используется адаптером только как
+ * ВЕРОЯТНОСТНЫЙ модификатор шансов, не как гарантия редкости; финальный бросок (включая
+ * независимый 2% Legend Fish) всегда делает адаптер (local/supabase), не клиент.
+ */
+export interface FishCastReq { hits: number }
 export interface FishCastRes { catch: FishCatch }
 
 // ── Стрик/отпуск/декор/секретки ───────────────────────────────────────────────

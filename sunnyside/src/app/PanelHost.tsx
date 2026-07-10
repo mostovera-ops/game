@@ -17,9 +17,9 @@
  * истины по-прежнему один (`ui.activePanel === 'ui_shift'`), крестик/Escape/«Назад»/z-порядок
  * — из общего `Modal`, дип-линк `?panel=ui_shift` работает как у остальных панелей.
  *
- * Панели без готового компонента в текущем скоупе (`ui_daily_specials`/`ui_regulars_club`/
- * `ui_expeditions`) пока не монтируются — их заведут профильные ui-агенты (TODO(c3) в их
- * зонах). `ui_moving_truck` (Moving Van, 12-migration) смонтирован ниже (ui-migration) —
+ * `ui_daily_specials`/`ui_regulars_club` (`ui-daily-club`, 16-retention) смонтированы ниже
+ * (`ui/retention/*`), как и `ui_expeditions` (`ui/expeditions/*`). `ui_moving_truck`
+ * (Moving Van, 12-migration) смонтирован ниже (ui-migration) —
  * хостит и Town Browser (§3.1.3), и Street Caravan/Town Merge статус как внутренние вкладки
  * одного экрана (canon-ключ только у самого Moving Van, остальные — нейминг-кандидаты §5).
  *
@@ -56,6 +56,9 @@ import { ToyShelf, RibbonWall, Postcards, NeonBuilder, PhotoMode } from '@/ui/co
 import { ChatPanel } from '@/ui/chat'
 import { MentorPanel, GoneFishinToggle, PetCard, ContestGallery } from '@/ui/social'
 import { MovingVan } from '@/ui/migration'
+import { ExpeditionsPanel } from '@/ui/expeditions'
+import { DailySpecials, RegularsClub } from '@/ui/retention'
+import { MailCatalog, MailboxPanel } from '@/ui/mail'
 import { getAdapter } from './backend'
 
 /** Заголовки панелей (letterboard-kicker, 19-ui-ux §3.0). RU/EN. */
@@ -73,6 +76,9 @@ const PANEL_TITLE: Partial<Record<UiScreenKey, Bilingual>> = {
   ui_toy_shelf: { en: 'Toy Shelf', ru: 'Полка игрушек' },
   ui_ribbon_wall: { en: 'Ribbon Wall', ru: 'Стена лент' },
   ui_postcards: { en: 'Postcards', ru: 'Открытки' },
+  ui_expeditions: { en: 'Expeditions', ru: 'Экспедиции' },
+  ui_daily_specials: { en: 'Daily Specials', ru: 'Спецблюда дня' },
+  ui_regulars_club: { en: 'Regulars’ Club', ru: 'Клуб завсегдатаев' },
   ui_potluck: { en: 'Potluck', ru: 'Общий стол' },
   ui_chat: { en: 'Chat', ru: 'Чат' },
   ui_mentor: { en: 'Mentorship', ru: 'Менторство' },
@@ -80,6 +86,8 @@ const PANEL_TITLE: Partial<Record<UiScreenKey, Bilingual>> = {
   ui_pet_card: { en: 'Animal Care', ru: 'Уход за животными' },
   ui_contest_gallery: { en: 'Contest Gallery', ru: 'Галерея конкурсов' },
   ui_moving_truck: { en: 'Moving Van', ru: 'Фургон переезда' },
+  ui_mail_catalog: { en: 'Mail Order', ru: 'Каталог почтой' },
+  ui_mailbox: { en: 'Mailbox', ru: 'Почтовый ящик' },
 }
 
 /** Локализованный заголовок панели (общий с `PanelLauncher`, чтобы не дублировать `PANEL_TITLE`). */
@@ -240,11 +248,16 @@ export function PanelHost() {
       {panel('ui_toy_shelf', <ToyShelf onClose={close} />)}
       {panel('ui_ribbon_wall', <RibbonWall onClose={close} />)}
       {panel('ui_postcards', <Postcards onClose={close} />)}
+      {panel('ui_expeditions', <ExpeditionsPanel onOpenPostcards={() => useStore.getState().openPanel('ui_postcards')} />)}
+      {panel('ui_daily_specials', <DailySpecials />)}
+      {panel('ui_regulars_club', <RegularsClub />)}
       {panel('ui_mentor', <MentorPanel />)}
       {panel('ui_vacation_toggle', <GoneFishinToggle />)}
       {panel('ui_pet_card', <PetCard />)}
       {panel('ui_contest_gallery', <ContestGallery />)}
       {panel('ui_moving_truck', <MovingVan />, 'sheet')}
+      {panel('ui_mail_catalog', <MailCatalog />, 'sheet')}
+      {panel('ui_mailbox', <MailboxPanel />)}
       {panel(
         'ui_photo_mode',
         <PhotoMode

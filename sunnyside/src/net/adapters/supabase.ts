@@ -50,6 +50,7 @@ import type {
   ProgressionSnapshot,
   CollectionsSnapshot,
   MailForagingSnapshot,
+  ExpeditionsSnapshot,
   RealtimeChannelKind,
   ChannelStatus,
   MutationKind,
@@ -82,7 +83,7 @@ import type {
   MailOrderReq, MailOrderRes,
   MailSpeedupReq, MailSpeedupRes,
   MailClaimReq, MailClaimRes,
-  ForageCollectReq, ForageRes, FishCastRes,
+  ForageCollectReq, ForageRes, FishCastReq, FishCastRes,
   StreakCheckRes, StreakInsureRes, VacationRes,
   DecorPlaceReq, NeonSaveReq,
   RecipeExperimentReq, RecipeExperimentRes,
@@ -168,6 +169,11 @@ const READ_RPC = {
   progression: 'get_progression',
   collections: 'get_collections',
   mailForaging: 'get_mail_foraging',
+  /** Роуд-трип (`ui_expeditions`, 07-expeditions §5) — активные рейсы + слоты/апгрейды.
+   *  TODO(server): серверная read-функция `get_expeditions` ещё не развёрнута
+   *  (см. supabase/APPLIED.md — есть таблица `expeditions` и мутации, нет read-RPC);
+   *  до её деплоя cloud-режим вернёт ok:false, панель покажет тёплый экран ошибки. */
+  expeditions: 'get_expeditions',
   /** Town Browser (12-migration §3.1.3) — не часть `get_town` (та — только МОЙ город). */
   townListings: 'list_towns',
 } as const
@@ -677,6 +683,7 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     getProgression: () => read<ProgressionSnapshot>(READ_RPC.progression),
     getCollections: () => read<CollectionsSnapshot>(READ_RPC.collections),
     getMailForaging: () => read<MailForagingSnapshot>(READ_RPC.mailForaging),
+    getExpeditions: () => read<ExpeditionsSnapshot>(READ_RPC.expeditions),
     listTowns: () => read<TownListing[]>(READ_RPC.townListings),
 
     // realtime
@@ -750,7 +757,9 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     forageClaim: () => notImplemented<ForageRes>('forage_claim'),
     // NB: forage_collect существует (RPC), имя параметра — зона NET-1 (закрыта де-факто), не трогаем.
     forageCollect: (req: ForageCollectReq) => mut<ForageRes>('forage_collect', { point_id: req.pointId }),
-    fishCast: () => mut<FishCastRes>('fish_cast', {}),
+    // p_hits: клампится и валидируется серверно (fish_cast SQL, BL-1) — вероятностный
+    // модификатор шансов, не гарантия редкости (см. FishCastReq докстринг).
+    fishCast: (req: FishCastReq) => mut<FishCastRes>('fish_cast', { p_hits: req.hits }),
 
     streakCheck: () => mut<StreakCheckRes>('streak_check', {}),
     streakInsure: () => mut<StreakInsureRes>('streak_insure', {}),

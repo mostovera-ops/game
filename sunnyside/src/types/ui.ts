@@ -18,6 +18,15 @@ export const SCENE_KEYS: readonly SceneKey[] = ['farm', 'town', 'fair', 'shift']
  * `ui_chat` — W3 Street Chat (19-ui-ux §3.6, 11-town §3.9/§5) — нейминг-кандидат
  * (11-town §8 п.1, ждёт PR в 00-canon.md §3.12), заведён по тому же прецеденту, что
  * `ui_notif_log`/`ui_shop` выше.
+ *
+ * wire-sanity (аудит смоук-проводки, после гейта C7b): ВСЕ ключи ниже смонтированы
+ * (`app/PanelHost.tsx`) и достижимы из прод-UI — `PanelLauncher` (core/meta), свой
+ * лаунчер (`ui_chat`/`ui_notif_log`), сцена (`ui_shift`/`ui_storage`) или контекстная
+ * навигация изнутри другой панели (`ui_mailbox` — кнопкой из `ui_mail_catalog`, см.
+ * `ui/mail/MailCatalog.tsx`). `ui_daily_specials`/`ui_regulars_club`/`ui_expeditions`/
+ * `ui_mail_catalog`/`ui_mailbox` домонтированы параллельными профильными агентами в ходе
+ * этого же гейта — на момент аудита инвариант «замонтирован ИЛИ явно помечен `v2-key,
+ * не в MVP`» держится без исключений; см. e2e `e2e/shared.ts` PANELS (полный список).
  */
 export type UiScreenKey =
   | 'ui_notif_log'
@@ -51,6 +60,11 @@ export type UiScreenKey =
   | 'ui_vacation_toggle'
   | 'ui_pet_card'
   | 'ui_contest_gallery'
+  // ── mail-catalog (08-mail-foraging §3.1.7): нейминг-кандидаты из спеки (не выдуманы,
+  //    AGENTS.md §0.7) — `ui_mail_catalog` (§3.1 «экран ui_mail_catalog»), `ui_mailbox`
+  //    (§3.1.3 «почтовый ящик игрока»/§3.1.7 «На пути»). ──
+  | 'ui_mail_catalog'
+  | 'ui_mailbox'
 
 export const UI_SCREEN_KEYS: readonly UiScreenKey[] = [
   'ui_notif_log',
@@ -78,6 +92,8 @@ export const UI_SCREEN_KEYS: readonly UiScreenKey[] = [
   'ui_vacation_toggle',
   'ui_pet_card',
   'ui_contest_gallery',
+  'ui_mail_catalog',
+  'ui_mailbox',
 ] as const
 
 /** Локаль (canon §5 — двуязычие RU/EN). */
