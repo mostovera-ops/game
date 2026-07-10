@@ -66,7 +66,7 @@ export type NoticeKind =
   | 'no-seeds'
   | 'no-money'
   | 'bought'
-  | 'sold'
+  | 'skipped'
 
 export interface Notice {
   id: number
@@ -125,33 +125,37 @@ export const RECIPES: Record<
 }
 
 /**
- * Экономика лавки.
- *
- * Купля дороже продажи по каждой культуре — иначе игрок крутил бы деньги из
- * воздуха, покупая и тут же сбывая семена обратно урожаем.
- *
- * Продать урожай в лавку всегда невыгоднее, чем сварить из него блюдо
- * (морковь: 1 за штуку против 3 в супе). Лавка — это способ добыть деньги на
- * семена в дни фермы, когда фудтрак ещё не открылся, а не второй источник
- * дохода.
+ * Экономика лавки. Лавка только продаёт семена: скупки урожая нет, и весь
+ * урожай уходит в блюда. Единственный источник денег — день фудтрака.
  *
  * Маржа блюда за вычетом семян: суп +2, салат +3, тако +7. Тако — цель недели,
  * суп — способ не остаться без денег.
  */
 export const SEED_PRICE: Record<CropId, number> = { carrot: 2, greens: 2, tomato: 3 }
-export const SELL_PRICE: Record<CropId, number> = { carrot: 1, greens: 1, tomato: 2 }
 
 /** По три семени каждой культуры — ровно на все девять слотов. */
 export const START_SEEDS = 3
 
 /**
- * Стартовый капитал. Полная пересадка всех девяти слотов стоит 21, так что
- * после первого урожая двадцатки чуть-чуть не хватает: одну морковку придётся
- * продать. Это и знакомит игрока с правой половиной лавки.
+ * Стартовый капитал. Полная пересадка всех девяти слотов стоит 21 — на монету
+ * больше, чем есть. Первую неделю засеваем стартовыми семенами, а деньги
+ * приходят только с ярмарки.
  */
 export const START_MONEY = 20
 
 export const RECIPE_IDS = Object.keys(RECIPES) as RecipeId[]
+
+/**
+ * Сколько порций блюда герой соберёт из того, что в сумке.
+ *
+ * Ограничивает самый дефицитный ингредиент. Это число HUD пишет на кнопке
+ * выдачи вместо цены: игроку важно, хватит ли, а не сколько это стоит.
+ */
+export function craftableCount(recipe: RecipeId, inventory: Inventory): number {
+  const needs = RECIPES[recipe].needs
+  const ids = Object.keys(needs) as CropId[]
+  return ids.reduce((min, crop) => Math.min(min, Math.floor(inventory[crop] / needs[crop]!)), Infinity)
+}
 
 export interface Customer {
   /**
@@ -235,6 +239,8 @@ interface GameData {
   shopOpen: boolean
   /** Цвет одежды героя, `#rrggbb`. */
   heroColor: string
+  /** Играет ли музыка. Звуки и природа от этого не зависят. */
+  musicOn: boolean
   /** Очередь тостов. Не персистится: события живут только в текущей сессии. */
   notices: Notice[]
   nextNoticeId: number
@@ -247,6 +253,8 @@ interface GameActions {
   selectTool: (tool: Tool) => void
   /** Перекрасить одежду героя. */
   setHeroColor: (color: string) => void
+  /** Включить/выключить музыку. Звуки продолжают играть. */
+  toggleMusic: () => void
   /** Убрать тост по id (истёк таймер или клик). */
   dismissNotice: (id: number) => void
   /** Сообщить о событии без данных. Подряд один и тот же вид не дублируется. */
@@ -256,8 +264,6 @@ interface GameActions {
   closeShop: () => void
   /** Купить семена. Не хватает денег — ничего не меняется, летит тост. */
   buySeeds: (crop: CropId, qty: number) => void
-  /** Продать урожай лавке. Продать больше, чем есть, нельзя. */
-  sellCrops: (crop: CropId, qty: number) => void
   /** Посадить выбранное семя в пустой слот. Тратит одно семя. */
   plant: (slotId: SlotId) => void
   /** Полить растущий слот (stage < 2). */
@@ -272,6 +278,8 @@ interface GameActions {
   tickTruck: (dt: number) => void
   /** Подать блюдо первому клиенту очереди. */
   serveCustomer: (recipeId: RecipeId) => ServeResult
+  /** Отпустить первого в очереди, ничего ему не подав. */
+  skipCustomer: () => void
   /** Начать новую неделю (день 1, чистые грядки; деньги/инвентарь остаются). */
   nextWeek: () => void
   /** Полный сброс к первому дню. */
@@ -293,6 +301,7 @@ function initialData(): GameData {
     truck: null,
     shopOpen: false,
     heroColor: HERO_COLOR_DEFAULT,
+    musicOn: true,
     notices: [],
     nextNoticeId: 1,
   }
@@ -337,6 +346,8 @@ export const useGameStore = create<GameState>()(
 
       setHeroColor: (heroColor) => set({ heroColor }),
 
+      toggleMusic: () => set((s) => ({ musicOn: !s.musicOn })),
+
       dismissNotice: (id) =>
         set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
 
@@ -363,16 +374,6 @@ export const useGameStore = create<GameState>()(
           }
         }),
 
-      sellCrops: (crop, qty) =>
-        set((s) => {
-          if (qty <= 0 || s.inventory[crop] < qty) return {}
-          return {
-            money: s.money + SELL_PRICE[crop] * qty,
-            inventory: { ...s.inventory, [crop]: s.inventory[crop] - qty },
-            ...withNotice(s, { kind: 'sold', crop, amount: SELL_PRICE[crop] * qty }),
-          }
-        }),
-
       plant: (slotId) =>
         set((s) => {
           const slot = s.slots.find((x) => x.id === slotId)
@@ -381,10 +382,10 @@ export const useGameStore = create<GameState>()(
           if (s.seeds[crop] < 1) return withNotice(s, { kind: 'no-seeds', crop })
           return {
             seeds: { ...s.seeds, [crop]: s.seeds[crop] - 1 },
+            // Полив принадлежит земле, а не растению: посадка в мокрую грядку
+            // не высушивает её.
             slots: s.slots.map((x) =>
-              x.id === slotId
-                ? { ...x, crop, stage: 0 as Stage, watered: false, lucky: false }
-                : x,
+              x.id === slotId ? { ...x, crop, stage: 0 as Stage, lucky: false } : x,
             ),
           }
         }),
@@ -403,7 +404,10 @@ export const useGameStore = create<GameState>()(
           const crop = slot.crop
           const amount = slot.lucky ? LUCKY_YIELD : 1
           return {
-            slots: s.slots.map((x) => (x.id === slotId ? emptySlot(x.id) : x)),
+            // Грядка остаётся политой: собрали растение, а не воду из земли.
+            slots: s.slots.map((x) =>
+              x.id === slotId ? { ...emptySlot(x.id), watered: x.watered } : x,
+            ),
             inventory: { ...s.inventory, [crop]: s.inventory[crop] + amount },
             ...withNotice(s, { kind: 'harvest', crop, amount }),
           }
@@ -518,6 +522,21 @@ export const useGameStore = create<GameState>()(
         return 'ok'
       },
 
+      // Заказ, который нечем закрыть, держит очередь: пропускаем его руками,
+      // не дожидаясь, пока у клиента кончится терпение.
+      skipCustomer: () =>
+        set((s) => {
+          const t = s.truck
+          if (!t || t.ended || t.queue.length === 0) {
+            return withNotice(s, { kind: 'no-customer' })
+          }
+          const front = t.queue[0]
+          return {
+            truck: { ...t, queue: t.queue.slice(1) },
+            ...withNotice(s, { kind: 'skipped', recipe: front.want }),
+          }
+        }),
+
       // Семена и деньги переезжают в новую неделю: они и есть накопленный
       // прогресс. Даром их больше не выдают — только лавка.
       nextWeek: () =>
@@ -530,7 +549,8 @@ export const useGameStore = create<GameState>()(
           notices: [],
         })),
 
-      resetGame: () => set(initialData()),
+      // Музыка переживает сброс: это настройка звука, а не игровой прогресс.
+      resetGame: () => set((s) => ({ ...initialData(), musicOn: s.musicOn })),
     }),
     {
       name: 'farm-truck',
@@ -545,7 +565,10 @@ export const useGameStore = create<GameState>()(
       //     и стартовые деньги сверху: раньше семена были бесплатны и копить
       //     на них было незачем, так что честного баланса из него не достать.
       // День и инвентарь переживают все миграции.
-      version: 4,
+      // v5: кнопка музыки в HUD. Старому сохранению включаем её — так было
+      //     до появления кнопки, и молчащая после обновления игра выглядела
+      //     бы поломкой, а не настройкой.
+      version: 5,
       migrate: (persisted, from) => {
         let s = persisted as GameData
         if (from < 1) s = { ...s, slots: emptySlots(), tool: 'seed' }
@@ -560,6 +583,7 @@ export const useGameStore = create<GameState>()(
           }
         }
         if (from < 4) s = { ...s, seeds: startingSeeds(), money: s.money + START_MONEY }
+        if (from < 5) s = { ...s, musicOn: true }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.
@@ -575,6 +599,7 @@ export const useGameStore = create<GameState>()(
         truck: s.truck,
         shopOpen: false, // лавка закрывается вместе с вкладкой
         heroColor: s.heroColor,
+        musicOn: s.musicOn,
         notices: [],
         nextNoticeId: 1,
       }),

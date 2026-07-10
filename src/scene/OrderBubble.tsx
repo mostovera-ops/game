@@ -5,11 +5,12 @@
  * а полоса терпения — отдельный меш: она меняется каждый кадр, и перерисовывать
  * ради неё холст было бы расточительно.
  */
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { type RecipeId } from '../game/store'
+import { hoverOrder, unhoverOrder } from './orderHover'
 
 const RECIPE_GLYPH: Record<RecipeId, string> = { salad: '🥗', soup: '🍲', taco: '🌮' }
 
@@ -20,8 +21,10 @@ const TAIL = 34
 const INK = '#241a20'
 const PAPER = '#f0e4c9'
 
-const BAR_W = 0.3
-const BAR_H = 0.035
+const BAR_W = 0.34
+const BAR_H = 0.05
+/** Заливка уже дорожки на рамку в 6 единиц с каждой стороны. */
+const BAR_INNER_W = BAR_W - 0.012
 
 /** Полоса терпения зеленеет в начале и краснеет к концу — как в старом HUD. */
 const CALM = new THREE.Color('#9fc25f')
@@ -83,11 +86,13 @@ function bubbleTexture(recipe: RecipeId): THREE.CanvasTexture {
 }
 
 export function OrderBubble({
+  customerId,
   recipe,
   patience,
   // Выше макушки: на 0.72 облачко пряталось внутри фигуры.
   y = 1.35,
 }: {
+  customerId: number
   recipe: RecipeId
   /** Доля оставшегося терпения, 0..1. */
   patience: number
@@ -104,25 +109,49 @@ export function OrderBubble({
     if (!m) return
     m.scale.x = Math.max(0.001, pct.current)
     // Полоса убывает справа налево, а не из центра.
-    m.position.x = -(BAR_W * (1 - pct.current)) / 2
+    m.position.x = -(BAR_INNER_W * (1 - pct.current)) / 2
     mat.current?.color.copy(PANIC).lerp(CALM, THREE.MathUtils.smoothstep(pct.current, 0.2, 0.6))
   })
 
+  // Ховер по облачку — состав блюда рисует HUD (см. orderHover.ts).
+  const onOver = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    hoverOrder({ customerId, recipe, x: e.nativeEvent.clientX, y: e.nativeEvent.clientY })
+    document.body.style.cursor = 'help'
+  }
+  const onMove = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    hoverOrder({ customerId, recipe, x: e.nativeEvent.clientX, y: e.nativeEvent.clientY })
+  }
+  const onOut = () => {
+    unhoverOrder(customerId)
+    document.body.style.cursor = ''
+  }
+
+  // Подсказка гаснет вместе с клиентом: обслужили — курсор «уходит» сам.
+  useEffect(() => () => unhoverOrder(customerId), [customerId])
+
   return (
     <Billboard position={[0, y, 0]}>
-      <mesh>
+      <mesh onPointerOver={onOver} onPointerMove={onMove} onPointerOut={onOut}>
         <planeGeometry args={[0.34, 0.34 * (H / W)]} />
         <meshBasicMaterial map={texture} transparent depthWrite={false} />
       </mesh>
 
-      {/* дорожка терпения под облачком */}
-      <mesh position={[0, 0.19, 0.001]}>
+      {/*
+        Полоса истекающего времени над облачком.
+
+        renderOrder обязателен: заливка непрозрачна, дорожка — нет, и three
+        рисует прозрачное последним. Без явного порядка тёмная дорожка ложилась
+        поверх заливки, и полоса всегда выглядела пустой.
+      */}
+      <mesh renderOrder={2} position={[0, 0.2, 0.001]}>
         <planeGeometry args={[BAR_W, BAR_H]} />
-        <meshBasicMaterial color="#241a20" transparent opacity={0.75} depthWrite={false} />
+        <meshBasicMaterial color={INK} transparent opacity={0.85} depthWrite={false} />
       </mesh>
-      <mesh ref={fill} position={[0, 0.19, 0.002]}>
-        <planeGeometry args={[BAR_W, BAR_H * 0.7]} />
-        <meshBasicMaterial ref={mat} color="#9fc25f" depthWrite={false} />
+      <mesh ref={fill} renderOrder={3} position={[0, 0.2, 0.002]}>
+        <planeGeometry args={[BAR_INNER_W, BAR_H - 0.012]} />
+        <meshBasicMaterial ref={mat} color="#9fc25f" transparent depthWrite={false} />
       </mesh>
     </Billboard>
   )

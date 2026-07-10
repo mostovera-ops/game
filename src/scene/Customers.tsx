@@ -17,11 +17,13 @@ import { useGLTF } from '@react-three/drei'
 import { applyPalette, type Palette } from '../assets/scene'
 import { useGameStore, type Customer } from '../game/store'
 import { OrderBubble } from './OrderBubble'
-import { QUEUE_YAW, SPAWN, queueSpot, yawTo } from './truckStage'
+import { APPROACH, QUEUE_DIR, QUEUE_YAW, SPAWN, queueSpot, yawTo } from './truckStage'
 
 const HERO_URL = '/assets/props/hero.glb'
 
-const SPEED = 1.5 // м/с — чуть быстрее героя: клиенты спешат
+// Путь из-за деревьев длиннее прежнего, а терпение тикает с появления:
+// без прибавки к скорости клиент тратил бы треть его на дорогу.
+const SPEED = 2.2 // м/с
 const STEP_RATE = 9
 const STEP_AMP = 0.5
 const AMP_LAMBDA = 8
@@ -70,10 +72,13 @@ function CustomerFigure({
   const step = useRef(0)
   const amp = useRef(0)
   const goal = useRef(new THREE.Vector3())
+  /** Обогнул ли клиент фудтрак: до этого идём в APPROACH, потом — в очередь. */
+  const rounded = useRef(false)
 
   // Новичок появляется за кадром, а не выпрыгивает в хвосте очереди.
   useEffect(() => {
     group.current?.position.copy(SPAWN)
+    rounded.current = false
   }, [])
 
   useFrame((_, rawDt) => {
@@ -82,7 +87,14 @@ function CustomerFigure({
     const dt = Math.min(rawDt, MAX_DT)
     if (dt <= 0) return
 
-    queueSpot(index, goal.current)
+    // Сперва выходим из-за деревьев на линию очереди, и только потом идём к
+    // своему месту. Иначе путь к голове очереди прошёл бы сквозь кузов.
+    if (!rounded.current) {
+      goal.current.copy(APPROACH)
+      if (g.position.distanceTo(APPROACH) <= ARRIVE * 4) rounded.current = true
+    }
+    if (rounded.current) queueSpot(index, goal.current)
+
     const dx = goal.current.x - g.position.x
     const dz = goal.current.z - g.position.z
     const dist = Math.hypot(dx, dz)
@@ -96,8 +108,11 @@ function CustomerFigure({
       moved = true
       step.current += STEP_RATE * dt
       want = yawTo(dx, dz)
+    } else if (index === 0) {
+      want = QUEUE_YAW // первый смотрит в окно раздачи
     } else {
-      want = QUEUE_YAW // дошёл — разворачивается к окну
+      // Остальные — в затылок переднему, то есть против хвоста очереди.
+      want = yawTo(-QUEUE_DIR.x, -QUEUE_DIR.z)
     }
 
     const delta = ((want - g.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI
@@ -112,7 +127,11 @@ function CustomerFigure({
   return (
     <group ref={group}>
       <primitive object={model} />
-      <OrderBubble recipe={customer.want} patience={customer.patience / customer.maxPatience} />
+      <OrderBubble
+        customerId={customer.id}
+        recipe={customer.want}
+        patience={customer.patience / customer.maxPatience}
+      />
     </group>
   )
 }

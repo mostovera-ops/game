@@ -16,6 +16,8 @@ import {
   type Vec3,
 } from '../assets/scene'
 import { slotActionable, useGameStore } from '../game/store'
+import { playSfx } from '../audio/engine'
+import { SFX } from '../audio/ambience'
 import { swayUniforms } from './sway'
 import { Beds } from './Beds'
 import { Slot } from './Slot'
@@ -146,9 +148,17 @@ function Interactions() {
 
       if (it.kind === 'shop') st.openShop()
       else if (it.kind === 'speak') say(it.text)
-      else if (st.tool === 'can') st.water(it.id)
-      else if (st.tool === 'hand') st.harvest(it.id)
-      else st.plant(it.id)
+      else if (st.tool === 'can') {
+        st.water(it.id)
+        playSfx(SFX.waterPour, { gain: 0.9, rate: [0.95, 1.05] })
+      } else if (st.tool === 'hand') st.harvest(it.id)
+      else {
+        // plant() молча ничего не делает, если семена кончились: звук — только
+        // если растение действительно появилось.
+        st.plant(it.id)
+        const planted = useGameStore.getState().slots.find((s) => s.id === it.id)?.crop
+        if (planted) playSfx(SFX.plantSeed, { gain: 1, rate: [0.95, 1.05] })
+      }
       clearIntent()
       return
     }

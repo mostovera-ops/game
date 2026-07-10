@@ -59,21 +59,50 @@ export const HERO_SEAT = toWorld(LOCAL_SERVE_X, LOCAL_FLOOR_Y, LOCAL_HERO_Z).set
   LOCAL_FLOOR_Y * TRUCK_SCALE - HERO_BODY_BOTTOM,
 )
 
-/** Первый в очереди — за прилавком; остальные за ним, прочь от окна. */
-export const QUEUE_HEAD = FACE.clone().addScaledVector(FACE_DIR, 0.62)
+/**
+ * Хвост очереди уходит по экранной горизонтали.
+ *
+ * Камера дня 7 смотрит грузовику прямо в окно, вдоль −FACE_DIR, поэтому
+ * «вправо по экрану» — это ровно перпендикуляр к FACE_DIR. Очередь, выложенная
+ * по нему, ложится вдоль кадра и не заваливается ни вглубь, ни вниз.
+ */
+export const QUEUE_DIR = new THREE.Vector3(FACE_DIR.z, 0, -FACE_DIR.x)
 
-/** Шаг между клиентами в очереди. */
-export const QUEUE_STEP = 0.85
+/**
+ * Первый в очереди — у края прилавка, правее героя.
+ *
+ * Ровно напротив окна он вставать не должен: он одного роста с героем, стоящим
+ * на полу кузова, и загородил бы собой всю раздачу. Сдвиг вправо на полметра
+ * оставляет героя в проёме.
+ */
+export const QUEUE_HEAD = FACE.clone()
+  .addScaledVector(FACE_DIR, 0.8)
+  .addScaledVector(QUEUE_DIR, 0.55)
 
-/** Откуда клиенты приходят: сбоку, из-за деревьев. */
-export const SPAWN = QUEUE_HEAD.clone()
-  .addScaledVector(FACE_DIR, 1.6)
-  .addScaledVector(new THREE.Vector3(FACE_DIR.z, 0, -FACE_DIR.x), 3.6)
+/** Шаг между клиентами. */
+export const QUEUE_STEP = 1.0
+
+/**
+ * Откуда клиенты приходят: из глубины сцены, из-за ёлок позади фудтрака — на
+ * экране это верхний край кадра.
+ *
+ * Раньше точка лежала справа на линии очереди, внутри поля зрения: клиенты не
+ * приходили, а возникали из воздуха посреди травы.
+ */
+export const SPAWN = new THREE.Vector3(5.6, 0, -11.0)
 
 /** Место i-го в очереди. */
 export function queueSpot(i: number, out = new THREE.Vector3()): THREE.Vector3 {
-  return out.copy(QUEUE_HEAD).addScaledVector(FACE_DIR, i * QUEUE_STEP)
+  return out.copy(QUEUE_HEAD).addScaledVector(QUEUE_DIR, i * QUEUE_STEP)
 }
+
+/**
+ * Поворотная точка на пути к очереди: на её линии, на шаг дальше хвоста.
+ *
+ * Без неё клиент, идущий к голове очереди, срезал бы прямо сквозь кузов
+ * фудтрака: коллизий у клиентов нет.
+ */
+export const APPROACH = queueSpot(4.6)
 
 /**
  * Угол открытой створки: поворот узла `Hatch` вокруг локального X. Ноль —
@@ -83,12 +112,6 @@ export const HATCH_OPEN = THREE.MathUtils.degToRad(-120)
 
 /** Насколько резво створка идёт к своему положению; ≈1 c на весь ход. */
 export const HATCH_LAMBDA = 3.2
-
-/**
- * Герой в кузове ростом со своих клиентов, но без ног: интерьер ниже его
- * полного роста, а ноги всё равно за прилавком. Узлы hero.glb, которые прячем.
- */
-export const HERO_LEG_NODES = ['HeroLegL', 'HeroLegR'] as const
 
 /** Куда смотреть, чтобы видеть точку (dx, dz). Модель глядит на −Z. */
 export function yawTo(dx: number, dz: number): number {

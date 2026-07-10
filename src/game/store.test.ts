@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BEDS,
+  craftableCount,
   CROPS,
   RECIPES,
   RECIPE_IDS,
   SEED_PRICE,
-  SELL_PRICE,
   SLOTS_PER_BED,
   SLOT_IDS,
   START_MONEY,
@@ -51,8 +51,12 @@ describe('farm cycle', () => {
     expect(slot(id).stage).toBe(1)
 
     S().water(id)
+    // Бросок удачи фиксируем: иначе раз в десять прогонов растение оказывается
+    // удачным, даёт 2 единицы, и тест про обычный сбор падает на ровном месте.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
     S().endDay()
     expect(slot(id).stage).toBe(2)
+    expect(slot(id).lucky).toBe(false)
 
     const before = S().inventory.carrot
     S().harvest(id)
@@ -159,6 +163,30 @@ describe('инструменты', () => {
     S().endDay() // созрело
     expect(slotActionable(slot(id), 'can')).toBe(true)
     expect(slotActionable(slot(id), 'hand')).toBe(true)
+  })
+})
+
+describe('полив принадлежит грядке, а не растению', () => {
+  it('сбор урожая не осушает грядку', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 0.5)
+    S().water(id)
+    expect(slot(id).watered).toBe(true)
+
+    S().harvest(id)
+    expect(slot(id).crop).toBeNull()
+    expect(slot(id).watered).toBe(true)
+  })
+
+  it('посадка в мокрую грядку сохраняет полив, и росток растёт', () => {
+    const id = SLOT_IDS[1]
+    S().water(id) // поливаем пустую грядку
+    S().plant(id)
+    expect(slot(id).watered).toBe(true)
+
+    S().endDay()
+    expect(slot(id).stage).toBe(1) // политый — вырос, а не погиб
+    expect(slot(id).crop).not.toBeNull()
   })
 })
 
@@ -407,35 +435,12 @@ describe('семена и лавка', () => {
     expect(S().notices.at(-1)?.kind).toBe('no-money')
   })
 
-  it('продажа урожая даёт деньги', () => {
-    useGameStore.setState({ inventory: { carrot: 2, greens: 0, tomato: 0 } })
-    S().sellCrops('carrot', 2)
-    expect(S().inventory.carrot).toBe(0)
-    expect(S().money).toBe(START_MONEY + SELL_PRICE.carrot * 2)
-  })
-
-  it('нельзя продать больше, чем есть', () => {
-    useGameStore.setState({ inventory: { carrot: 1, greens: 0, tomato: 0 } })
-    S().sellCrops('carrot', 2)
-    expect(S().inventory.carrot).toBe(1)
-    expect(S().money).toBe(START_MONEY)
-  })
-
-  it('купить дороже, чем продать: прогнать деньги через лавку нельзя', () => {
-    for (const crop of CROPS) expect(SEED_PRICE[crop]).toBeGreaterThan(SELL_PRICE[crop])
-  })
-
   it('каждое блюдо окупает свои семена', () => {
     for (const id of RECIPE_IDS) {
       const recipe = RECIPES[id]
       const seedCost = CROPS.reduce((sum, c) => sum + SEED_PRICE[c] * (recipe.needs[c] ?? 0), 0)
       expect(recipe.price).toBeGreaterThan(seedCost)
     }
-  })
-
-  it('сырьё выгоднее готовить, чем сдавать в лавку', () => {
-    // Суп — худший случай: две морковки за 6 против 1 за штуку на прилавке.
-    expect(RECIPES.soup.price / 2).toBeGreaterThan(SELL_PRICE.carrot)
   })
 
   it('новая неделя не выдаёт семян даром', () => {
@@ -456,6 +461,38 @@ describe('день фудтрака (Task 3)', () => {
     ended: false,
     nextCustomerId: 1,
     ...over,
+  })
+
+  it('пропуск заказа отпускает первого и двигает очередь', () => {
+    useGameStore.setState({
+      phase: 'truck',
+      money: 0,
+      truck: mkTruck({
+        queue: [
+          { id: 1, want: 'taco' as const, patience: 16, maxPatience: 16 },
+          { id: 2, want: 'soup' as const, patience: 16, maxPatience: 16 },
+        ],
+      }),
+    })
+    S().skipCustomer()
+    expect(S().truck!.queue.map((c) => c.id)).toEqual([2])
+    expect(S().truck!.served).toBe(0) // пропуск — не продажа
+    expect(S().money).toBe(0)
+    const n = S().notices.at(-1)!
+    expect(n.kind).toBe('skipped')
+    expect(n.recipe).toBe('taco')
+  })
+
+  it('пропускать некого — тост, очередь не трогаем', () => {
+    useGameStore.setState({ phase: 'truck', truck: mkTruck() })
+    S().skipCustomer()
+    expect(S().notices.at(-1)!.kind).toBe('no-customer')
+  })
+
+  it('craftableCount ограничен самым дефицитным ингредиентом', () => {
+    expect(craftableCount('soup', { carrot: 5, greens: 0, tomato: 0 })).toBe(2) // 2 моркови на порцию
+    expect(craftableCount('taco', { carrot: 3, greens: 1, tomato: 9 })).toBe(1) // зелень в дефиците
+    expect(craftableCount('salad', { carrot: 9, greens: 0, tomato: 9 })).toBe(0)
   })
 
   it('endDay на дне 6 открывает фудтрек', () => {
@@ -527,5 +564,29 @@ describe('день фудтрака (Task 3)', () => {
     expect(S().phase).toBe('farm')
     expect(S().truck).toBeNull()
     expect(S().money).toBe(20)
+  })
+})
+
+describe('музыка', () => {
+  // resetGame намеренно не трогает флаг, поэтому beforeEach его не вернёт:
+  // без этого тесты зависели бы от порядка выполнения.
+  afterEach(() => useGameStore.setState({ musicOn: true }))
+
+  it('по умолчанию включена', () => {
+    expect(S().musicOn).toBe(true)
+  })
+
+  it('toggleMusic переключает флаг', () => {
+    S().toggleMusic()
+    expect(S().musicOn).toBe(false)
+    S().toggleMusic()
+    expect(S().musicOn).toBe(true)
+  })
+
+  it('переживает сброс игры: это настройка звука, а не прогресс', () => {
+    S().toggleMusic()
+    S().resetGame()
+    expect(S().musicOn).toBe(false)
+    expect(S().day).toBe(1)
   })
 })

@@ -30,8 +30,12 @@ import { FACE_EPS, hero, HERO_RADIUS } from './heroState'
 import { clearIntent } from './intent'
 import { resolveCollisions, type Collider } from './collision'
 import { getSpeech, subscribeSpeech } from './heroSpeech'
+import { applyEyes, Blinker, collectEyes, gazeTarget } from './heroEyes'
+import { pointerNDC, trackPointer } from './pointer'
 import { HeroBubble } from './HeroBubble'
 import { HERO_SEAT, HERO_YAW } from './truckStage'
+import { playSfx } from '../audio/engine'
+import { SFX } from '../audio/ambience'
 
 const HERO_URL = '/assets/props/hero.glb'
 useGLTF.preload(HERO_URL)
@@ -111,6 +115,7 @@ export function Hero({
 }) {
   const { scene } = useGLTF(HERO_URL)
   const camera = useThree((s) => s.camera)
+  const canvas = useThree((s) => s.gl.domElement)
   const pressed = usePressedKeys()
   const phrase = useSyncExternalStore(subscribeSpeech, getSpeech, getSpeech)
   const heroColor = useGameStore((s) => s.heroColor)
@@ -118,7 +123,7 @@ export function Hero({
   // Белок и зрачок берём из палитры, одежду — из стора: её красит игрок.
   // Материал создаётся один раз, цвет в него доливает эффект ниже.
   const body = useMemo(() => smoothLambert('Hero', HERO_COLOR_DEFAULT), [])
-  const eyes = useMemo(
+  const eyeMats = useMemo(
     () => ({
       HeroEyeWhite: smoothLambert('HeroEyeWhite', palette.HeroEyeWhite ?? '#f7f7f5'),
       HeroEyePupil: smoothLambert('HeroEyePupil', palette.HeroEyePupil ?? '#0d0d12'),
@@ -135,10 +140,10 @@ export function Hero({
       if (!mesh.isMesh) return
       mesh.castShadow = true
       const name = (mesh.material as THREE.Material).name
-      mesh.material = name in eyes ? eyes[name as keyof typeof eyes] : body
+      mesh.material = name in eyeMats ? eyeMats[name as keyof typeof eyeMats] : body
     })
     return clone
-  }, [scene, body, eyes])
+  }, [scene, body, eyeMats])
 
   const legs = useMemo(
     () => ({
@@ -148,11 +153,22 @@ export function Hero({
     [model],
   )
 
+  const eyes = useMemo(() => collectEyes(model), [model])
+  const blinker = useRef(new Blinker())
+  const gaze = useRef(new THREE.Vector3())
+  const hasGaze = useRef(false)
+
+  // Курсор слушаем у окна, а не у канваса: за открытой лавкой герой иначе
+  // перестал бы следить за мышью — модалка съедает pointermove.
+  useEffect(() => trackPointer(canvas), [canvas])
+
   const group = useRef<THREE.Group>(null)
   const phase = useRef(0)
   const amp = useRef(0)
   // Был ли герой в фудтраке в прошлом кадре: по этому ловим конец дня продаж.
   const wasInTruck = useRef(false)
+  // Нога касается земли на каждом полупериоде качания: считаем эти полупериоды.
+  const halfSteps = useRef(0)
 
   // Без этого цель осталась бы в мировом нуле и герой на старте пошёл бы в дом.
   useEffect(() => {
@@ -163,6 +179,20 @@ export function Hero({
   // Переиспользуем векторы: useFrame не место для аллокаций.
   const fwd = useRef(new THREE.Vector3())
   const right = useRef(new THREE.Vector3())
+
+  /**
+   * Глаза: моргание и взгляд за курсором. Зовётся из обеих веток кадра —
+   * и с фермы, и из-за прилавка. Иначе в день торговли зрачки замирали бы в
+   * той позе, в какой их застал седьмой день.
+   */
+  const updateEyes = (g: THREE.Group, dt: number) => {
+    if (!eyes.length) return
+    // Цель взгляда ищем на уровне глаз: курсор в небе плоскость не пересекает —
+    // тогда держим прежнюю цель, а не роняем взгляд в ноль.
+    const eyeY = g.position.y + eyes[0].center.y
+    if (gazeTarget(pointerNDC(), camera, eyeY, gaze.current)) hasGaze.current = true
+    applyEyes(eyes, g, hasGaze.current ? gaze.current : null, blinker.current.step(dt), dt)
+  }
 
   useFrame((_, rawDt) => {
     const g = group.current
@@ -194,6 +224,7 @@ export function Hero({
       if (legs.l) legs.l.visible = false
       if (legs.r) legs.r.visible = false
 
+      updateEyes(g, dt)
       return
     }
 
@@ -268,7 +299,16 @@ export function Hero({
       const delta = shortestArc(g.rotation.y, yawTo(vx, vz))
       g.rotation.y += delta * (1 - Math.exp(-TURN_LAMBDA * dt))
 
-      if (moved) phase.current += STEP_RATE * dt
+      if (moved) {
+        phase.current += STEP_RATE * dt
+        // Шаг звучит по факту сдвига, а не по нажатой клавише: упёршись в стену,
+        // герой перебирает ногами беззвучно — phase стоит вместе с ним.
+        const half = Math.floor(phase.current / Math.PI)
+        if (half !== halfSteps.current) {
+          halfSteps.current = half
+          playSfx(SFX.footstep, { gain: 0.5, rate: [0.9, 1.1], pan: [-0.25, 0.25] })
+        }
+      }
 
       // Идём по клику и упёрлись в препятствие: цель недостижима, бросаем её,
       // иначе герой будет вечно перебирать ногами в стену.
@@ -289,6 +329,8 @@ export function Hero({
     const swing = Math.sin(phase.current) * amp.current
     if (legs.l) legs.l.rotation.x = swing
     if (legs.r) legs.r.rotation.x = -swing
+
+    updateEyes(g, dt)
   })
 
   return (
