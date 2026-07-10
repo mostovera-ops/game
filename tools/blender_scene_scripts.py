@@ -408,7 +408,7 @@ mat_tomato_fruit = make_mat("TomatoFruit", (0.8, 0.1, 0.08), 0.4)
 mat_glass = make_mat("GreenhouseGlass", (0.75, 0.9, 0.95), 0.15)
 mat_frame = make_mat("GreenhouseFrame", (0.9, 0.9, 0.9), 0.6)
 
-def add_raised_bed(x, y, w=1.6, d=0.6, h=0.28):
+def add_raised_bed(x, y, w=1.5, d=0.5, h=0.28):
     bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, h/2))
     frame = bpy.context.active_object
     frame.scale = (w/2, d/2, h/2)
@@ -665,7 +665,7 @@ BED_H = 0.28
 SOIL_TOP_Z = BED_H + SOIL_LIFT  # на этой Z сидят растения (см. 08_export.py)
 
 
-def add_raised_bed(x, y, w=1.6, d=0.6, h=BED_H):
+def add_raised_bed(x, y, w=1.5, d=0.5, h=BED_H):
     bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, h/2))
     frame = bpy.context.active_object
     frame.scale = (w, d, h)
