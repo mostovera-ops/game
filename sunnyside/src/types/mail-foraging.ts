@@ -21,8 +21,12 @@ export interface MailOrder extends Versioned {
   deliverAt: EpochMs
 }
 
-/** Тип точки фуражинга. Лимит forage_daily — суммарный по типу/день (08 §3.2.3). */
-export type ForageKind = 'mushroom' | 'berry' | 'herb' | 'flower'
+/**
+ * Тип точки фуражинга. Лимит forage_daily — суммарный по типу/день (08 §3.2.3).
+ * Канон-типы карты города — 4 точки (08 §3.2): грибы, ягоды, дикий мёд, рыбалка.
+ * `fishing` — единственная активная мини-игра (08 §3.2.4); `wild_beehive` — дикий улей.
+ */
+export type ForageKind = 'mushroom' | 'berry' | 'herb' | 'flower' | 'fishing' | 'wild_beehive'
 
 /**
  * Точка фуражинга на общей карте (Realtime `town:{id}:foraging`).

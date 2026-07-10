@@ -333,7 +333,9 @@ export function createInitialWorld(userId: UUID, townId: UUID, now: EpochMs): Lo
     weekIndex,
     lastSimAt: now,
 
-    wallet: { bucks: 1000, dimes: 40, tickets: 0, ribbons: 0 },
+    // Стартовый кошелёк новичка — $150 / ◉5 (18-onboarding §3.1; паритет с серверным
+    // game_configs.onboarding, миграция 0015). Балансы не персистятся (анти-подмена).
+    wallet: { bucks: 150, dimes: 5, tickets: 0, ribbons: 0 },
     farmLevel: 1,
     xp: 0,
     plots,

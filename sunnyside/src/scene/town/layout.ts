@@ -104,12 +104,15 @@ export function orderedStreets(streets: readonly Street[]): Street[] {
 /** Внешнее кольцо обочины (Route 66) — за фермами стритов. */
 export const ROADSIDE_RADIUS = STREET_INNER_RADIUS + 9
 
-/** Ассет-заглушка сцены по виду точки фуражинга (реюз существующих env/crop-ключей). */
+/** Ассет-заглушка сцены по виду точки фуражинга (реюз существующих env/crop/bld-ключей). */
 export const FORAGE_ASSET_BY_KIND: Record<ForageKind, string> = {
   mushroom: 'env_bush',
   berry: 'crop_tomato',
   herb: 'crop_greens',
   flower: 'crop_carrot',
+  // Заглушки для канон-типов (08 §3.2): дикий мёд → улей-пасека, рыбалка → лужа-вода.
+  wild_beehive: 'bld_apiary',
+  fishing: 'env_puddle',
 }
 
 export interface ForageLayoutPoint {

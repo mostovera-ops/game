@@ -94,7 +94,8 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
           data-testid={`modal-close-${panelKey}`}
           aria-label="Close"
           onClick={() => openPanel(null)}
-          className="absolute right-3 top-3 z-10 rounded-full bg-black/40 px-2 py-1 text-base leading-none text-white opacity-80 hover:opacity-100"
+          className="hud-tap-target absolute right-3 top-3 z-10 flex items-center justify-center rounded-full bg-black/40 px-2 py-1 text-base leading-none text-white opacity-80 hover:opacity-100"
+          style={{ top: 'max(0.75rem, env(safe-area-inset-top))', right: 'max(0.75rem, env(safe-area-inset-right))' }}
         >
           ✕
         </button>
@@ -111,29 +112,45 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center"
       onClick={() => openPanel(null)}
     >
+      {/*
+       * Карточка панели — `flex flex-col` с ограниченной высотой (§4.4 «прокрутка внутри
+       * панелей»): заголовок (kicker) остаётся зафиксирован, а ТЕЛО (`children`) скроллится
+       * само в своём `overflow-y-auto`-контейнере ниже. Это единая точка правки для ВСЕХ
+       * ui_*-панелей (они все проходят через этот компонент, AGENTS.md-докстринг файла) —
+       * панель, которая уже держит собственный `max-h-[Nvh]`/`overflow-y-auto` внутри (см.
+       * RecipeBox/StorageOverlay/ChatPanel), просто оказывается меньше своего бюджета высоты
+       * и не мешает этому внешнему скроллу; панели без своего скролла получают его бесплатно.
+       */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className={
-          'hud-receipt pointer-events-auto w-full max-w-lg p-4 ' +
-          (sheet ? 'rounded-t-2xl' : 'm-4 rounded-[var(--radius-diner)]')
+          'hud-receipt pointer-events-auto flex w-full max-w-lg flex-col p-4 ' +
+          (sheet
+            ? 'max-h-[85vh] rounded-t-2xl'
+            : 'm-4 max-h-[calc(100vh-2rem)] rounded-[var(--radius-diner)]')
         }
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="hud-kicker mb-3 flex items-center justify-between pb-2 text-sm">
+        <div className="hud-kicker mb-3 flex shrink-0 items-center justify-between pb-2 text-sm">
           <span>{title}</span>
           <button
             type="button"
             data-testid={`modal-close-${panelKey}`}
             aria-label="Close"
             onClick={() => openPanel(null)}
-            className="rounded-full px-2 text-base leading-none opacity-70 hover:opacity-100"
+            className="hud-tap-target flex items-center justify-center rounded-full px-2 text-base leading-none opacity-70 hover:opacity-100"
           >
             ✕
           </button>
         </div>
-        {children}
+        <div
+          className="hud-scroll min-h-0 flex-1 overflow-y-auto"
+          style={sheet ? { paddingBottom: 'max(0px, env(safe-area-inset-bottom))' } : undefined}
+        >
+          {children}
+        </div>
       </div>
     </div>
   )

@@ -56,7 +56,7 @@ describe('composition — SystemContext + createSystems + гидрация', () 
     await boot(clock)
     const s = useStore.getState()
     expect(s.farm?.plots).toHaveLength(6)
-    expect(s.econ.wallet.bucks).toBe(1000)
+    expect(s.econ.wallet.bucks).toBe(150)
     expect(s.clock.calendar?.weekIndex).toBe(WEEK)
     // serverOffset выставлен так, что serverNow() ≈ игровое время адаптера.
     expect(Math.abs(s.serverNow() - MONDAY_0100)).toBeLessThan(5_000)

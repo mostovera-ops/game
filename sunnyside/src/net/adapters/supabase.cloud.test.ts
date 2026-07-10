@@ -320,10 +320,10 @@ describe.runIf(RUN)('supabase cloud — bootstrap нового игрока + ge
     expect(p.data?.town_id).toBe(SEED_TOWN)
   })
 
-  it('B2) стартовый кошелёк — 1000◈ / 40◉ (приветственный подарок через леджер)', async () => {
+  it('B2) стартовый кошелёк — 150◈ / 5◉ (приветственный подарок через леджер, 18-onboarding §3.1)', async () => {
     const w = unwrap(await adapter.getWallet()) as unknown as Record<string, number>
-    expect(w.bucks).toBe(1000)
-    expect(w.dimes).toBe(40)
+    expect(w.bucks).toBe(150)
+    expect(w.dimes).toBe(5)
   })
 
   it('B3) полная T1-гидрация: ВСЕ get_*-снапшоты ok (адаптер не получает not_found)', async () => {

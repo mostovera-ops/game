@@ -15,7 +15,7 @@ export function SoundSettingsButton() {
       data-testid="sound-settings-btn"
       aria-label="Sound settings"
       onClick={() => open(true)}
-      className="pointer-events-auto rounded-full bg-black/40 p-2 text-lg leading-none text-white/90 hover:text-white"
+      className="hud-tap-target pointer-events-auto flex items-center justify-center rounded-full bg-black/40 p-2 text-lg leading-none text-white/90 hover:text-white"
     >
       <span aria-hidden>🔊</span>
     </button>

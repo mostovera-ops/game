@@ -145,3 +145,45 @@ curl -4 -s -X POST \
   -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
   --data '{"query":"select name, applied_at from public._sunnyside_migrations order by name"}'
 ```
+
+## Обновление «server-verdicts» — 2026-07-10, миграция 0015_followups.sql
+
+**15-я миграция применена с первого прохода. SQL-ошибок — 0. Правок в файлах 0001–0014 — 0.**
+Канал/инструмент — те же (`scripts/db-apply.mjs`, `curl -4`, реестр `public._sunnyside_migrations`,
+токен из `"Supabase Sunnyside PAT"`).
+
+| # | Файл | Статус | applied_at (UTC) |
+|---|------|--------|------------------|
+| 15 | `0015_followups.sql` | OK | 2026-07-10 09:03:53 |
+
+Пять вердиктов оркестратора, доведённых до канона (шлюз `game` НЕ трогался — редеплой не нужен):
+
+1. **Стартовый кошелёк новичка → `$150 / ◉5`** (18-onboarding §3.1). `game_configs.onboarding`
+   обновлён на сервере (`start_bucks=150, start_dimes=5`; было 1000/40). Локальный мир
+   `sunnyside/src/net/local/world.ts` и тесты (`app/integration.test.ts`, cloud-B2) приведены
+   к парности. Существующие игроки не затронуты (кошелёк уже начислен через леджер).
+2. **`job_migration_execute`** — прошедшие голосования (`migration_proposals.state='passed'`)
+   реально исполняются: караван переносит стрит целиком, мердж — все стриты угасающего города
+   + бесхозных жителей, ставит `towns.grand_reopening_until = now()+7d` обоим городам и
+   архивирует угасающий. Компенсация вклада в tp_* старого города → 🎟 (50:1, кэп 500, §4.4)
+   через хелперы `_migrate_player_to` / `_migrate_street_to`. Cron `sunny_migration_execute`
+   (`0 0 * * 1`, Пн 00:00 UTC — граница недели §3.3.4). Идемпотентно на игровой день.
+   **E2E-проверка (в откатываемой транзакции): караван из 2 игроков перенесён, тикеты
+   84 (вклад 4200) и 20 (вклад 1000), proposal→executed** — тестовых данных не осталось (rollback).
+3. **`job_farm_value_recompute`** — пересчёт `players.farm_value` по мастер-формуле
+   13-progression §3.4.1/§4.5 (веса W_bld/стафф×40/know-how×60/грядки×15/mastery★×10) с капом
+   косметики/коллекций 15% (`min(cosmetic, core×0.15/0.85)`). Оси, не смоделированные серверно
+   (orchard/animal_fv/decor), = 0 (паритет с локальным адаптером). Cron
+   `sunny_farm_value_recompute` (`10 0 * * 1`). Прогон на текущих данных — `recomputed=4`, без ошибок.
+4. **`chat_post` — экранирование regex-метасимволов банвордов.** Прежде банворд подставлялся в
+   `regexp_replace` как ПАТТЕРН (banword с `.`/`(`/`*`/`[` вёл себя как регэксп). Теперь каждый
+   банворд экранируется (`regexp_replace(word,'([^[:alnum:]])','\\\1','g')`) → маскируется
+   как литерал. **Проверено:** `(bad.word)` теперь маскируется целиком (`say *** now`), тогда как
+   старое поведение дало бы `say (***) now`.
+5. **`ForageKind` (клиент-only, без SQL)** — union расширен `fishing | wild_beehive`
+   (`src/types/mail-foraging.ts`), UI-иконки-заглушки в `FORAGE_ASSET_BY_KIND`
+   (`src/scene/town/layout.ts`): `wild_beehive→bld_apiary`, `fishing→env_puddle`; тест
+   `layout.test.ts` расширен на новые виды.
+
+**Локальный гейт `sunnyside/`:** `pnpm typecheck` ✅, `pnpm lint:boundary` ✅,
+`pnpm test` — **1246 passed / 22 skipped** (22 skipped = gated cloud-сьют).

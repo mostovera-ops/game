@@ -41,7 +41,7 @@ export function BottomNav() {
               goto(key)
             }}
             className={
-              'rounded-full px-4 py-1.5 text-sm font-semibold transition ' +
+              'hud-tap-target flex items-center justify-center rounded-full px-4 py-1.5 text-sm font-semibold transition ' +
               (isActive
                 ? 'text-white'
                 : muted

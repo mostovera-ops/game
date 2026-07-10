@@ -134,7 +134,11 @@ export function App() {
         shadows={!liteMode}
         dpr={liteMode ? 1 : ([1, 1.5] as [number, number])}
         camera={{ position: [10, 9, 12], fov: 42 }}
-        style={{ background: color('sky_day') }}
+        // touchAction: 'none' (19-ui-ux §4.4 «камера на тач») — канвас сам гарантированно не
+        // отдаёт одно-/двухпальцевые жесты браузерному скроллу/pinch-зуму страницы, независимо
+        // от того, на какой именно DOM-узел r3f/OrbitControls повесят свои pointer-слушатели
+        // (тот же приём, что OrbitControls применяет к СВОЕМУ `domElement` при connect()).
+        style={{ background: color('sky_day'), touchAction: 'none' }}
       >
         <Suspense fallback={null}>
           <SceneBoundary sceneKey={active}>

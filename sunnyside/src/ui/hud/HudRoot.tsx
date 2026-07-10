@@ -37,7 +37,18 @@ export function HudRoot() {
   useEffect(() => initSoundBridge(), [])
 
   return (
-    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3 sm:p-4">
+    <div
+      className={
+        'pointer-events-none absolute inset-0 flex flex-col justify-between ' +
+        // Safe-area (19-ui-ux §4.4): базовый паддинг (совпадает с прежним p-3/sm:p-4), но
+        // растёт под чёлку/жест-бар/home-indicator, где он есть (`env(...)`, требует
+        // `viewport-fit=cover`, index.html). На устройствах без выреза `max()` даёт тот же p-3.
+        'pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] ' +
+        'pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] ' +
+        'sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] ' +
+        'sm:pl-[max(1rem,env(safe-area-inset-left))] sm:pr-[max(1rem,env(safe-area-inset-right))]'
+      }
+    >
       {/* Верхний ряд: бренд + плашка дня + валюты + колокол + net-плашка */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -50,7 +61,14 @@ export function HudRoot() {
           </h1>
           <DayPhaseBanner />
         </div>
-        <div className="flex items-center gap-2">
+        {/*
+         * `flex-wrap` + `justify-end`: на узких телефонных вьюпортах (xs 360–599px, §4.4)
+         * валюты×4 + Farm Value + 3 иконки + net-плашка + dev-таймскип (dev-only) не влезают в
+         * одну строку — без wrap правая группа раздувала страницу за пределы вьюпорта
+         * (горизонтальный скролл, найдено `e2e/mobile.spec.ts`). С wrap она сама переносится на
+         * вторую строку под брендом, а не толкает документ вширь.
+         */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <CurrencyBar />
           <ChatLauncher />
           <NotificationBell />

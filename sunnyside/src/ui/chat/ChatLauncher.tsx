@@ -32,7 +32,7 @@ export function ChatLauncher() {
       data-testid="chat-launcher"
       aria-label="Chat"
       onClick={() => openPanel('ui_chat')}
-      className="pointer-events-auto relative rounded-full bg-black/40 p-2 text-lg leading-none text-white/90 hover:text-white"
+      className="hud-tap-target pointer-events-auto relative flex items-center justify-center rounded-full bg-black/40 p-2 text-lg leading-none text-white/90 hover:text-white"
     >
       <span aria-hidden>💬</span>
       {total > 0 && (

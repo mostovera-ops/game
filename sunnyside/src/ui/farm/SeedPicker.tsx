@@ -72,48 +72,50 @@ export function SeedPicker() {
         role="dialog"
         aria-modal="true"
         aria-label={locale === 'ru' ? 'Что посадим?' : 'What should we plant?'}
-        className="hud-receipt pointer-events-auto w-full max-w-lg rounded-t-2xl p-4 md:m-4 md:rounded-[var(--radius-diner)]"
+        className="hud-receipt pointer-events-auto flex max-h-[85vh] w-full max-w-lg flex-col rounded-t-2xl p-4 md:m-4 md:rounded-[var(--radius-diner)]"
         onClick={(e) => e.stopPropagation()}
         style={{ background: DINER.paper }}
       >
-        <header className="hud-kicker mb-3 flex items-center justify-between pb-2 text-sm">
+        <header className="hud-kicker mb-3 flex shrink-0 items-center justify-between pb-2 text-sm">
           <span>{locale === 'ru' ? 'Что посадим?' : 'What should we plant?'}</span>
           <button
             type="button"
             data-testid="seed-picker-close"
             aria-label="Close"
             onClick={close}
-            className="rounded-full px-2 text-base leading-none opacity-70 hover:opacity-100"
+            className="hud-tap-target flex items-center justify-center rounded-full px-2 text-base leading-none opacity-70 hover:opacity-100"
           >
             ✕
           </button>
         </header>
 
-        {options.length === 0 ? (
-          <p className="italic opacity-70">{locale === 'ru' ? 'Семян пока нет' : 'No seeds yet'}</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {options.map((crop) => (
-              <button
-                key={crop.seedKey}
-                type="button"
-                data-testid={`seed-picker-option-${crop.seedKey}`}
-                disabled={sowingKey !== null}
-                onClick={() => void pick(crop.seedKey)}
-                className="flex flex-col items-start gap-0.5 rounded-xl p-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: DINER.card, boxShadow: PRINT_SHADOW, color: '#2b2118' }}
-              >
-                <span className="font-black uppercase tracking-wide" style={{ color: DINER.board }}>
-                  {crop.name[locale]}
-                </span>
-                <span className="text-xs tabular-nums opacity-80">
-                  T{crop.tier} · {formatGrow(crop.growSec, locale)}
-                  {sowingKey === crop.seedKey ? (locale === 'ru' ? ' · Сеем…' : ' · Sowing…') : ''}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="hud-scroll min-h-0 flex-1 overflow-y-auto">
+          {options.length === 0 ? (
+            <p className="italic opacity-70">{locale === 'ru' ? 'Семян пока нет' : 'No seeds yet'}</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {options.map((crop) => (
+                <button
+                  key={crop.seedKey}
+                  type="button"
+                  data-testid={`seed-picker-option-${crop.seedKey}`}
+                  disabled={sowingKey !== null}
+                  onClick={() => void pick(crop.seedKey)}
+                  className="flex min-h-11 flex-col items-start justify-center gap-0.5 rounded-xl p-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ background: DINER.card, boxShadow: PRINT_SHADOW, color: '#2b2118' }}
+                >
+                  <span className="font-black uppercase tracking-wide" style={{ color: DINER.board }}>
+                    {crop.name[locale]}
+                  </span>
+                  <span className="text-xs tabular-nums opacity-80">
+                    T{crop.tier} · {formatGrow(crop.growSec, locale)}
+                    {sowingKey === crop.seedKey ? (locale === 'ru' ? ' · Сеем…' : ' · Sowing…') : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

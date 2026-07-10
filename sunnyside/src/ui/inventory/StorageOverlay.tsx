@@ -98,7 +98,7 @@ export function StorageOverlay({ onGiftNeighbor, onAddPotluck, onUpgrade, onClos
             type="button"
             data-testid="storage-close"
             onClick={onClose}
-            className="rounded-full px-3 py-1 text-sm font-bold"
+            className="hud-tap-target flex items-center justify-center rounded-full px-3 py-1 text-sm font-bold"
             style={{ background: DINER.board, color: DINER.boardInk }}
           >
             {locale === 'ru' ? 'Закрыть' : 'Close'}

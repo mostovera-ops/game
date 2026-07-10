@@ -12,10 +12,23 @@ body {
   color: #f5ecd6;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   overflow: hidden;
+  overscroll-behavior: none; /* iOS/Android pull-to-refresh/bounce не должен дёргать игру (19-ui-ux §4.4) */
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation; /* убирает 300мс тап-дилей и двойной-тап-зум браузера на HUD-кнопках */
 }
 
 /* Табличные числа для балансов валют (canon §2.1). */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Мобильный скролл внутри панелей/леттербордов (19-ui-ux §4.4): страница сама никогда не
+ * скроллится (body overflow:hidden выше) — любой скроллящийся контейнер (тело Modal,
+ * леттерборд-таблица) должен явно попросить momentum-скролл на iOS, иначе список внутри
+ * тянется «жёстко». Не влияет на десктоп (там нативный wheel-скролл уже работает).
+ */
+.hud-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }

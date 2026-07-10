@@ -143,7 +143,7 @@ describe('layoutForagePoints', () => {
   })
 
   it('каждый вид фуражинга смаплен на существующий ассет-ключ сцены', () => {
-    for (const kind of ['mushroom', 'berry', 'herb', 'flower'] as const) {
+    for (const kind of ['mushroom', 'berry', 'herb', 'flower', 'fishing', 'wild_beehive'] as const) {
       expect(FORAGE_ASSET_BY_KIND[kind]).toBeTruthy()
     }
   })

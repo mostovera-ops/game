@@ -67,7 +67,10 @@ async function ovenId(page: Page): Promise<string> {
 test('полный игровой цикл: посадка → сбор → крафт → прилавок → смена → ивент, валюта и XP растут', async ({
   page,
 }) => {
-  test.setTimeout(90_000)
+  // Самый тяжёлый смоук (посадка→сбор→крафт→прилавок→смена→ивент, R3F-сцена + гидрация).
+  // В изоляции ~55–60 с; под нагрузкой полного параллельного прогона один Vite-dev обслуживает
+  // десятки тяжёлых страниц разом → даём двойной запас, чтобы контеншн не давал ложных таймаутов.
+  test.setTimeout(180_000)
   const errors: string[] = []
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
@@ -79,12 +82,16 @@ test('полный игровой цикл: посадка → сбор → кр
   await expect(page.getByTestId('brand')).toHaveText('Sunnyside')
   await expect(page.locator('canvas')).toBeVisible()
   await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = (window as any).sunnyside
-        return !!w?.systems?.farm && !!w.useStore.getState().farm && !!w.useStore.getState().progression
-      }),
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const w = (window as any).sunnyside
+          return !!w?.systems?.farm && !!w.useStore.getState().farm && !!w.useStore.getState().progression
+        }),
+      // Бутстрап R3F-сцены + гидрация под нагрузкой полного параллельного прогона может
+      // превысить дефолтные 5 с poll (тест сам живёт в бюджете 90 с) — даём запас.
+      { timeout: 30_000 },
     )
     .toBe(true)
   // Онлайн (мутации уходят на адаптер, а не остаются оптимистичным кэшем).

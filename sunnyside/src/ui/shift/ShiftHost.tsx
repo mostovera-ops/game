@@ -100,13 +100,16 @@ export function ShiftHost({ shiftSystem }: { shiftSystem?: ShiftSystem } = {}) {
   return (
     <>
       {/* idle — компактный старт-каркас (не блокирует орбит-камеру: pointer-events только
-          на карточке). Живёт вне Modal — это триггер входа в панель, не сама панель. */}
+          на карточке). Живёт вне Modal — это триггер входа в панель, не сама панель.
+          bottom — очищает нижнюю навигацию HUD (`BottomNav`, ~44px тач-таргет + паддинг
+          хоста) и safe-area home-indicator (19-ui-ux §4.4 «нижняя навигация не перекрыта»):
+          без запаса карточка на телефоне садится поверх/под таб-баром сцен. */}
       <div
         style={{
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: 20,
+          bottom: 'max(84px, calc(64px + env(safe-area-inset-bottom)))',
           display: 'flex',
           justifyContent: 'center',
           pointerEvents: 'none',

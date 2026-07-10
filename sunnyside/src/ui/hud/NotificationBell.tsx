@@ -24,7 +24,7 @@ export function NotificationBell() {
         openPanel('ui_notif_log')
         markNotificationsSeen(serverNow())
       }}
-      className="pointer-events-auto relative rounded-full bg-black/40 p-2 text-lg leading-none text-white/90 hover:text-white"
+      className="hud-tap-target pointer-events-auto relative flex items-center justify-center rounded-full bg-black/40 p-2 text-lg leading-none text-white/90 hover:text-white"
     >
       <span aria-hidden>🔔</span>
       {unread > 0 && (

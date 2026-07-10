@@ -54,7 +54,7 @@ export function DevTimeskip() {
       data-testid="dev-timeskip"
       onClick={handleClick}
       title="Dev only: +1ч к clock.serverOffset"
-      className="pointer-events-auto rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-white/80 hover:text-white"
+      className="hud-tap-target pointer-events-auto flex items-center justify-center rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-white/80 hover:text-white"
     >
       ⏩ +1ч
     </button>
