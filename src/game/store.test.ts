@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BASE_RECIPE_IDS,
   BEDS,
+  INITIAL_PLACEMENTS,
   cookableRecipes,
   EGG_REGROW,
   MUSHROOM_REGROW,
@@ -104,14 +105,98 @@ describe('грядка: 3 слота', () => {
   it('в грядке ровно 3 слота, всего 9', () => {
     expect(SLOTS_PER_BED).toBe(3)
     expect(SLOT_IDS.length).toBe(BEDS * 3)
-    for (let bed = 0; bed < BEDS; bed++) {
-      expect(SLOT_IDS.filter((id) => bedOf(id) === bed).length).toBe(3)
+    expect(INITIAL_PLACEMENTS).toHaveLength(BEDS)
+    for (const bed of INITIAL_PLACEMENTS) {
+      expect(SLOT_IDS.filter((id) => bedOf(id) === bed.id).length).toBe(3)
     }
   })
 
   it('четвёртого слота не существует', () => {
-    expect(SLOT_IDS).not.toContain('0:3')
-    expect(S().slots.find((x) => x.id === '0:3')).toBeUndefined()
+    expect(SLOT_IDS).not.toContain('bed-1:3')
+    expect(S().slots.find((x) => x.id === 'bed-1:3')).toBeUndefined()
+  })
+})
+
+describe('планировка двора', () => {
+  beforeEach(() => S().setStaticCells([]))
+
+  it('стартовые грядки на месте, режим стройки выключен', () => {
+    expect(S().placements).toHaveLength(3)
+    expect(S().buildMode).toBe(false)
+    expect(S().drag).toBeNull()
+  })
+
+  it('режим стройки переключается только на ферме', () => {
+    S().toggleBuild()
+    expect(S().buildMode).toBe(true)
+    S().toggleBuild()
+    expect(S().buildMode).toBe(false)
+  })
+
+  it('поднял → повернул → опустил: грядка переехала и повернулась', () => {
+    S().toggleBuild()
+    const id = S().placements[0].id
+    S().grabPlacement(id)
+    expect(S().drag).toEqual({ id, rot: 0 })
+    S().rotateDrag()
+    const ok = S().dropPlacement(-2, -2)
+    expect(ok).toBe(true)
+    expect(S().drag).toBeNull()
+    const p = S().placements.find((x) => x.id === id)!
+    expect([p.gx, p.gz, p.rot]).toEqual([-2, -2, 1])
+  })
+
+  it('урожай переезжает вместе с грядкой', () => {
+    const id = S().placements[0].id
+    S().plant(`${id}:0`)
+    expect(slot(`${id}:0`).crop).toBe('carrot')
+    S().toggleBuild()
+    S().grabPlacement(id)
+    S().dropPlacement(-4, 5)
+    // Слот тот же — id грядки не менялся, поменялись только её координаты.
+    expect(slot(`${id}:0`).crop).toBe('carrot')
+  })
+
+  it('нельзя опустить на занятую клетку — руки остаются заняты', () => {
+    S().toggleBuild()
+    const [a, b] = S().placements
+    S().grabPlacement(b.id)
+    const ok = S().dropPlacement(a.gx, a.gz) // ровно на первую грядку
+    expect(ok).toBe(false)
+    expect(S().drag?.id).toBe(b.id)
+    expect(S().placements.find((x) => x.id === b.id)!.gx).toBe(b.gx)
+  })
+
+  it('нельзя опустить за границу двора', () => {
+    S().toggleBuild()
+    const id = S().placements[0].id
+    S().grabPlacement(id)
+    expect(S().dropPlacement(100, 100)).toBe(false)
+  })
+
+  it('статика блокирует клетку', () => {
+    S().setStaticCells([`${-2},${-2}`, `${-1},${-2}`, `${0},${-2}`])
+    S().toggleBuild()
+    const id = S().placements[0].id
+    S().grabPlacement(id)
+    expect(S().dropPlacement(-2, -2)).toBe(false)
+  })
+
+  it('повторный grab по поднятой грядке опускает её на месте', () => {
+    S().toggleBuild()
+    const id = S().placements[0].id
+    S().grabPlacement(id)
+    S().grabPlacement(id)
+    expect(S().drag).toBeNull()
+  })
+
+  it('endDay в день 7 роняет поднятую грядку и выходит из стройки', () => {
+    for (let i = 0; i < 5; i++) S().endDay() // → день 6
+    S().toggleBuild()
+    S().grabPlacement(S().placements[0].id)
+    S().endDay() // день 6 → 7
+    expect(S().buildMode).toBe(false)
+    expect(S().drag).toBeNull()
   })
 })
 

@@ -15,6 +15,11 @@ export const CROP_ASSET: Record<CropId, string> = {
   tomato: 'tomato_bush',
 }
 
+/** Тип объекта на сетке → имя GLB-пропса. */
+export const BUILDABLE_ASSET: Record<string, string> = {
+  raised_bed: 'raised_bed',
+}
+
 export interface PropInstance {
   asset: string
   position: Vec3

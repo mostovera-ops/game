@@ -462,8 +462,45 @@ function Toolbar({
         <>
           <div className="mx-1 h-10 w-px bg-white/15" />
           <Actions />
+          <BuildButton />
         </>
       )}
+    </div>
+  )
+}
+
+/** Кнопка режима планировки: включает сетку и перенос грядок. */
+function BuildButton() {
+  const buildMode = useGameStore((s) => s.buildMode)
+  const toggleBuild = useGameStore((s) => s.toggleBuild)
+  return (
+    <button
+      onClick={toggleBuild}
+      {...hoverTip(buildMode ? 'Выйти из планировки (G)' : 'Планировка двора (G)')}
+      className={`relative grid h-12 w-12 place-items-center rounded-md text-2xl transition ${
+        buildMode ? 'bg-[#6db3f2] text-[#241a20]' : 'bg-white/5 hover:bg-white/10'
+      }`}
+    >
+      🔨
+      <span className="absolute bottom-0 right-1 text-[9px] opacity-60">G</span>
+    </button>
+  )
+}
+
+/** Подсказка поверх экрана, пока идёт планировка двора. */
+function BuildModeBanner() {
+  const buildMode = useGameStore((s) => s.buildMode)
+  const dragging = useGameStore((s) => s.drag !== null)
+  if (!buildMode) return null
+  return (
+    <div className="absolute left-1/2 top-16 -translate-x-1/2">
+      <div className={`${panel} px-4 py-1.5 text-center text-sm`}>
+        {dragging ? (
+          <>Клик — поставить · <b>R</b> — повернуть · <b>Esc</b> — отменить</>
+        ) : (
+          <>Планировка двора · клик по грядке, чтобы взять · <b>G</b> — выйти</>
+        )}
+      </div>
     </div>
   )
 }
@@ -669,6 +706,20 @@ export function HUD() {
       }
       if (inventoryOpen || bookOpen) return // за модалкой инструменты не переключаем
 
+      // Планировка двора: G входит и выходит, R крутит грядку в руках, Esc
+      // отменяет перенос или закрывает режим. Пока грядка в руках, инструменты
+      // не переключаем — цифры и буквы отдыхают.
+      const st = useGameStore.getState()
+      if (e.code === 'KeyG' && phase === 'farm') {
+        st.toggleBuild()
+        return
+      }
+      if (st.buildMode) {
+        if (e.code === 'KeyR') st.rotateDrag()
+        else if (e.code === 'Escape') st.drag ? st.cancelDrag() : st.toggleBuild()
+        return
+      }
+
       // В день торговли цифры подают блюда — ровно в том порядке, в каком они
       // нарисованы на кнопках выдачи, то есть в порядке доступных сейчас блюд.
       if (phase === 'truck') {
@@ -715,6 +766,8 @@ export function HUD() {
           <TruckClock />
         </div>
       )}
+
+      <BuildModeBanner />
 
       <Toasts />
 
