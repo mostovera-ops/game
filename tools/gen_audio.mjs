@@ -34,6 +34,20 @@ const MUSIC = [
     music_length_ms: 60_000,
   },
   {
+    name: 'night-loop',
+    // Та же палитра, что у дневной подложки, но в миноре и вдвое медленнее:
+    // ночь должна читаться как та же ферма, а не как другая игра.
+    prompt:
+      'Slow, sparse, gently eerie instrumental night music for a quiet farm after dark. ' +
+      'Lead: soft felt upright piano playing a simple slow melody in a minor key. ' +
+      'Under it: low sustained string drone, faint celesta, distant soft bells, a little air and reverb. ' +
+      'Very slow tempo around 60 BPM, hushed dynamics, lots of space between notes. ' +
+      'Mysterious and slightly unsettling, but calm and pretty — never frightening, no horror stingers. ' +
+      'No vocals, no drums, no percussion. ' +
+      'Even dynamics and consistent texture from start to finish so it can be looped seamlessly.',
+    music_length_ms: 60_000,
+  },
+  {
     name: 'truck-day-loop',
     prompt:
       'Upbeat, cheerful instrumental background music for a busy food truck market day. ' +
@@ -78,7 +92,8 @@ const SFX = [
   {
     name: 'footstep-grass',
     // Один шаг, не серия: шаги в игре повторяются по таймеру ходьбы.
-    text: 'A single footstep on grass, one soft crunch of dry grass and soil under a shoe, close up, dry recording, then silence. No music, one step only.',
+    // Сухая трава хрустела и резала слух — просим мягкую землю и глухой звук.
+    text: 'A single soft muffled footstep on damp earth and soft grass, one dull low thud, no crunch, no gravel, no twigs, no leaves. Close up, quiet, then silence. No music, one step only.',
     duration_seconds: 1,
   },
   // Блипа реплик здесь нет намеренно: минимум у генератора 0.5 с, а нужен тон
@@ -90,8 +105,16 @@ const SFX = [
   },
   {
     name: 'water-pour',
-    text: 'Water pouring from a watering can onto garden soil, steady gentle stream splashing and soaking in, close up. No music.',
+    // Прошлый вариант хлестал как из ведра. Нужен ситечковый дождик из лейки.
+    text: 'A gentle quiet trickle of water sprinkling from a watering can rose onto garden soil, soft light drizzle soaking in, no splashing, no gushing, no stream. Close up, subdued. No music.',
     duration_seconds: 3,
+  },
+  {
+    name: 'harvest-cut',
+    // Мягкая формулировка дала шорох с максимумом на 1.6 с. Просим один
+    // громкий резкий взмах в самом начале.
+    text: 'One fast sharp scythe swish slicing through wheat stalks, a single strong loud whoosh with a crisp snap of cut stems, right at the start, close microphone, then silence. No music, exactly one cut, no rustling afterwards.',
+    duration_seconds: 2,
   },
 
   // --- день торговли ---
@@ -102,8 +125,18 @@ const SFX = [
   },
   {
     name: 'dish-missed',
-    text: 'A dull muffled bloop, one low pitched wet plop like something soft dropped into water. Short, deadened, then silence. No music.',
+    // У прошлого варианта максимум приходился на 571 мс: бульк опаздывал за
+    // кликом почти на полсекунды. Просим мгновенную атаку с нулевой отметки.
+    text: 'One dull muffled bloop with an immediate sharp attack at the very first instant, low pitched wet plop, very short and deadened, then silence. The sound starts instantly at time zero, no fade in, no build up. No music.',
     duration_seconds: 2,
+  },
+  // Щелчка кнопки здесь нет намеренно: три попытки подряд генератор отдавал
+  // почти тишину (пик 0.006 при просьбе «громкий стук»). Синтезируется
+  // осциллятором — audio/engine.ts, uiClick().
+  {
+    name: 'owl-hoot',
+    text: 'A distant owl hooting twice in a dark forest at night, soft low haunting hoots with a long pause between them, far away. Then silence. No music, no other animals, no wind.',
+    duration_seconds: 4,
   },
   {
     name: 'crowd-murmur',

@@ -3,13 +3,13 @@ import { useGameStore, type NoticeKind } from '../game/store'
 import { playSfx } from './engine'
 import { SFX } from './ambience'
 
-/** Пики файлов: cash-register 0.65, dish-missed 0.137 — отсюда разные усиления. */
+/** Пики файлов: cash-register 0.65, dish-missed 0.487 — отсюда разные усиления. */
 // time-up сюда не входит: это конец дня, а не потерянное блюдо.
 const ON_NOTICE: Partial<Record<NoticeKind, { url: string; gain: number }>> = {
   served: { url: SFX.cashRegister, gain: 0.46 },
   // Заказ упущен: клиент не дождался или игрок сам его пропустил.
-  'customer-left': { url: SFX.dishMissed, gain: 1.6 },
-  skipped: { url: SFX.dishMissed, gain: 1.6 },
+  'customer-left': { url: SFX.dishMissed, gain: 0.33 },
+  skipped: { url: SFX.dishMissed, gain: 0.33 },
 }
 
 /**

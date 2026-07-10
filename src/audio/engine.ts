@@ -134,6 +134,30 @@ export function blip(freq = 380): void {
   osc.stop(t + BLIP_SEC + 0.01)
 }
 
+/**
+ * Щелчок кнопки. Тоже осциллятором: генератор эффектов три раза подряд отдавал
+ * на «громкий короткий стук» почти тишину (пик 0.006).
+ */
+export function uiClick(): void {
+  if (!ctx || !master) return
+
+  const t = ctx.currentTime
+  const osc = ctx.createOscillator()
+  osc.type = 'triangle'
+  // Быстрый спад высоты превращает тон в стук по дереву, а не в писк.
+  osc.frequency.setValueAtTime(760, t)
+  osc.frequency.exponentialRampToValueAtTime(180, t + 0.05)
+
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, t)
+  gain.gain.linearRampToValueAtTime(0.12, t + 0.004)
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.07)
+
+  osc.connect(gain).connect(master)
+  osc.start(t)
+  osc.stop(t + 0.09)
+}
+
 export interface LoopHandle {
   fadeIn: (sec: number) => void
   fadeOut: (sec: number) => void

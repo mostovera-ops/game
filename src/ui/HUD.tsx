@@ -24,6 +24,7 @@ import {
   type RecipeId,
   type Tool,
 } from '../game/store'
+import { uiClick } from '../audio/engine'
 import { getHoveredOrder, subscribeOrderHover } from '../scene/orderHover'
 import { ITEM_EMOJI, ITEM_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
 import { HeroPortrait } from './HeroPortrait'
@@ -525,7 +526,10 @@ function FarmAction() {
   const endDay = useGameStore((s) => s.endDay)
   return (
     <button
-      onClick={endDay}
+      onClick={() => {
+        uiClick()
+        endDay()
+      }}
       className="pointer-events-auto rounded-md bg-[#6b8f3f] px-4 py-2 text-sm font-bold text-[#f0e4c9] transition hover:brightness-110"
     >
       Закончить день →
@@ -676,7 +680,10 @@ function WeekSummary() {
         </p>
         <p className="text-2xl font-bold text-[#ff8b5e]">💰 {money}</p>
         <button
-          onClick={nextWeek}
+          onClick={() => {
+            uiClick()
+            nextWeek()
+          }}
           className="mt-1 rounded-md bg-[#6b8f3f] px-5 py-2 text-sm font-bold text-[#f0e4c9] transition hover:brightness-110"
         >
           Новая неделя →
