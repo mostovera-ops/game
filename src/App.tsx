@@ -6,6 +6,7 @@ import { Perf } from 'r3f-perf'
 import { Farm } from './scene/Farm'
 import { HUD } from './ui/HUD'
 import { useAmbience } from './audio/useAmbience'
+import { useGameSfx } from './audio/useGameSfx'
 
 interface CamState {
   pos: [number, number, number]
@@ -121,6 +122,7 @@ const START = FRAME_SCENE === 'truck' ? TRUCK_CAM : FARM_CAM
 export default function App() {
   // В режиме кадрирования звук не нужен.
   useAmbience(FRAME_SCENE === null)
+  useGameSfx(FRAME_SCENE === null)
   return (
     <div className="relative h-full w-full">
       <Canvas flat shadows dpr={[1, 2]}>

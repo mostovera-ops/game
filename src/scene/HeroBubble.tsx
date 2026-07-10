@@ -8,9 +8,10 @@
  * плоскость под самую длинную значило бы гонять пустое поле над головой.
  * Billboard разворачивает облачко к камере, поэтому поворот героя ему не важен.
  */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { Billboard } from '@react-three/drei'
+import { blip } from '../audio/engine'
 
 const W = 512 // ширина холста; высота зависит от числа строк
 const PAD = 30 // отступ текста от рамки
@@ -62,13 +63,29 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): st
   return lines
 }
 
-function drawBubble(text: string): { texture: THREE.CanvasTexture; height: number } {
+/**
+ * Рисует облачко. Раскладка всегда считается по полному тексту, а показывается
+ * только первые `shown` символов: иначе облачко прыгало бы по мере набора.
+ */
+function drawBubble(
+  text: string,
+  shown: number,
+): { texture: THREE.CanvasTexture; height: number } {
   // Первый холст — только чтобы померить текст и узнать высоту итогового.
   const measure = document.createElement('canvas').getContext('2d')
   if (!measure) throw new Error('HeroSpeech: 2d-контекст недоступен')
   measure.font = FONT
   const maxWidth = W - 2 * (PAD + BORDER)
-  const lines = wrap(measure, text, maxWidth)
+  const full = wrap(measure, text, maxWidth)
+
+  // Режем строки по счётчику символов. Перенос строки съедает пробел, поэтому
+  // после каждой строки, кроме последней, счётчик уменьшается ещё на единицу.
+  let left = shown
+  const lines = full.map((line, i) => {
+    const visible = line.slice(0, Math.max(0, left))
+    left -= line.length + (i < full.length - 1 ? 1 : 0)
+    return visible
+  })
 
   const bodyH = 2 * PAD + lines.length * LINE
   const H = bodyH + TAIL
@@ -119,8 +136,25 @@ function drawBubble(text: string): { texture: THREE.CanvasTexture; height: numbe
   return { texture, height: H }
 }
 
+/** Пауза между буквами при наборе. */
+const CHAR_MS = 38
+
 export function HeroBubble({ text }: { text: string }) {
-  const { texture, height } = useMemo(() => drawBubble(text), [text])
+  const [shown, setShown] = useState(0)
+
+  useEffect(() => setShown(0), [text])
+
+  useEffect(() => {
+    if (shown >= text.length) return
+    const id = window.setTimeout(() => {
+      // Блип только на видимый символ: на пробелах реплика молчит.
+      if (!/\s/.test(text[shown])) blip()
+      setShown(shown + 1)
+    }, CHAR_MS)
+    return () => window.clearTimeout(id)
+  }, [shown, text])
+
+  const { texture, height } = useMemo(() => drawBubble(text, shown), [text, shown])
   useEffect(() => () => texture.dispose(), [texture])
 
   const planeH = PLANE_W * (height / W)

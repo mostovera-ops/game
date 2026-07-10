@@ -43,4 +43,5 @@ export function getSpeech(): string | null {
 // Доступ из DevTools и автопроверок. В прод-сборку не попадает.
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   ;(window as unknown as { __speech?: unknown }).__speech = getSpeech
+  ;(window as unknown as { __say?: unknown }).__say = say
 }

@@ -34,6 +34,8 @@ import { applyEyes, Blinker, collectEyes, gazeTarget } from './heroEyes'
 import { pointerNDC, trackPointer } from './pointer'
 import { HeroBubble } from './HeroBubble'
 import { HERO_SEAT, yawTo as faceTo } from './truckStage'
+import { playSfx } from '../audio/engine'
+import { SFX } from '../audio/ambience'
 
 const HERO_URL = '/assets/props/hero.glb'
 useGLTF.preload(HERO_URL)
@@ -163,6 +165,8 @@ export function Hero({
   const group = useRef<THREE.Group>(null)
   const phase = useRef(0)
   const amp = useRef(0)
+  // Нога касается земли на каждом полупериоде качания: считаем эти полупериоды.
+  const halfSteps = useRef(0)
 
   // Без этого цель осталась бы в мировом нуле и герой на старте пошёл бы в дом.
   useEffect(() => {
@@ -284,7 +288,16 @@ export function Hero({
       const delta = shortestArc(g.rotation.y, yawTo(vx, vz))
       g.rotation.y += delta * (1 - Math.exp(-TURN_LAMBDA * dt))
 
-      if (moved) phase.current += STEP_RATE * dt
+      if (moved) {
+        phase.current += STEP_RATE * dt
+        // Шаг звучит по факту сдвига, а не по нажатой клавише: упёршись в стену,
+        // герой перебирает ногами беззвучно — phase стоит вместе с ним.
+        const half = Math.floor(phase.current / Math.PI)
+        if (half !== halfSteps.current) {
+          halfSteps.current = half
+          playSfx(SFX.footstep, { gain: 0.5, rate: [0.9, 1.1], pan: [-0.25, 0.25] })
+        }
+      }
 
       // Идём по клику и упёрлись в препятствие: цель недостижима, бросаем её,
       // иначе герой будет вечно перебирать ногами в стену.
