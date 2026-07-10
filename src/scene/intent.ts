@@ -9,6 +9,7 @@
  * его через React незачем. Отдельный модуль по той же причине, что heroTarget:
  * экспорт не-компонента из файла с компонентом ломает Fast Refresh.
  */
+import type { ForageId } from '../game/store'
 import { hero } from './heroState'
 
 interface Target {
@@ -32,6 +33,8 @@ export type Intent =
   | (Target & { kind: 'shop' })
   /** Подойти к пропсу и произнести реплику. */
   | (Target & { kind: 'speak'; text: string })
+  /** Подойти к находке в лесу и подобрать её. */
+  | (Target & { kind: 'forage'; id: string; item: ForageId })
 
 export const intent: { current: Intent | null } = { current: null }
 

@@ -99,20 +99,6 @@
       ]
     },
     {
-      "asset": "ladybug",
-      "position": [
-        5.9248,
-        0.4945,
-        0.6962
-      ],
-      "rotationY": 0.0,
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
       "asset": "seed_store",
       "position": [
         1.0555,

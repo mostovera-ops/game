@@ -232,7 +232,7 @@ def collect():
     """
     cats = {
         "house": [], "greenhouse": [], "food_truck": [], "brick_path": [],
-        "log_table": [], "sit_log": [], "ladybug": [], "raised_bed": [],
+        "log_table": [], "sit_log": [], "raised_bed": [],
         "carrot": [], "greens": [], "tomato_bush": [], "tree": [], "bush": [],
     }
 
@@ -242,7 +242,6 @@ def collect():
         "FoodTruck": "food_truck",
         "BrickPath": "brick_path",
         "LogTable": "log_table",
-        "Ladybug": "ladybug",
     }
 
     for obj in bpy.data.objects:
@@ -283,7 +282,7 @@ def collect():
 # Растения (carrot/greens/tomato_bush) НЕ идут — они появляются в plots[].slots.
 # RaisedBed НЕ идёт — она в plots[].bed. Ground рисуется кодом.
 LAYOUT_PROPS = ["house", "greenhouse", "food_truck", "brick_path",
-                "log_table", "sit_log", "ladybug", "tree", "bush"]
+                "log_table", "sit_log", "tree", "bush"]
 
 # Офсеты 3 слотов посадки по X от центра грядки (CLAUDE.md).
 # Симметрично: центр + два края, внутри почвы (её полуширина 0.736).
@@ -397,14 +396,14 @@ def main():
     counts = {}     # asset -> число инстансов в сцене
 
     all_assets = ["house", "greenhouse", "food_truck", "brick_path",
-                  "raised_bed", "log_table", "sit_log", "ladybug",
+                  "raised_bed", "log_table", "sit_log",
                   "carrot", "greens", "tomato_bush", "tree", "bush"]
 
     # Одиночные пропсы: поворот запекаем в GLB (rotationY=0 в layout).
     # Остальные (деревья/кусты для инстансинга, грядки и растения, которые
     # игра сама ставит/поворачивает) — каноническая, не повёрнутая геометрия.
     BAKE_ROTATION = {"house", "greenhouse", "food_truck", "brick_path",
-                     "log_table", "sit_log", "ladybug"}
+                     "log_table", "sit_log"}
 
     for asset in all_assets:
         objs = cats[asset]

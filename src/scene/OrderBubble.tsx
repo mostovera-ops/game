@@ -1,9 +1,9 @@
 /**
  * Облачко заказа над клиентом: что он хочет и сколько ещё подождёт.
  *
- * Эмодзи блюда рисуется в canvas один раз на рецепт (три текстуры на всю игру),
- * а полоса терпения — отдельный меш: она меняется каждый кадр, и перерисовывать
- * ради неё холст было бы расточительно.
+ * Эмодзи блюда рисуется в canvas один раз на рецепт (по текстуре на блюдо,
+ * пять на всю игру), а полоса терпения — отдельный меш: она меняется каждый
+ * кадр, и перерисовывать ради неё холст было бы расточительно.
  */
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -12,7 +12,14 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { type RecipeId } from '../game/store'
 import { hoverOrder, unhoverOrder } from './orderHover'
 
-const RECIPE_GLYPH: Record<RecipeId, string> = { salad: '🥗', soup: '🍲', taco: '🌮' }
+// Свой список, а не ui/crops: сцена в HUD не заглядывает. Держим в согласии.
+const RECIPE_GLYPH: Record<RecipeId, string> = {
+  salad: '🥗',
+  soup: '🍲',
+  taco: '🌮',
+  mushroom_soup: '🍜',
+  omelette: '🍳',
+}
 
 const W = 192
 const H = 168

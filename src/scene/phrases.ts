@@ -13,13 +13,8 @@
 const TRUCK = 'Он поможет мне разбогатеть!'
 const TRUCK_NAME = 'Фудтрак'
 const LOG = 'Совсем скоро я смогу посидеть тут.'
-const LADYBUG = 'Она почему-то зависла и не летит. Может позже починят.'
 
 export const PHRASES: Record<string, string> = {
-  // Божья коровка
-  LadybugRed: LADYBUG,
-  LadybugBlack: LADYBUG,
-
   // Дом: только окно и дверь. Стена и крыша молчат.
   Window: 'Не хотелось бы его разбить.',
   Door: 'Пока рано отдыхать.',
@@ -62,6 +57,11 @@ export const PHRASES: Record<string, string> = {
  * Земли здесь нет: клик по траве — это приказ идти, а не разглядывание.
  */
 const HOUSE = 'Дом'
+const MUSHROOM = 'Гриб'
+const NEST = 'Птичье гнездо'
+const BIRD = 'Птица'
+const RABBIT = 'Заяц'
+const BOAR = 'Кабан'
 const TREE = 'Ель'
 const GREENHOUSE = 'Теплица'
 const STORE = 'Лавка семян'
@@ -86,8 +86,34 @@ export const PROP_NAMES: Record<string, string> = {
   WoodLog: 'Бревно',
   TableTop: 'Стол-пенёк',
 
-  LadybugRed: 'Божья коровка',
-  LadybugBlack: 'Божья коровка',
+  // Лесные находки и живность. Букашки мелкие, но подпись у них тоже своя.
+  MushroomCap: MUSHROOM,
+  MushroomStem: MUSHROOM,
+  MushroomSpot: MUSHROOM,
+  NestTwig: NEST,
+  NestEgg: NEST,
+
+  LadybugShell: 'Божья коровка',
+  LadybugSpot: 'Божья коровка',
+  BeeBody: 'Пчела',
+  BeeStripe: 'Пчела',
+  BeetleBody: 'Жук',
+  BeetleShell: 'Жук',
+  ButterflyBody: 'Бабочка',
+  ButterflyWing: 'Бабочка',
+
+  BirdBody: BIRD,
+  BirdWing: BIRD,
+  BirdBeak: BIRD,
+  BirdEye: BIRD,
+  RabbitFur: RABBIT,
+  RabbitEye: RABBIT,
+  RabbitTail: RABBIT,
+  BoarHide: BOAR,
+  BoarSnout: BOAR,
+  BoarTusk: BOAR,
+  BoarEye: BOAR,
+
 
   GreenhouseFrame: GREENHOUSE,
   GreenhouseGlass: GREENHOUSE,

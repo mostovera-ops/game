@@ -6,8 +6,8 @@
  * герой должен остаться перекрашенным после перезагрузки.
  */
 import { useEffect } from 'react'
-import { CROPS, HERO_COLORS, useGameStore } from '../game/store'
-import { CROP_EMOJI, CROP_NAME } from './crops'
+import { CROPS, FORAGE_IDS, HERO_COLORS, useGameStore } from '../game/store'
+import { ITEM_EMOJI, ITEM_NAME } from './crops'
 import { HeroPortrait } from './HeroPortrait'
 
 export function Inventory({ onClose }: { onClose: () => void }) {
@@ -89,10 +89,10 @@ export function Inventory({ onClose }: { onClose: () => void }) {
                 {CROPS.map((c) => (
                   <div
                     key={c}
-                    title={`${CROP_NAME[c]}: урожай ${inventory[c]}, семян ${seeds[c]}`}
+                    title={`${ITEM_NAME[c]}: урожай ${inventory[c]}, семян ${seeds[c]}`}
                     className="flex items-center gap-2 rounded bg-white/5 px-3 py-2 text-sm"
                   >
-                    <span>{CROP_EMOJI[c]}</span>
+                    <span>{ITEM_EMOJI[c]}</span>
                     <span className="font-bold">{inventory[c]}</span>
                     <span className="opacity-40">·</span>
                     <span className="opacity-60">🌱 {seeds[c]}</span>
@@ -101,6 +101,27 @@ export function Inventory({ onClose }: { onClose: () => void }) {
                 <div className="flex items-center gap-2 rounded bg-white/5 px-3 py-2 text-sm font-bold text-[#f4b942]">
                   💰 {money}
                 </div>
+              </div>
+            </div>
+
+            {/* Находки — без семян: их не сеют, а приносят из леса. */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[9px] uppercase tracking-wide opacity-50">
+                Находки из леса
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {FORAGE_IDS.map((f) => (
+                  <div
+                    key={f}
+                    title={ITEM_NAME[f]}
+                    className={`flex items-center gap-2 rounded bg-white/5 px-3 py-2 text-sm ${
+                      inventory[f] ? '' : 'opacity-30'
+                    }`}
+                  >
+                    <span>{ITEM_EMOJI[f]}</span>
+                    <span className="font-bold">{inventory[f]}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

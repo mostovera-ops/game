@@ -11,16 +11,16 @@
  *
  * Чистые функции без React и без zustand: их зовёт стор, а тесты — напрямую.
  */
-import type { CropId, Inventory } from './store'
-import { CROPS } from './store'
+import type { CropId, Inventory, ItemId, Seeds } from './store'
+import { CROPS, ITEM_IDS } from './store'
 
 export const TOOLBAR_CELLS = 10
 
 export type ToolbarItem =
   /** Пакетик семян: клик берёт их в руки. */
   | { kind: 'seed'; crop: CropId }
-  /** Собранный урожай: кликать нечего, только счётчик. */
-  | { kind: 'crop'; crop: CropId }
+  /** Добро в сумке — урожай или лесная находка. Кликать нечего, только счётчик. */
+  | { kind: 'item'; item: ItemId }
 
 export type ToolbarLayout = (ToolbarItem | null)[]
 
@@ -29,11 +29,16 @@ export function emptyToolbar(): ToolbarLayout {
 }
 
 /** Сколько штук этого предмета у героя. Ноль — предмета нет. */
-export function itemCount(item: ToolbarItem, seeds: Inventory, inventory: Inventory): number {
-  return item.kind === 'seed' ? seeds[item.crop] : inventory[item.crop]
+export function itemCount(cell: ToolbarItem, seeds: Seeds, inventory: Inventory): number {
+  return cell.kind === 'seed' ? seeds[cell.crop] : inventory[cell.item]
 }
 
-const same = (a: ToolbarItem, b: ToolbarItem) => a.kind === b.kind && a.crop === b.crop
+/** Что за предмет лежит в ячейке — для подписей и сравнений. */
+export function itemId(cell: ToolbarItem): ItemId {
+  return cell.kind === 'seed' ? cell.crop : cell.item
+}
+
+const same = (a: ToolbarItem, b: ToolbarItem) => a.kind === b.kind && itemId(a) === itemId(b)
 
 /**
  * Приводит раскладку в соответствие с тем, чем герой владеет.
@@ -46,7 +51,7 @@ const same = (a: ToolbarItem, b: ToolbarItem) => a.kind === b.kind && a.crop ===
  */
 export function reconcileToolbar(
   layout: ToolbarLayout,
-  seeds: Inventory,
+  seeds: Seeds,
   inventory: Inventory,
 ): ToolbarLayout {
   const next: ToolbarLayout = layout
@@ -57,7 +62,7 @@ export function reconcileToolbar(
   const present = (item: ToolbarItem) => next.some((x) => x && same(x, item))
   const wanted: ToolbarItem[] = [
     ...CROPS.map((crop): ToolbarItem => ({ kind: 'seed', crop })),
-    ...CROPS.map((crop): ToolbarItem => ({ kind: 'crop', crop })),
+    ...ITEM_IDS.map((item): ToolbarItem => ({ kind: 'item', item })),
   ]
 
   for (const item of wanted) {

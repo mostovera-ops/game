@@ -10,31 +10,26 @@
  * отдаёт вид события, текст собирается здесь.
  *
  * По I открывается инвентарь героя — портрет и цвет одежды. E берёт в руки
- * руку: сбор урожая — действие частое, и буква под ним самая удобная.
+ * руку: собирать урожай приходится чаще, чем разглядывать портрет.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   craftableCount,
-  RECIPE_IDS,
   RECIPES,
   useGameStore,
-  type CropId,
+  type ItemId,
   type Notice,
   type RecipeId,
   type Tool,
 } from '../game/store'
 import { getHoveredOrder, subscribeOrderHover } from '../scene/orderHover'
-import { CROP_EMOJI, CROP_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
+import { ITEM_EMOJI, ITEM_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
 import { HeroPortrait } from './HeroPortrait'
 import { Inventory } from './Inventory'
+import { RecipeBook } from './RecipeBook'
 import { SeedPacket } from './SeedPacket'
 import { Shop } from './Shop'
-import {
-  hotkeyFor,
-  itemCount,
-  TOOLBAR_CELLS,
-  type ToolbarItem,
-} from '../game/toolbar'
+import { hotkeyFor, itemCount, itemId, TOOLBAR_CELLS, type ToolbarItem } from '../game/toolbar'
 import { getHoverLabel, subscribeHoverLabel } from '../scene/hoverLabel'
 
 /** Клавиши ячеек тулбара в их порядке: 1…9, 0. */
@@ -70,8 +65,15 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
       return { text: 'Время вышло — ярмарка закрыта', tone: 'warn' }
     case 'harvest':
       return n.amount! > 1
-        ? { text: `Удачный сбор! ${CROP_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
-        : { text: `${CROP_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
+        ? { text: `Удачный сбор! ${ITEM_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
+        : { text: `${ITEM_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
+    case 'foraged':
+      return { text: `Находка: ${ITEM_EMOJI[n.item!]} ${ITEM_NAME[n.item!]}`, tone: 'good' }
+    case 'recipe-found':
+      return {
+        text: `Новый рецепт: ${RECIPE_EMOJI[n.recipe!]} ${RECIPE_NAME[n.recipe!]} — смотрите книгу (B)`,
+        tone: 'good',
+      }
     case 'withered':
       return {
         text: `Без полива погибло растений: ${n.amount}`,
@@ -81,13 +83,13 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
       return { text: 'Слишком далеко — подойдите к грядке', tone: 'warn' }
     case 'no-seeds':
       return {
-        text: `${CROP_NAME[n.crop!]}: семена кончились — купите в лавке`,
+        text: `${ITEM_NAME[n.crop!]}: семена кончились — купите в лавке`,
         tone: 'warn',
       }
     case 'no-money':
       return { text: 'Не хватает денег', tone: 'bad' }
     case 'bought':
-      return { text: `Куплено семян: ${CROP_EMOJI[n.crop!]} ×${n.amount}`, tone: 'good' }
+      return { text: `Куплено семян: ${ITEM_EMOJI[n.crop!]} ×${n.amount}`, tone: 'good' }
     case 'skipped':
       return {
         text: `Заказ пропущен: ${RECIPE_EMOJI[n.recipe!]} ${RECIPE_NAME[n.recipe!]}`,
@@ -263,12 +265,6 @@ const ACTIONS: {
   },
 ]
 
-/** Подпись предмета для ховера: «Семена Томата ×3», «Морковь ×2». */
-function itemHint(item: ToolbarItem, count: number): string {
-  const name = CROP_NAME[item.crop]
-  return item.kind === 'seed' ? `Семена: ${name} ×${count}` : `${name} ×${count}`
-}
-
 /** Лейка и рука: не имущество, а действия — поэтому отдельно от ячеек. */
 function Actions() {
   const tool = useGameStore((s) => s.tool)
@@ -291,6 +287,12 @@ function Actions() {
   )
 }
 
+/** Подпись предмета для ховера: «Семена: Томат ×3», «Гриб ×1». */
+function itemHint(cell: ToolbarItem, count: number): string {
+  const name = ITEM_NAME[itemId(cell)]
+  return cell.kind === 'seed' ? `Семена: ${name} ×${count}` : `${name} ×${count}`
+}
+
 /**
  * Ячейка тулбара. Она же цель перетаскивания: предмет держится своей ячейки,
  * пока игрок сам его не перенесёт, а пустая ячейка остаётся пустой — соседи
@@ -299,7 +301,7 @@ function Actions() {
  * Дроп в занятую ячейку меняет предметы местами: промахнувшись, игрок не
  * должен терять то, что нёс.
  */
-function ToolbarCell({ index, item }: { index: number; item: ToolbarItem | null }) {
+function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null }) {
   const selectedSeed = useGameStore((s) => s.selectedSeed)
   const tool = useGameStore((s) => s.tool)
   const seeds = useGameStore((s) => s.seeds)
@@ -319,10 +321,9 @@ function ToolbarCell({ index, item }: { index: number; item: ToolbarItem | null 
     e.preventDefault()
     setOver(true)
   }
-
   const ring = over ? 'ring-2 ring-[#f4b942]' : ''
 
-  if (!item) {
+  if (!cell) {
     // Пустая ячейка: рамка есть, содержимого нет. Цифру не пишем — нажимать
     // нечего, а подписанная клавиша обещала бы действие.
     return (
@@ -335,13 +336,13 @@ function ToolbarCell({ index, item }: { index: number; item: ToolbarItem | null 
     )
   }
 
-  const count = itemCount(item, seeds, inventory)
-  const hint = itemHint(item, count)
+  const count = itemCount(cell, seeds, inventory)
+  const hint = itemHint(cell, count)
   // В день торговли цифры подают блюда: подписывать ими ячейки значило бы
   // обещать то, чего не будет.
   const hotkey = phase === 'farm' ? hotkeyFor(index) : ''
 
-  const common = {
+  const drag = {
     draggable: true,
     onDragStart: (e: React.DragEvent) => e.dataTransfer.setData('text/toolbar-cell', String(index)),
     onDragOver: dragOver,
@@ -349,32 +350,32 @@ function ToolbarCell({ index, item }: { index: number; item: ToolbarItem | null 
     onDrop: drop,
   }
 
-  if (item.kind === 'seed') {
-    const active = tool === 'seed' && selectedSeed === item.crop
+  if (cell.kind === 'seed') {
+    const active = tool === 'seed' && selectedSeed === cell.crop
     return (
-      <div {...common} className={`rounded-md ${ring}`}>
+      <div {...drag} className={`rounded-md ${ring}`}>
         <ToolButton
           active={active}
           activeClass="bg-[#9fc25f]"
           hint={hint}
           hotkey={hotkey}
-          onClick={() => selectSeed(item.crop)}
+          onClick={() => selectSeed(cell.crop)}
         >
-          <SeedPacket crop={item.crop} active={active} />
+          <SeedPacket crop={cell.crop} active={active} />
           <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
         </ToolButton>
       </div>
     )
   }
 
-  // Урожай: он не инструмент, кликать нечего — только счётчик.
+  // Урожай и находки: они не инструмент, кликать нечего — только счётчик.
   return (
     <div
-      {...common}
+      {...drag}
       title={hint}
       className={`relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl ${ring}`}
     >
-      <span>{CROP_EMOJI[item.crop]}</span>
+      <span>{ITEM_EMOJI[cell.item]}</span>
       <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
     </div>
   )
@@ -388,7 +389,13 @@ function ToolbarCell({ index, item }: { index: number; item: ToolbarItem | null 
  * разных списка. Чего нет — того нет: ни нулей, ни приглушённых иконок.
  * Действия отделены чертой: они не имущество, их нельзя потратить.
  */
-function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
+function Toolbar({
+  onOpenInventory,
+  onOpenBook,
+}: {
+  onOpenInventory: () => void
+  onOpenBook: () => void
+}) {
   const phase = useGameStore((s) => s.phase)
   const heroColor = useGameStore((s) => s.heroColor)
   const toolbar = useGameStore((s) => s.toolbar)
@@ -404,10 +411,19 @@ function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
         <span className="absolute bottom-0 right-1 text-[9px] opacity-60">I</span>
       </button>
 
+      <button
+        onClick={onOpenBook}
+        title="Книга рецептов (B)"
+        className="relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl transition hover:bg-white/10"
+      >
+        📖
+        <span className="absolute bottom-0 right-1 text-[9px] opacity-60">B</span>
+      </button>
+
       <div className="mx-1 h-10 w-px bg-white/15" />
 
-      {toolbar.map((item, i) => (
-        <ToolbarCell key={i} index={i} item={item} />
+      {toolbar.map((cell, i) => (
+        <ToolbarCell key={i} index={i} cell={cell} />
       ))}
 
       {/* Действия — только на ферме: в день торговли грядки на замке. */}
@@ -473,16 +489,19 @@ function DishCard({ recipe }: { recipe: RecipeId }) {
   )
 }
 
+/** Выдавать можно только освоенное: клиенты и заказывают только его. */
 function TruckAction() {
   const skipCustomer = useGameStore((s) => s.skipCustomer)
   // Пропускать нечего, пока первый в очереди не дошёл до окна и не заказал.
   const hasOrder = useGameStore((s) => !!s.truck?.queue[0]?.want)
+  const knownRecipes = useGameStore((s) => s.knownRecipes)
 
   return (
     <div className={`${panel} flex flex-col items-start gap-1.5 p-2`}>
       <span className="px-1 text-[9px] uppercase tracking-wide opacity-50">выдать</span>
-      <div className="flex items-center gap-2">
-        {RECIPE_IDS.map((r) => (
+      {/* Рецептов может стать пять — на узком экране ряд переносится. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {knownRecipes.map((r) => (
           <DishCard key={r} recipe={r} />
         ))}
 
@@ -521,7 +540,7 @@ function OrderTooltip() {
         <span>{RECIPE_NAME[hovered.recipe]}</span>
         <span className="ml-auto">{RECIPES[hovered.recipe].price}💰</span>
       </div>
-      {(Object.keys(needs) as CropId[]).map((c) => {
+      {(Object.keys(needs) as ItemId[]).map((c) => {
         const need = needs[c] ?? 0
         const have = inventory[c]
         return (
@@ -532,7 +551,7 @@ function OrderTooltip() {
             }`}
           >
             <span>
-              {CROP_EMOJI[c]} {CROP_NAME[c]}
+              {ITEM_EMOJI[c]} {ITEM_NAME[c]}
             </span>
             <span className="font-mono">
               {have}/{need}
@@ -596,11 +615,13 @@ function WeekSummary() {
 export function HUD() {
   const phase = useGameStore((s) => s.phase)
   const toolbar = useGameStore((s) => s.toolbar)
+  const knownRecipes = useGameStore((s) => s.knownRecipes)
   const selectSeed = useGameStore((s) => s.selectSeed)
   const selectTool = useGameStore((s) => s.selectTool)
   const serveCustomer = useGameStore((s) => s.serveCustomer)
   const shopOpen = useGameStore((s) => s.shopOpen)
   const [inventoryOpen, setInventoryOpen] = useState(false)
+  const [bookOpen, setBookOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -610,12 +631,17 @@ export function HUD() {
         setInventoryOpen((v) => !v)
         return
       }
-      if (inventoryOpen) return // за модалкой инструменты не переключаем
+      if (e.code === 'KeyB') {
+        setBookOpen((v) => !v)
+        return
+      }
+      if (inventoryOpen || bookOpen) return // за модалкой инструменты не переключаем
 
-      // В день торговли цифры подают блюда: тулбар там держит только урожай.
+      // В день торговли цифры подают блюда — ровно в том порядке, в каком они
+      // нарисованы на кнопках выдачи, то есть в порядке освоенных рецептов.
       if (phase === 'truck') {
-        const dish = { '1': 0, '2': 1, '3': 2 }[e.key]
-        if (dish !== undefined) serveCustomer(RECIPE_IDS[dish])
+        const dish = TOOLBAR_KEYS.indexOf(e.key)
+        if (dish >= 0 && dish < knownRecipes.length) serveCustomer(knownRecipes[dish])
         return
       }
 
@@ -629,12 +655,22 @@ export function HUD() {
       // На ферме цифра — номер ячейки тулбара, ровно та, что под ней нарисована.
       const index = TOOLBAR_KEYS.indexOf(e.key)
       if (index < 0) return
-      const item = toolbar[index]
-      if (item?.kind === 'seed') selectSeed(item.crop)
+      const cell = toolbar[index]
+      if (cell?.kind === 'seed') selectSeed(cell.crop)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, toolbar, selectSeed, selectTool, serveCustomer, inventoryOpen, shopOpen])
+  }, [
+    phase,
+    toolbar,
+    knownRecipes,
+    selectSeed,
+    selectTool,
+    serveCustomer,
+    inventoryOpen,
+    bookOpen,
+    shopOpen,
+  ])
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none p-4 font-mono text-[#f0e4c9]">
@@ -651,7 +687,10 @@ export function HUD() {
       {/* Нижний ряд: экипировка героя слева, действие фазы справа.
           На узком экране переносится, иначе кнопка фазы уезжает за край. */}
       <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-end justify-between gap-3">
-        <Toolbar onOpenInventory={() => setInventoryOpen(true)} />
+        <Toolbar
+          onOpenInventory={() => setInventoryOpen(true)}
+          onOpenBook={() => setBookOpen(true)}
+        />
         {phase === 'farm' ? <FarmAction /> : <TruckAction />}
       </div>
 
@@ -659,6 +698,7 @@ export function HUD() {
       <SceneTooltip />
 
       {inventoryOpen && <Inventory onClose={() => setInventoryOpen(false)} />}
+      {bookOpen && <RecipeBook onClose={() => setBookOpen(false)} />}
       {shopOpen && <Shop />}
 
       <WeekSummary />

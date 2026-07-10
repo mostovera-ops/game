@@ -31,6 +31,7 @@ import { say } from './heroSpeech'
 import { PHRASES, PROP_NAMES } from './phrases'
 import { clearAllHoverLabels, clearHoverLabel, setHoverLabel } from './hoverLabel'
 import { HATCH_LAMBDA, HATCH_OPEN } from './truckStage'
+import { Wildlife } from './wildlife/Wildlife'
 
 export interface CamView {
   pos: Vec3
@@ -48,7 +49,6 @@ const SINGLETON_ASSETS = [
   'brick_path',
   'log_table',
   'sit_log',
-  'ladybug',
   'seed_store',
 ] as const
 
@@ -64,7 +64,7 @@ const PLANT_ASSETS = ['raised_bed', 'carrot', 'greens', 'tomato_bush'] as const
 // Камера фермы (FARM_CAM в App.tsx) нацелена сюда же — герой стоит в центре кадра.
 const HERO_START: Vec3 = [2.17, 0, -0.39]
 
-// Через что герой не проходит. Дорожка и божья коровка — не препятствия.
+// Через что герой не проходит. Дорожка — не препятствие.
 const SOLID_SINGLETONS = [
   'house',
   'greenhouse',
@@ -140,6 +140,12 @@ function Interactions() {
       }
     }
 
+    // Наступил новый день, пока герой шёл через лес, — находка уже не та.
+    if (it.kind === 'forage' && st.takenForage.includes(it.id)) {
+      clearIntent()
+      return
+    }
+
     if (distanceToHero(it.x, it.z) <= it.reach) {
       // Дошёл — дальше идти незачем, иначе упрётся в борт грядки.
       heroTarget.set(hero.pos.x, 0, hero.pos.z)
@@ -149,6 +155,7 @@ function Interactions() {
 
       if (it.kind === 'shop') st.openShop()
       else if (it.kind === 'speak') say(it.text)
+      else if (it.kind === 'forage') st.collectForage(it.id, it.item)
       else if (st.tool === 'can') {
         st.water(it.id)
         playSfx(SFX.waterPour, { gain: 0.9, rate: [0.95, 1.05] })
@@ -654,6 +661,7 @@ export function Farm({
       <Beds plots={layout.plots} palette={palette} />
       <Hero palette={palette} start={HERO_START} colliders={colliders} />
       <Customers palette={palette} />
+      <Wildlife layout={layout} palette={palette} />
       {slotPositions.map((s) => (
         <Slot key={s.id} slotId={s.id} position={s.position} palette={palette} />
       ))}

@@ -9,15 +9,20 @@
  */
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import {
-  emptyToolbar,
-  moveItem,
-  reconcileToolbar,
-  type ToolbarLayout,
-} from './toolbar'
+import { emptyToolbar, moveItem, reconcileToolbar, type ToolbarLayout } from './toolbar'
 
 export type CropId = 'carrot' | 'greens' | 'tomato'
-export type RecipeId = 'salad' | 'soup' | 'taco'
+
+/**
+ * Лесные находки. Их не сажают и не покупают — их находят, поэтому у них нет
+ * ни семян, ни цены. Отдельный тип от CropId: в грядку гриб не воткнёшь.
+ */
+export type ForageId = 'mushroom' | 'egg'
+
+/** Всё, что лежит в сумке героя: и урожай, и находки. */
+export type ItemId = CropId | ForageId
+
+export type RecipeId = 'salad' | 'soup' | 'taco' | 'mushroom_soup' | 'omelette'
 export type Phase = 'farm' | 'truck'
 export type Stage = 0 | 1 | 2
 
@@ -73,19 +78,26 @@ export type NoticeKind =
   | 'no-money'
   | 'bought'
   | 'skipped'
+  | 'foraged'
+  | 'recipe-found'
 
 export interface Notice {
   id: number
   kind: NoticeKind
   recipe?: RecipeId
   crop?: CropId
+  item?: ForageId
   amount?: number
 }
 
 /** Сколько тостов держим на экране одновременно. */
 const MAX_NOTICES = 4
 
-export type Inventory = Record<CropId, number>
+/** Сумка героя. Находки лежат в ней рядом с урожаем — тратятся они одинаково. */
+export type Inventory = Record<ItemId, number>
+
+/** Семена на руках. Только культуры: находки не сеют. */
+export type Seeds = Record<CropId, number>
 
 /**
  * Цвет одежды героя. Хранится строкой `#rrggbb`: сцена красит им материал
@@ -116,6 +128,11 @@ export const SLOT_IDS: SlotId[] = Array.from({ length: BEDS }, (_, bed) =>
 
 export const CROPS: CropId[] = ['carrot', 'greens', 'tomato']
 
+export const FORAGE_IDS: ForageId[] = ['mushroom', 'egg']
+
+/** Порядок ячеек в сумке: сперва урожай, потом находки. */
+export const ITEM_IDS: ItemId[] = [...CROPS, ...FORAGE_IDS]
+
 /** Индекс грядки из slotId (`${bed}:${slot}`). */
 export function bedOf(slotId: SlotId): number {
   return Number(slotId.split(':')[0])
@@ -123,11 +140,24 @@ export function bedOf(slotId: SlotId): number {
 
 export const RECIPES: Record<
   RecipeId,
-  { needs: Partial<Record<CropId, number>>; price: number }
+  { needs: Partial<Record<ItemId, number>>; price: number }
 > = {
   salad: { needs: { tomato: 1, greens: 1 }, price: 8 },
   soup: { needs: { carrot: 2 }, price: 6 },
   taco: { needs: { carrot: 1, tomato: 1, greens: 1 }, price: 14 },
+  // Находки достаются даром, поэтому в обоих блюдах есть и грядочный
+  // ингредиент: иначе лес кормил бы лучше фермы, и грядки стали бы не нужны.
+  mushroom_soup: { needs: { mushroom: 2, carrot: 1 }, price: 12 },
+  omelette: { needs: { egg: 2, greens: 1 }, price: 11 },
+}
+
+/** Что герой умеет готовить с самого начала. Остальное открывает лес. */
+export const BASE_RECIPE_IDS: RecipeId[] = ['salad', 'soup', 'taco']
+
+/** Первая находка такого вида открывает рецепт. */
+export const FORAGE_RECIPE: Record<ForageId, RecipeId> = {
+  mushroom: 'mushroom_soup',
+  egg: 'omelette',
 }
 
 /**
@@ -159,8 +189,8 @@ export const RECIPE_IDS = Object.keys(RECIPES) as RecipeId[]
  */
 export function craftableCount(recipe: RecipeId, inventory: Inventory): number {
   const needs = RECIPES[recipe].needs
-  const ids = Object.keys(needs) as CropId[]
-  return ids.reduce((min, crop) => Math.min(min, Math.floor(inventory[crop] / needs[crop]!)), Infinity)
+  const ids = Object.keys(needs) as ItemId[]
+  return ids.reduce((min, item) => Math.min(min, Math.floor(inventory[item] / needs[item]!)), Infinity)
 }
 
 export interface Customer {
@@ -222,10 +252,10 @@ const emptySlot = (id: SlotId): Slot => ({
 })
 
 function emptyInventory(): Inventory {
-  return { carrot: 0, greens: 0, tomato: 0 }
+  return { carrot: 0, greens: 0, tomato: 0, mushroom: 0, egg: 0 }
 }
 
-function startingSeeds(): Inventory {
+function startingSeeds(): Seeds {
   return { carrot: START_SEEDS, greens: START_SEEDS, tomato: START_SEEDS }
 }
 
@@ -239,9 +269,20 @@ interface GameData {
   slots: Slot[]
   inventory: Inventory
   /** Семена на руках. Посадка тратит одно, лавка продаёт новые. */
-  seeds: Inventory
+  seeds: Seeds
   selectedSeed: CropId
   tool: Tool
+  /**
+   * Рецепты, которые герой уже знает. Клиенты заказывают только их: спрашивать
+   * грибной суп у повара, не видевшего гриба, некому.
+   */
+  knownRecipes: RecipeId[]
+  /**
+   * Что из леса уже подобрано сегодня. Точки собирательства расставляет сцена,
+   * стор помнит только их id — иначе game/ пришлось бы знать про координаты.
+   * Чистится в endDay: за ночь в лесу вырастает новое.
+   */
+  takenForage: string[]
   truck: TruckState | null
   /**
    * Открыта ли лавка. Не персистится: это состояние экрана.
@@ -288,6 +329,11 @@ interface GameActions {
   water: (slotId: SlotId) => void
   /** Собрать созревший слот (stage === 2) → +1, у удачного +2. */
   harvest: (slotId: SlotId) => void
+  /**
+   * Подобрать находку. Первая находка каждого вида открывает свой рецепт.
+   * Повторный вызов по той же точке ничего не делает: собрать гриб дважды нельзя.
+   */
+  collectForage: (spotId: string, item: ForageId) => void
   /** Конец дня: рост политых, гибель неполитых, смена фазы на день 7. */
   endDay: () => void
   /** Приготовить блюдо, если хватает ингредиентов. Возвращает успех. */
@@ -320,6 +366,8 @@ function initialData(): GameData {
     seeds: startingSeeds(),
     selectedSeed: 'carrot',
     tool: 'seed',
+    knownRecipes: [...BASE_RECIPE_IDS],
+    takenForage: [],
     truck: null,
     toolbar: reconcileToolbar(emptyToolbar(), startingSeeds(), emptyInventory()),
     shopOpen: false,
@@ -331,21 +379,25 @@ function initialData(): GameData {
 }
 
 /**
- * Патч раскладки тулбара под новые семена/инвентарь. Зовётся из каждого
- * действия, которое их меняет: кончившийся предмет освобождает ячейку,
- * появившийся садится в первую свободную.
+ * Патч раскладки тулбара под новые семена/сумку. Зовётся из каждого действия,
+ * которое их меняет: кончившийся предмет освобождает ячейку, появившийся
+ * садится в первую свободную.
  */
-function withToolbar(layout: ToolbarLayout, seeds: Inventory, inventory: Inventory) {
+function withToolbar(layout: ToolbarLayout, seeds: Seeds, inventory: Inventory) {
   return { toolbar: reconcileToolbar(layout, seeds, inventory) }
 }
 
-/** Добавляет тост, вытесняя самые старые. Возвращает патч для set(). */
-function withNotice(s: GameData, notice: Omit<Notice, 'id'>) {
-  const next = [...s.notices, { ...notice, id: s.nextNoticeId }]
-  return {
-    notices: next.slice(-MAX_NOTICES),
-    nextNoticeId: s.nextNoticeId + 1,
-  }
+/**
+ * Добавляет тосты, вытесняя самые старые. Возвращает патч для set().
+ *
+ * Несколько сразу — не роскошь: находка гриба это и «подобрал», и «открыт
+ * рецепт», а два вызова подряд второй раз читали бы устаревшее s.notices.
+ */
+function withNotice(s: GameData, ...notices: Omit<Notice, 'id'>[]) {
+  const next = [...s.notices]
+  let id = s.nextNoticeId
+  for (const notice of notices) next.push({ ...notice, id: id++ })
+  return { notices: next.slice(-MAX_NOTICES), nextNoticeId: id }
 }
 
 // В браузере — localStorage; в тестах/SSR (node) — память, без падений.
@@ -451,6 +503,25 @@ export const useGameStore = create<GameState>()(
           }
         }),
 
+      collectForage: (spotId, item) =>
+        set((s) => {
+          if (s.takenForage.includes(spotId)) return {}
+          const recipe = FORAGE_RECIPE[item]
+          const found = !s.knownRecipes.includes(recipe)
+          const inventory = { ...s.inventory, [item]: s.inventory[item] + 1 }
+          return {
+            takenForage: [...s.takenForage, spotId],
+            inventory,
+            ...withToolbar(s.toolbar, s.seeds, inventory),
+            knownRecipes: found ? [...s.knownRecipes, recipe] : s.knownRecipes,
+            ...withNotice(
+              s,
+              { kind: 'foraged', item },
+              ...(found ? [{ kind: 'recipe-found' as const, recipe }] : []),
+            ),
+          }
+        }),
+
       endDay: () =>
         set((s) => {
           let withered = 0
@@ -480,6 +551,8 @@ export const useGameStore = create<GameState>()(
             day,
             phase,
             truck,
+            // За ночь в лесу вырастают новые грибы, а в гнёзда возвращаются яйца.
+            takenForage: [],
             ...(withered ? withNotice(s, { kind: 'withered', amount: withered }) : {}),
           }
         }),
@@ -488,12 +561,12 @@ export const useGameStore = create<GameState>()(
         const s = get()
         if (s.phase !== 'truck') return false
         const recipe = RECIPES[recipeId]
-        const needs = Object.keys(recipe.needs) as CropId[]
-        if (needs.some((crop) => s.inventory[crop] < (recipe.needs[crop] ?? 0))) {
+        const needs = Object.keys(recipe.needs) as ItemId[]
+        if (needs.some((item) => s.inventory[item] < (recipe.needs[item] ?? 0))) {
           return false
         }
         const inventory = { ...s.inventory }
-        for (const crop of needs) inventory[crop] -= recipe.needs[crop] ?? 0
+        for (const item of needs) inventory[item] -= recipe.needs[item] ?? 0
         set({ inventory, money: s.money + recipe.price, ...withToolbar(s.toolbar, s.seeds, inventory) })
         return true
       },
@@ -509,11 +582,10 @@ export const useGameStore = create<GameState>()(
               ...withNotice(s, { kind: 'time-up' }),
             }
           }
+          // Терпение убывает, ушедших клиентов убираем — и сообщаем о них.
           // Терпение убывает только у тех, кто уже сделал заказ: дорога к окну
-          // его не тратит. Ушедших клиентов убираем — и сообщаем о них.
-          const ticked = t.queue.map((c) =>
-            c.want ? { ...c, patience: c.patience - dt } : c,
-          )
+          // его не тратит.
+          const ticked = t.queue.map((c) => (c.want ? { ...c, patience: c.patience - dt } : c))
           const left = ticked.filter((c) => c.patience <= 0)
           let queue = ticked.filter((c) => c.patience > 0)
           let notice = {}
@@ -525,7 +597,10 @@ export const useGameStore = create<GameState>()(
             spawnTimer = 0
             nextSpawnIn = 3 + Math.random() * 3
             // Без заказа: его клиент придумает, дойдя до окна.
-            queue = [...queue, { id: nextCustomerId, want: null, patience: PATIENCE, maxPatience: PATIENCE }]
+            queue = [
+              ...queue,
+              { id: nextCustomerId, want: null, patience: PATIENCE, maxPatience: PATIENCE },
+            ]
             nextCustomerId++
           }
           return {
@@ -552,13 +627,13 @@ export const useGameStore = create<GameState>()(
           return 'wrong-dish'
         }
         const recipe = RECIPES[recipeId]
-        const needs = Object.keys(recipe.needs) as CropId[]
-        if (needs.some((crop) => s.inventory[crop] < (recipe.needs[crop] ?? 0))) {
+        const needs = Object.keys(recipe.needs) as ItemId[]
+        if (needs.some((item) => s.inventory[item] < (recipe.needs[item] ?? 0))) {
           set(withNotice(s, { kind: 'no-ingredients', recipe: recipeId }))
           return 'no-ingredients'
         }
         const inventory = { ...s.inventory }
-        for (const crop of needs) inventory[crop] -= recipe.needs[crop] ?? 0
+        for (const item of needs) inventory[item] -= recipe.needs[item] ?? 0
         set({
           inventory,
           ...withToolbar(s.toolbar, s.seeds, inventory),
@@ -587,14 +662,15 @@ export const useGameStore = create<GameState>()(
 
       // Заказ рождается здесь, а не при появлении клиента: сцена зовёт это,
       // когда человечек дошёл до окна. Просить умеет только первый в очереди —
-      // остальные ещё стоят за ним и в окно не смотрят.
+      // остальные ещё стоят за ним и в окно не смотрят. Хочет он только то,
+      // что герой умеет готовить.
       customerReady: (id) =>
         set((s) => {
           const t = s.truck
           if (!t || t.ended) return {}
           const front = t.queue[0]
           if (!front || front.id !== id || front.want) return {}
-          const want = RECIPE_IDS[Math.floor(Math.random() * RECIPE_IDS.length)]
+          const want = s.knownRecipes[Math.floor(Math.random() * s.knownRecipes.length)]
           return {
             truck: {
               ...t,
@@ -609,10 +685,13 @@ export const useGameStore = create<GameState>()(
       // накопленный прогресс. Даром семян больше не выдают — только лавка.
       // Грядки не подметаем: несобранный урожай и всходы — тоже труд игрока,
       // и ярмарка не повод их выкорчёвывать.
+      // Знание рецептов тоже переезжает: гриб, найденный однажды, не
+      // забывается. Точки собирательства, наоборот, обнуляются.
       nextWeek: () =>
         set(() => ({
           day: 1,
           phase: 'farm',
+          takenForage: [],
           truck: null,
           shopOpen: false,
           notices: [],
@@ -633,14 +712,18 @@ export const useGameStore = create<GameState>()(
       // v4: семена стали ресурсом. Старому сохранению выдаём стартовый набор
       //     и стартовые деньги сверху: раньше семена были бесплатны и копить
       //     на них было незачем, так что честного баланса из него не достать.
-      // День и инвентарь переживают все миграции.
       // v5: кнопка музыки в HUD. Старому сохранению включаем её — так было
       //     до появления кнопки, и молчащая после обновления игра выглядела
       //     бы поломкой, а не настройкой.
-      // v6: у тулбара появилась своя раскладка — предметы держатся ячеек и
-      //     не сдвигаются, когда сосед кончился. Старому сохранению собираем
-      //     её из того, чем герой владеет.
-      version: 6,
+      // v6: появились лесные находки и открываемые рецепты. Старому сохранению
+      //     дописываем нулевые находки и базовые рецепты: гриба он не видел.
+      //     Своим номером, а не внутри v5: та уже уехала в прод, и сохранения
+      //     на ней существуют — им находки тоже надо дописать.
+      // v7: у тулбара появилась своя раскладка — предметы держатся ячеек и не
+      //     сдвигаются, когда сосед кончился. Собираем её из того, чем герой
+      //     владеет.
+      // День и инвентарь переживают все миграции.
+      version: 7,
       migrate: (persisted, from) => {
         let s = persisted as GameData
         if (from < 1) s = { ...s, slots: emptySlots(), tool: 'seed' }
@@ -656,7 +739,17 @@ export const useGameStore = create<GameState>()(
         }
         if (from < 4) s = { ...s, seeds: startingSeeds(), money: s.money + START_MONEY }
         if (from < 5) s = { ...s, musicOn: true }
-        if (from < 6) s = { ...s, toolbar: reconcileToolbar(emptyToolbar(), s.seeds, s.inventory) }
+        if (from < 6) {
+          s = {
+            ...s,
+            inventory: { ...emptyInventory(), ...s.inventory },
+            knownRecipes: [...BASE_RECIPE_IDS],
+            takenForage: [],
+          }
+          // Клиент из сохранения мог хотеть блюдо, которого герой ещё не знает?
+          // Нет: до v6 других блюд не было. Очередь не трогаем.
+        }
+        if (from < 7) s = { ...s, toolbar: reconcileToolbar(emptyToolbar(), s.seeds, s.inventory) }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.
@@ -669,6 +762,8 @@ export const useGameStore = create<GameState>()(
         seeds: s.seeds,
         selectedSeed: s.selectedSeed,
         tool: s.tool,
+        knownRecipes: s.knownRecipes,
+        takenForage: s.takenForage,
         truck: s.truck,
         toolbar: s.toolbar,
         shopOpen: false, // лавка закрывается вместе с вкладкой
