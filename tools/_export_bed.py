@@ -24,7 +24,9 @@ OUT = os.path.join(ROOT, "public", "assets", "props", "raised_bed.glb")
 # --- те же константы, что в blender_scene_scripts.py -----------------------
 SOIL_LIFT = 0.015
 BED_H = 0.28
-W, D = 1.6, 0.6
+# Ровно 3×1 клетки сетки (CELL = 0.5 м, см. src/game/grid.ts): три слота
+# посадки садятся в центры трёх клеток, а грядка — в их прямоугольник.
+W, D = 1.5, 0.5
 
 
 def clear_scene():

@@ -11,12 +11,15 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { resetClock } from './dayClock'
 import { emptyToolbar, moveItem, reconcileToolbar, type ToolbarLayout } from './toolbar'
+import { BUILDABLES, nextRot, placeable, type Placement } from './buildables'
+import type { Placed, Rot } from './grid'
 import type { CropId, ForageId, Inventory, ItemId, Seeds } from './items'
 
 // Предметы живут в items.ts — иначе store и toolbar импортировали бы друг
 // друга по кругу. Реэкспорт, чтобы остальной код по-прежнему брал их отсюда.
 export { CROPS, FORAGE_IDS, ITEM_IDS } from './items'
 export type { CropId, ForageId, Inventory, ItemId, Seeds } from './items'
+export type { BuildableId, Placement } from './buildables'
 
 export type RecipeId = 'salad' | 'soup' | 'taco' | 'mushroom_soup' | 'omelette'
 export type Phase = 'farm' | 'truck'
@@ -25,7 +28,11 @@ export type Stage = 0 | 1 | 2
 /** Чем игрок действует по слоту: сажает, поливает или собирает руками. */
 export type Tool = 'seed' | 'can' | 'hand'
 
-/** slotId = `${bedIndex}:${slotIndex}` — 3 грядки × 3 слота = 9 слотов. */
+/**
+ * slotId = `${placementId}:${slotIndex}`. Грядок может стать больше или меньше,
+ * поэтому в id стоит id размещения, а не его номер в массиве: переставленная
+ * грядка не должна забирать чужой урожай.
+ */
 export type SlotId = string
 
 export interface Slot {
@@ -112,14 +119,30 @@ export const HERO_COLORS: readonly string[] = [
 export const BEDS = 3
 export const SLOTS_PER_BED = 3
 
-/** Все 9 идентификаторов слотов в порядке грядка→слот. */
-export const SLOT_IDS: SlotId[] = Array.from({ length: BEDS }, (_, bed) =>
-  Array.from({ length: SLOTS_PER_BED }, (_, slot) => `${bed}:${slot}`),
-).flat()
+/**
+ * Три грядки, с которых начинается ферма, уже на клетках сетки.
+ *
+ * Координаты — те же места к востоку от дома, где грядки стояли и раньше,
+ * только округлённые до клетки: сдвиг не превышает четверти метра, а поворот
+ * в 86° стал ровными 90°.
+ */
+export const INITIAL_PLACEMENTS: readonly Placement[] = [
+  { id: 'bed-1', def: 'raised_bed', gx: 7, gz: 2, rot: 0 },
+  { id: 'bed-2', def: 'raised_bed', gx: 8, gz: -4, rot: 1 },
+  { id: 'bed-3', def: 'raised_bed', gx: 10, gz: -4, rot: 3 },
+]
 
-/** Индекс грядки из slotId (`${bed}:${slot}`). */
-export function bedOf(slotId: SlotId): number {
-  return Number(slotId.split(':')[0])
+/** Идентификаторы слотов посадки одного размещения. Пусто у того, во что не сеют. */
+export function slotIdsOf(p: Placement): SlotId[] {
+  return BUILDABLES[p.def].slotCells.map((_, i) => `${p.id}:${i}`)
+}
+
+/** Все 9 идентификаторов слотов стартовой фермы, в порядке грядка→слот. */
+export const SLOT_IDS: SlotId[] = INITIAL_PLACEMENTS.flatMap(slotIdsOf)
+
+/** id грядки из slotId (`bed-1:2`). */
+export function bedOf(slotId: SlotId): string {
+  return slotId.slice(0, slotId.lastIndexOf(':'))
 }
 
 export const RECIPES: Record<
@@ -293,6 +316,8 @@ interface GameData {
   day: number
   phase: Phase
   money: number
+  /** Что и где стоит на сетке двора. Персистится: это планировка игрока. */
+  placements: Placement[]
   slots: Slot[]
   inventory: Inventory
   /** Семена на руках. Посадка тратит одно, лавка продаёт новые. */
@@ -327,6 +352,24 @@ interface GameData {
   heroColor: string
   /** Играет ли музыка. Звуки и природа от этого не зависят. */
   musicOn: boolean
+  /**
+   * Открыт ли режим планировки. Не персистится: это состояние экрана, и
+   * вкладка должна открываться в игре, а не в редакторе.
+   */
+  buildMode: boolean
+  /**
+   * Объект «в руках» игрока: его id и поворот, который тот ему накрутил.
+   * Пока он в руках, сам объект стоит на старом месте — по двору едет призрак.
+   * Не персистится вместе с buildMode: поднятая грядка должна опуститься.
+   */
+  drag: { id: string; rot: Rot } | null
+  /**
+   * Клетки, занятые неподвижным: домом, теплицей, лавкой, деревьями. Их коробки
+   * известны только по GLB, поэтому сцена считает их сама и кладёт сюда, а
+   * стор принимает как данность (см. CLAUDE.md о границе game/ и scene/).
+   * Не персистится: сцена пересчитает при загрузке.
+   */
+  staticCells: string[]
   /** Очередь тостов. Не персистится: события живут только в текущей сессии. */
   notices: Notice[]
   nextNoticeId: number
@@ -375,6 +418,22 @@ interface GameActions {
   customerReady: (id: number) => void
   /** Перетащить предмет тулбара из ячейки в ячейку. */
   moveToolbarItem: (from: number, to: number) => void
+  /** Сцена сообщает, какие клетки заняты неподвижным. Зовётся один раз. */
+  setStaticCells: (cells: string[]) => void
+  /** Войти в режим планировки и выйти из него. В день ярмарки не работает. */
+  toggleBuild: () => void
+  /** Взять объект в руки (поднять). Заново взять уже поднятый — опустить на месте. */
+  grabPlacement: (id: string) => void
+  /** Повернуть объект в руках на четверть оборота. */
+  rotateDrag: () => void
+  /** Отпустить руки, ничего не поставив (Esc). */
+  cancelDrag: () => void
+  /**
+   * Опустить объект из рук в клетку (gx, gz) с текущим поворотом. Возвращает
+   * успех: некуда — руки остаются занятыми, объект не двигается.
+   * Растения переезжают вместе с грядкой: они состояние слота, а не мира.
+   */
+  dropPlacement: (gx: number, gz: number) => boolean
   /** Начать новую неделю (день 1; грядки, деньги и инвентарь остаются). */
   nextWeek: () => void
   /** Полный сброс к первому дню. */
@@ -388,6 +447,7 @@ function initialData(): GameData {
     day: 1,
     phase: 'farm',
     money: START_MONEY,
+    placements: INITIAL_PLACEMENTS.map((p) => ({ ...p })),
     slots: emptySlots(),
     inventory: emptyInventory(),
     seeds: startingSeeds(),
@@ -400,6 +460,9 @@ function initialData(): GameData {
     shopOpen: false,
     heroColor: HERO_COLOR_DEFAULT,
     musicOn: true,
+    buildMode: false,
+    drag: null,
+    staticCells: [],
     notices: [],
     nextNoticeId: 1,
   }
@@ -581,6 +644,9 @@ export const useGameStore = create<GameState>()(
             day,
             phase,
             truck,
+            // Планировку двора на ярмарку с собой не берут.
+            buildMode: phase === 'truck' ? false : s.buildMode,
+            drag: phase === 'truck' ? null : s.drag,
             // Лес отрастает не весь и не сразу: каждая собранная точка бросает
             // свой шанс вернуться (см. MUSHROOM_REGROW / EGG_REGROW).
             takenForage: regrowForage(s.takenForage),
@@ -721,6 +787,46 @@ export const useGameStore = create<GameState>()(
 
       moveToolbarItem: (from, to) => set((s) => ({ toolbar: moveItem(s.toolbar, from, to) })),
 
+      setStaticCells: (staticCells) => set({ staticCells }),
+
+      // В день ярмарки герой за прилавком, а двор — за тридевять земель.
+      toggleBuild: () =>
+        set((s) =>
+          s.phase === 'farm'
+            ? { buildMode: !s.buildMode, drag: null }
+            : { buildMode: false, drag: null },
+        ),
+
+      grabPlacement: (id) =>
+        set((s) => {
+          if (!s.buildMode) return {}
+          const p = s.placements.find((x) => x.id === id)
+          if (!p || !BUILDABLES[p.def].movable) return {}
+          // Клик по уже поднятой грядке — передумал: опускаем как было.
+          if (s.drag?.id === id) return { drag: null }
+          return { drag: { id, rot: p.rot } }
+        }),
+
+      rotateDrag: () =>
+        set((s) => (s.drag ? { drag: { ...s.drag, rot: nextRot(s.drag.rot) } } : {})),
+
+      cancelDrag: () => set({ drag: null }),
+
+      dropPlacement: (gx, gz) => {
+        const s = get()
+        if (!s.drag) return false
+        const { id, rot } = s.drag
+        const p = s.placements.find((x) => x.id === id)
+        if (!p) return false
+        const target: Placed = { gx, gz, rot }
+        if (!placeable(s.placements, s.staticCells, p.def, target, id)) return false
+        set({
+          placements: s.placements.map((x) => (x.id === id ? { ...x, ...target } : x)),
+          drag: null,
+        })
+        return true
+      },
+
       // Семена, деньги и грядки переезжают в новую неделю: это и есть
       // накопленный прогресс. Даром семян больше не выдают — только лавка.
       // Грядки не подметаем: несобранный урожай и всходы — тоже труд игрока,
@@ -736,14 +842,17 @@ export const useGameStore = create<GameState>()(
           takenForage: [],
           truck: null,
           shopOpen: false,
+          buildMode: false,
+          drag: null,
           notices: [],
         }))
       },
 
       // Музыка переживает сброс: это настройка звука, а не игровой прогресс.
+      // Занятые клетки — тем более: это обмер сцены, а сцена не перезагружается.
       resetGame: () => {
         resetClock()
-        set((s) => ({ ...initialData(), musicOn: s.musicOn }))
+        set((s) => ({ ...initialData(), musicOn: s.musicOn, staticCells: s.staticCells }))
       },
     }),
     {
@@ -768,8 +877,11 @@ export const useGameStore = create<GameState>()(
       // v7: у тулбара появилась своя раскладка — предметы держатся ячеек и не
       //     сдвигаются, когда сосед кончился. Собираем её из того, чем герой
       //     владеет.
+      // v8: грядки встали на сетку и научились двигаться. Позиция уехала из
+      //     scene-layout.json в стор, а slotId `0:1` стал `bed-1:1`. Старые
+      //     грядки садятся на ближайшие клетки, посевы переезжают вместе с ними.
       // День и инвентарь переживают все миграции.
-      version: 7,
+      version: 8,
       migrate: (persisted, from) => {
         let s = persisted as GameData
         if (from < 1) s = { ...s, slots: emptySlots(), tool: 'seed' }
@@ -796,6 +908,24 @@ export const useGameStore = create<GameState>()(
           // Нет: до v6 других блюд не было. Очередь не трогаем.
         }
         if (from < 7) s = { ...s, toolbar: reconcileToolbar(emptyToolbar(), s.seeds, s.inventory) }
+        if (from < 8) {
+          // Грядки нумеровались индексом в scene-layout.json, слоты — `${bed}:${i}`.
+          // Порядок INITIAL_PLACEMENTS повторяет тот же порядок, так что урожай
+          // остаётся ровно там, где рос.
+          const placements = INITIAL_PLACEMENTS.map((p) => ({ ...p }))
+          s = {
+            ...s,
+            placements,
+            slots: s.slots.map((slot) => {
+              const [bed, i] = slot.id.split(':')
+              const p = placements[Number(bed)]
+              return p ? { ...slot, id: `${p.id}:${i}` } : slot
+            }),
+            buildMode: false,
+            drag: null,
+            staticCells: [],
+          }
+        }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.
@@ -803,6 +933,7 @@ export const useGameStore = create<GameState>()(
         day: s.day,
         phase: s.phase,
         money: s.money,
+        placements: s.placements,
         slots: s.slots,
         inventory: s.inventory,
         seeds: s.seeds,
@@ -815,6 +946,9 @@ export const useGameStore = create<GameState>()(
         shopOpen: false, // лавка закрывается вместе с вкладкой
         heroColor: s.heroColor,
         musicOn: s.musicOn,
+        buildMode: false, // вкладка открывается в игре, а не в редакторе
+        drag: null, // поднятая грядка опускается вместе с вкладкой
+        staticCells: [], // обмер сцены, а не сохранение
         notices: [],
         nextNoticeId: 1,
       }),

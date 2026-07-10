@@ -16,6 +16,8 @@ import {
   type Vec3,
 } from '../assets/scene'
 import { slotActionable, useGameStore } from '../game/store'
+import { bedCollider, slotPositions as bedSlotPositions, staticYardCells } from './yard'
+import { GridOverlay } from './GridOverlay'
 import { playSfx } from '../audio/engine'
 import { SFX } from '../audio/ambience'
 import { swayUniforms } from './sway'
@@ -468,17 +470,18 @@ function InstancedProp({
 }
 
 /**
- * Коллайдеры сцены. Коробки берём из bbox самих GLB, а не из констант: пропс
- * поменяет размер в Blender — препятствие поедет за ним.
+ * Неподвижные коллайдеры сцены — дом, теплица, лавка, деревья. Коробки берём из
+ * bbox самих GLB, а не из констант: пропс поменяет размер в Blender —
+ * препятствие поедет за ним. Грядки сюда не входят: они двигаются, их коллайдер
+ * считается отдельно из клеток.
  */
-function useColliders(layout: SceneLayout): Collider[] {
+function useStaticColliders(layout: SceneLayout): Collider[] {
   const house = useGLTF(propUrl('house')).scene
   const greenhouse = useGLTF(propUrl('greenhouse')).scene
   const truck = useGLTF(propUrl('food_truck_open')).scene
   const logTable = useGLTF(propUrl('log_table')).scene
   const sitLog = useGLTF(propUrl('sit_log')).scene
   const seedStore = useGLTF(propUrl('seed_store')).scene
-  const bed = useGLTF(propUrl('raised_bed')).scene
 
   return useMemo(() => {
     const scenes: Record<string, THREE.Object3D> = {
@@ -516,20 +519,8 @@ function useColliders(layout: SceneLayout): Collider[] {
       }
     }
 
-    const bedHalf = halfExtentsXZ(bed)
-    for (const plot of layout.plots) {
-      out.push({
-        kind: 'rect',
-        x: plot.bed[0],
-        z: plot.bed[2],
-        rot: plot.bedRotationY,
-        hx: bedHalf.hx,
-        hz: bedHalf.hz,
-      })
-    }
-
     return out
-  }, [layout, house, greenhouse, truck, logTable, sitLog, seedStore, bed])
+  }, [layout, house, greenhouse, truck, logTable, sitLog, seedStore])
 }
 
 function Ground({ size, color }: { size: number; color: string }) {
@@ -564,7 +555,22 @@ export function Farm({
 }) {
   const layout = useJSON<SceneLayout>('/assets/scene-layout.json')
   const palette = useJSON<Palette>('/assets/palette.json')
-  const colliders = useColliders(layout)
+  const staticColliders = useStaticColliders(layout)
+  const placements = useGameStore((s) => s.placements)
+  const setStaticCells = useGameStore((s) => s.setStaticCells)
+
+  // Клетки под неподвижным считаем один раз и отдаём стору: он проверяет по ним
+  // размещение, а сам про метры и bbox не знает (см. CLAUDE.md о границе).
+  useEffect(() => {
+    setStaticCells(staticYardCells(staticColliders))
+  }, [staticColliders, setStaticCells])
+
+  // Через грядки герой не ходит так же, как раньше: их коллайдеры добавляем к
+  // неподвижным, но считаем из клеток размещения.
+  const colliders = useMemo(
+    () => [...staticColliders, ...placements.map(bedCollider)],
+    [staticColliders, placements],
+  )
 
   const byAsset = useMemo(() => {
     const map: Record<string, PropInstance[]> = {}
@@ -572,14 +578,11 @@ export function Farm({
     return map
   }, [layout])
 
-  // slotId (`${bed}:${slot}`) → мировая позиция из plots[].
-  const slotPositions = useMemo(() => {
-    const out: { id: string; position: PropInstance['position'] }[] = []
-    for (const plot of layout.plots) {
-      plot.slots.forEach((position, i) => out.push({ id: `${plot.id}:${i}`, position }))
-    }
-    return out
-  }, [layout])
+  // slotId (`${placementId}:${slot}`) → мировая позиция из клеток грядки.
+  const slotPositions = useMemo(
+    () => placements.flatMap(bedSlotPositions),
+    [placements],
+  )
 
   return (
     <>
@@ -616,7 +619,8 @@ export function Farm({
         )
       })}
 
-      <Beds plots={layout.plots} palette={palette} />
+      <Beds placements={placements} palette={palette} />
+      <GridOverlay />
       <Hero palette={palette} start={HERO_START} colliders={colliders} />
       <Customers palette={palette} />
       <Wildlife layout={layout} palette={palette} colliders={colliders} />
