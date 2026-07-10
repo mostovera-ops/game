@@ -47,7 +47,6 @@ const SINGLETON_ASSETS = [
   'brick_path',
   'log_table',
   'sit_log',
-  'ladybug',
   'seed_store',
 ] as const
 
@@ -63,7 +62,7 @@ const PLANT_ASSETS = ['raised_bed', 'carrot', 'greens', 'tomato_bush'] as const
 // Камера фермы (FARM_CAM в App.tsx) нацелена сюда же — герой стоит в центре кадра.
 const HERO_START: Vec3 = [2.17, 0, -0.39]
 
-// Через что герой не проходит. Дорожка и божья коровка — не препятствия.
+// Через что герой не проходит. Дорожка — не препятствие.
 const SOLID_SINGLETONS = [
   'house',
   'greenhouse',

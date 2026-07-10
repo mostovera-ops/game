@@ -7,7 +7,12 @@
   или вставлять по одному в Scripting → Text Editor → Run Script).
 
   Blender 5.1 / Python 3.x
-  Порядок выполнения: 01 → 02 → 03 → 04 → 05 → 06 → 07
+  Порядок выполнения: 01 → 02 → 03 → 04 → 05 → 07
+
+  Номер 06 пуст: там жила божья коровка, летавшая по запечённой в GLB
+  анимации. Живность теперь строится tools/_export_wildlife.py и движется
+  кодом. Остальные номера не сдвигаем — на них ссылаются 08_export.py
+  и CLAUDE.md.
 
   Скрипты 02 и 03 — это фиксы масштаба, которые удаляют и пересоздают
   дом, дорожку, грядки и теплицу. Если строишь с нуля — можно
@@ -922,178 +927,6 @@ def animate_bloom(obj, period, phase, closed=0.35, opened=1.15):
 
 for fo in flower_objs:
     animate_bloom(fo, period=random.uniform(160, 220), phase=random.uniform(0, 120))
-
-
-# ======================================================================
-# 06 — БОЖЬЯ КОРОВКА: сборка модели + анимация маршрута
-# ======================================================================
-
-import bpy, math, random
-
-random.seed(55)
-
-def make_mat(name, color, roughness=0.9):
-    mat = bpy.data.materials.get(name)
-    if mat is None:
-        mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    bsdf = mat.node_tree.nodes.get("Principled BSDF")
-    if bsdf:
-        bsdf.inputs["Base Color"].default_value = (*color, 1.0)
-        bsdf.inputs["Roughness"].default_value = roughness
-    return mat
-
-def shade_flat(obj):
-    for p in obj.data.polygons:
-        p.use_smooth = False
-
-def world_bbox_minz(obj):
-    coords = [obj.matrix_world @ v.co for v in obj.data.vertices]
-    return min(c.z for c in coords)
-
-def sit_on_ground(obj):
-    minz = world_bbox_minz(obj)
-    obj.location.z -= minz
-
-def join_objects(objs, active=None, name=None):
-    bpy.ops.object.select_all(action='DESELECT')
-    for o in objs:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = active or objs[0]
-    bpy.ops.object.join()
-    r = bpy.context.active_object
-    if name:
-        r.name = name
-    return r
-
-def get_action_fcurves(action):
-    out = []
-    if action is None:
-        return out
-    if hasattr(action, "fcurves"):
-        try:
-            fc = list(action.fcurves)
-            if fc:
-                return fc
-        except Exception:
-            pass
-    try:
-        for layer in action.layers:
-            for strip in layer.strips:
-                cbs = getattr(strip, "channelbags", None)
-                if cbs:
-                    for cb in cbs:
-                        out.extend(list(cb.fcurves))
-    except Exception:
-        pass
-    return out
-
-def add_cycle(fcurve):
-    m = fcurve.modifiers.new(type='CYCLES')
-    m.mode_before = 'REPEAT'
-    m.mode_after = 'REPEAT'
-
-def bezier_all(fcurve):
-    for kp in fcurve.keyframe_points:
-        kp.interpolation = 'BEZIER'
-        kp.handle_left_type = 'AUTO_CLAMPED'
-        kp.handle_right_type = 'AUTO_CLAMPED'
-
-# Удалить старую, если есть
-old = bpy.data.objects.get("Ladybug")
-if old:
-    bpy.data.objects.remove(old, do_unlink=True)
-
-mat_lb_red = make_mat("LadybugRed", (0.85, 0.08, 0.05), 0.35)
-mat_lb_black = make_mat("LadybugBlack", (0.03, 0.03, 0.03), 0.4)
-
-# --- Модель божьей коровки (forward = +X) ---
-bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.22, location=(0, 0, 0.13))
-body = bpy.context.active_object
-body.scale = (1.0, 1.15, 0.62)
-bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-body.data.materials.append(mat_lb_red)
-shade_flat(body)
-parts = [body]
-
-# Голова
-bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=0.09, location=(0.24, 0, 0.11))
-head = bpy.context.active_object
-head.data.materials.append(mat_lb_black)
-shade_flat(head)
-parts.append(head)
-
-# Центральная полоска
-bpy.ops.mesh.primitive_cube_add(size=1, location=(0.02, 0, 0.24))
-line = bpy.context.active_object
-line.scale = (0.24, 0.02, 0.02)
-bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-line.data.materials.append(mat_lb_black)
-shade_flat(line)
-parts.append(line)
-
-# Пятнышки
-spot_positions = [(-0.05, 0.13, 0.22), (-0.05, -0.13, 0.22), (0.05, 0.2, 0.19),
-                   (0.05, -0.2, 0.19), (-0.16, 0.08, 0.18), (-0.16, -0.08, 0.18)]
-for sx, sy, sz in spot_positions:
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=0.035, location=(sx, sy, sz))
-    sp = bpy.context.active_object
-    sp.data.materials.append(mat_lb_black)
-    shade_flat(sp)
-    parts.append(sp)
-
-# Усики
-for ay in (0.05, -0.05):
-    bpy.ops.mesh.primitive_cylinder_add(radius=0.008, depth=0.14, vertices=5, location=(0.32, ay, 0.17))
-    an = bpy.context.active_object
-    an.rotation_euler = (0, math.radians(60), 0)
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-    an.data.materials.append(mat_lb_black)
-    shade_flat(an)
-    parts.append(an)
-
-bug = join_objects(parts, name="Ladybug")
-sit_on_ground(bug)
-belly_offset = bug.location.z
-
-# --- Анимация маршрута ---
-path_y = -2.1
-
-# (кадр, x, y, высота_брюшка, поворот_Z_град, наклон_X_град)
-timeline = [
-    (1,   -2.5, path_y,        0.08, 0,   0),
-    (20,  -1.5, path_y,        0.10, 6,   0),
-    (40,  -0.5, path_y,        0.065,-5,  0),
-    (60,   0.5, path_y,        0.10, 6,   0),
-    (80,   2.0, path_y,        0.08, 0,   0),
-    (92,   2.4, path_y+0.3,    0.40, 35, -20),   # взлёт
-    (106,  4.3, -1.4,          1.30, 55,  0),     # полёт к бревну
-    (120,  6.0, -0.75,         0.55, 75,  18),    # посадка на бревно
-    (132,  5.8, -0.75,         0.42, 90,  0),     # ползёт по бревну
-    (172,  6.8, -0.65,         0.42, 90,  0),     # ползёт по бревну
-    (186,  7.0, -0.55,         0.70, 110,-18),    # взлёт с бревна
-    (202,  3.3, -1.3,          1.30, 150, 0),     # полёт обратно
-    (216, -1.0, path_y+0.3,    0.40, 175, 18),    # снижение
-    (232, -2.5, path_y,        0.08, 180, 0),     # посадка на дорожку
-    (260, -2.5, path_y,        0.08, 0,   0),     # разворот → замыкание цикла
-]
-
-for f, x, y, bz, rz, rx in timeline:
-    bug.location = (x, y, bz + belly_offset)
-    bug.keyframe_insert(data_path="location", frame=f)
-    rot = list(bug.rotation_euler)
-    rot[2] = math.radians(rz)
-    rot[0] = math.radians(rx)
-    bug.rotation_euler = rot
-    bug.keyframe_insert(data_path="rotation_euler", index=2, frame=f)
-    bug.keyframe_insert(data_path="rotation_euler", index=0, frame=f)
-
-action = bug.animation_data.action if bug.animation_data else None
-for fc in get_action_fcurves(action):
-    bezier_all(fc)
-    add_cycle(fc)
-
-bpy.context.scene.frame_current = 1
 
 
 # ======================================================================

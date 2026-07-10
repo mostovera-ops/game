@@ -12,13 +12,8 @@
 
 const TRUCK = 'Он поможет мне разбогатеть!'
 const LOG = 'Совсем скоро я смогу посидеть тут.'
-const LADYBUG = 'Она почему-то зависла и не летит. Может позже починят.'
 
 export const PHRASES: Record<string, string> = {
-  // Божья коровка
-  LadybugRed: LADYBUG,
-  LadybugBlack: LADYBUG,
-
   // Дом: только окно и дверь. Стена и крыша молчат.
   Window: 'Не хотелось бы его разбить.',
   Door: 'Пока рано отдыхать.',
