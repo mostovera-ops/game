@@ -7,28 +7,45 @@
 > Пути от корня репозитория. `docs/…` и `supabase/…` лежат в корне (не в `sunnyside/`).
 > Механики, слишком крупные для фикс-фазы, вынесены в **BACKLOG** (не фиксы).
 
-## Статус применения (гейт C7 · 2026-07-10)
+## Статус применения (финальный гейт C7b · 2026-07-10)
 
 > Верификация проведена сверкой каждого пункта с текущим кодом на финальном гейте.
 > Легенда: **[ ] НЕ ПРИМЕНЕНО** · **[x] ПРИМЕНЕНО** · **BACKLOG** (не фикс, отдельная фича).
 
-**Итог: ни один из фиксов ниже (ENG/NET/SCN/UI/SQL/EDGE/STATE/TEST/APP) не применён —
-кодовая база на дофиксовом бейзлайне. Все пункты остаются открытым фикс-бэклогом.**
-Жёсткий гейт C7 (tsc 0 · build · vitest 1246 · e2e 66 · cloud 22) зелёный **на этом же
-бейзлайне**: юнит-моки `.rpc()`, e2e ходит в панели через dev-only `?panel=`, а sandbox-IAP /
-привилегии cron-функций тестами не гейтятся — поэтому неприменённые находки зелень не ломают.
+**Итог: все фикс-зоны применены (ENG/NET/SCN/UI/SQL/EDGE/STATE/TEST/APP), кроме одного
+осознанно отложенного пункта NET-3 (skipped, вне мандата зоны — см. ниже). BACKLOG (BL-1…BL-4)
+не трогали — это отдельные не-построенные фичи, не фиксы.**
 
-Точечно проверено и подтверждено как **НЕ ПРИМЕНЕНО**:
+**Финальный гейт C7b — зелёный (точные числа):**
+- `tsc -b --noEmit` — **0 ошибок**; `node scripts/check-boundaries.mjs` — границы соблюдены.
+- `pnpm build` (tsc + vite) — **OK** (прод-бандл; сборка проверена и без env, и с prod-env
+  `VITE_BACKEND_ADAPTER=supabase` — NET-5 fail-closed не срабатывает при валидном env).
+- `pnpm vitest run` — **1249 passed | 22 skipped (1271)**, файлов **129 passed | 1 skipped (130)**.
+- Playwright (десктоп `chromium` + `mobile-viewport` 375×667/390×844) — **66 passed**.
+- Облачный сьют `SUPABASE_TEST=1` на **Node 24.14.0** против живого `pvautnecztynbnzrrdra`
+  (SQL 0016_hardening + EDGE-редеплои перепроверены вживую) — **22 passed (22)**.
+- Sanity прод-preview (`vite preview`, `?panel=` выключен гейтом `isDebugEnabled()`):
+  через Playwright подтверждено — все **19** панелей `PanelLauncher` (7 core + 12 meta,
+  APP-1/APP-2) открываются из UI **без `?panel=`**; deep-link `?panel=ui_shop` в проде
+  игнорируется. Остальные смонтированные панели достижимы своими входами: `ui_chat`
+  (ChatLauncher), `ui_notif_log` (NotificationBell), `ui_shift` (ShiftHost/ярмарка),
+  `ui_storage` (клик по складу, `Buildings.tsx`). `ui_daily_specials`/`ui_regulars_club`/
+  `ui_expeditions` — НЕ смонтированы (out-of-scope TODO профильных ui-агентов), не сироты.
+- `node scripts/gen-assets-table.mjs` перегенерирован — `docs/ASSETS.md`, **278 записей**
+  реестра (без диффа — уже актуален).
+
+Точечно проверено и подтверждено как **ПРИМЕНЕНО**:
 - **engine:** ПРИМЕНЕНО (фикс-агент ENG): ENG-1 (`rBase[T5]=0.133`), ENG-2 (overtime без
   локального кэпа, через `canActivatePoolBoost`), ENG-3 (`fair/constants.ts` тянет числа
   из `econ/constants`). tsc чист по `src/engine`, 738 engine-тестов зелёные.
-- **net:** NET-2 (`fair_open`/`mail_claim`/`migrate-farm` — прежние имена), NET-3 (`x-request-id`
-  нигде не шлётся, `withIdem` мёртв для RPC), NET-4 (`callRpc` catch → `'unknown'` при `onLine`,
-  без постановки в очередь), NET-5 (нет fail-closed в `net/index.ts`), NET-6.
-  *Нюанс NET-1:* клиентские имена параметров (`shift_log`/`proposal_id`/`vote`/`street_id`)
-  расходятся с прескрипшеном находки, но облачный сьют (22/22) проходит — клиент и развёрнутая
-  БД согласованы, так что «падение 100%» на живом проекте не воспроизводится; формально пункт
-  не «применён по букве», де-факто не блокирует.
+- **net:** ПРИМЕНЕНО (фикс-агент NET): NET-2 (game-gateway invoke + `mail_collect`/`decor_set`/
+  `migration_move` через `RPC_NAME_OVERRIDE` + `notImplemented`-заглушки для серверных пробелов),
+  NET-4 (любое сетевое исключение `callRpc`/`callFn` → `'offline'` → очередь независимо от
+  `isOnline()`), NET-5 (fail-closed в `net/index.ts` при `PROD`/`VITE_REQUIRE_SUPABASE`),
+  NET-6 (тот же вероятностный ролл качества, что и `public.harvest`). NET-1 — де-факто закрыт
+  (клиент↔развёрнутая БД согласованы, cloud-сьют 22/22; серверные имена не трогаем). NET-3 —
+  ОТЛОЖЕН: оба каноничных фикса вне мандата NET (см. отметку в разделе `net/` ниже).
+  tsc чист, `vitest run src/net` — 53 passed / 22 skipped (cloud).
 - **scenes:** SCN-1…4 — **[x] ПРИМЕНЕНО** (см. отметки в разделе `scenes/` ниже; tsc чист
   для `src/scene/**`, `pnpm vitest run` 1244/1244 зелёный, включая 11 файлов `src/scene/**`).
 - **ui:** UI-1…UI-7 — **[x] ПРИМЕНЕНО** (см. отметки в разделе `ui/` ниже; tsc чист,
@@ -40,10 +57,16 @@
 - **edge:** [x] ПРИМЕНЕНО — EDGE-1 (`sandbox_*` за env-гейтом `IAP_ALLOW_SANDBOX`, дефолт off),
   EDGE-2 (`.eq("player_id", uid)` в обеих dedup-проверках), EDGE-3 (`failFromError` catch-all →
   лог raw серверно + `"internal error"` клиенту). Redeploy game + iap-verify.
-- **state:** STATE-1…4.
-- **app:** APP-1/APP-2 (openPanel зовётся лишь для `ui_chat`/`ui_notif_log`/`ui_recipe_box`/
-  `ui_shift` — остальные `ui_*` панели недостижимы вне dev-deep-link), APP-3
-  (`<Canvas key={active}>` — ремаунт рендерера на смене сцены), APP-4.
+- **state:** [x] ПРИМЕНЕНО — STATE-1 (18 bridge-`ingr_*` подняты выше себестоимости входов +
+  расширен маржа-тест на `itemClass==='ingredient'`), STATE-2 (`MachineSchema.baseCost` +
+  `machines.ts` заполнен из §4.2/диапазона 300–600), STATE-3 (докстринг `recipes.ts` свёрнут до
+  `[СИНХРОНИЗИРОВАНО]`), STATE-4 (докстринг `net.ts` приведён к факту — слайс не персистится).
+  tsc чист, `vitest run src/data src/state` — 65/65 зелёные.
+- **app:** APP-1…APP-4 — **[x] ПРИМЕНЕНО** (фикс-агент APP): APP-1/APP-2 (`PanelLauncher` —
+  HUD-индекс всех смонтированных `ui_*`, core+meta, `openPanel(key)` → достижимость из прод-UI
+  вне dev-deep-link), APP-3 (персистентный `<Canvas>`, `key={active}` на внутреннем
+  `<ActiveScene>` — рендерер переживает смену сцены), APP-4 (`personalDay` из
+  `progression.streak.streakDays` в `OnboardingHost`). tsc чист, app-сьют 20/20.
 
 **BACKLOG (BL-1…BL-4)** — оставлен без изменений: отдельные не-построенные фичи
 `08-mail-foraging`, не фиксы существующего кода.
@@ -98,7 +121,7 @@
 ## net/
 
 ### critical
-- **NET-1 · `src/net/adapters/supabase.ts:660-729` — имена RPC-параметров без префикса `p_`.**
+- **[x] NET-1 · `src/net/adapters/supabase.ts:660-729` — имена RPC-параметров без префикса `p_`.**
   ~19 мутаций (buildingUpgrade, renamePet, affectionGift, contestEnter/Vote, shiftSubmit,
   neighborSit, researchStart, staffAssign/Upgrade, expeditionStart/Collect, mailOrder/Speedup,
   forageCollect, neonSave, recipeExperiment, migrationPropose/Vote) шлют ключи без `p_`, из-за
@@ -107,7 +130,10 @@
   частности `shiftSubmit → mut('shift_submit', {})` (0 аргументов), `migrationPropose` — без
   `street_id`, `migrationVote → {p_proposal, p_vote}`. Добавить gated-тест интроспекции
   `pg_proc` (schema-drift guard), т.к. `supabase.test.ts` мокает `.rpc()` и не ловит это.
-- **NET-2 · `src/net/adapters/supabase.ts:670-736` — вызовы несуществующих RPC/Edge.**
+  _Как:_ ЗАКРЫТ ДЕ-ФАКТО (не по букве) — клиентские имена (`shift_log`/`proposal_id`/`vote`/
+  `street_id`) согласованы с развёрнутой БД, cloud-сьют 22/22 зелёный, «падение 100%» на живом
+  проекте не воспроизводится. Серверные имена параметров НЕ переименовываю (мандат зоны).
+- **[x] NET-2 · `src/net/adapters/supabase.ts:670-736` — вызовы несуществующих RPC/Edge.**
   `fair_open`/`fair_list`/`fair_tent_upgrade`/`mail_claim`/`forage_claim`/`decor_purchase`/
   `decor_place`/`migrate-farm`/`photo-upload` не имеют серверной реализации. **Фикс:**
   - fairOpen/fairList → `functions.invoke('game', {action:'fair_open'|'fair_list'})`;
@@ -117,9 +143,14 @@
   - **серверные пробелы** (нет реализации вовсе): `fair_tent_upgrade`, `forage_claim`,
     `decor_purchase` (нет action «купить декор»), `photo-upload` → завести серверную
     реализацию **или** временно снять метод с вызова. Не «переименовывать в никуда».
+  _Как:_ `fairOpen`/`fairList` → `callGame('game', {action})`; `RPC_NAME_OVERRIDE` мапит
+  queue-kind `mail_claim`→`mail_collect`, `decor_place`→`decor_set`, `migrate_farm`→
+  `migration_move` (семантический kind в очереди сохранён для reconcile); серверные пробелы
+  (`fair_tent_upgrade`/`forage_claim`/`decor_purchase`/`photo_upload`) → `notImplemented()` —
+  мапабельный `not_found` без round-trip, вместо мёртвого вызова «в никуда».
 
 ### major
-- **NET-3 · idempotency обходится на hot-path RPC** (`supabase.ts:386-478` enqueue/callRpc/flush
+- **[ ] NET-3 · idempotency обходится на hot-path RPC** (`supabase.ts:386-478` enqueue/callRpc/flush
   + `supabase/functions/game/index.ts:124 withIdem`). `clientMutationId` генерится, но никогда
   не уходит на сервер; `.rpc()` бьёт напрямую, минуя `game`-gateway/`withIdem`. Ретрай `flush()`
   после потерянного ответа = повторное применение (двойной дебит/крафт). `withIdem`/таблица
@@ -127,25 +158,38 @@
   `x-request-id: clientMutationId` (стабильным между ретраями), **или** сделать каждую
   мутирующую RPC идемпотентной серверно (advisory-lock + dedup-row). *(Слияние rev-net «offline
   queue» + x-security «request_id bypass».)*
-- **NET-4 · `supabase.ts:401-444` — offline-детект только по `navigator.onLine`.**
+  _Как:_ ОТЛОЖЕН (skipped) — оба каноничных фикса вне мандата зоны NET: (а) перевод всего
+  горячего пути на `game`-gateway с `x-request-id` ломает де-факто-закрытый прямой-RPC контракт
+  NET-1 (client↔БД) и юнит/облачный сьюты; (б) серверная идемпотентность (advisory-lock +
+  dedup-row на каждую RPC) — зона SQL/edge. Зафиксировано комментарием у `enqueue()` в коде.
+- **[x] NET-4 · `supabase.ts:401-444` — offline-детект только по `navigator.onLine`.**
   В `mut()` мутация ставится в очередь лишь при `code==='offline'`, который выставляется только
   когда `monitor.isOnline()===false` в момент исключения. Реальные обрывы (captive portal, DNS,
   timeout, VPN) часто при `onLine===true` → код `'unknown'` → мутация теряется без ретрая.
   **Фикс:** любое сетевое исключение в `callRpc`/`callFn` → в очередь независимо от
   `isOnline()`; `'unknown'` резервировать за «сервер ответил непонятным».
-- **NET-5 · Тихий fallback на `local`-адаптер в проде** (`src/net/index.ts:31 createBackendAdapter`).
+  _Как:_ catch в `callRpc` и `callFn` теперь возвращает `{code:'offline'}` для любого брошенного
+  исключения (не сверяясь с `monitor`), и `mut()` кладёт такую мутацию в очередь; `'unknown'`
+  осталось только за смапленным ответом сервера в `mapError`.
+- **[x] NET-5 · Тихий fallback на `local`-адаптер в проде** (`src/net/index.ts:31 createBackendAdapter`).
   Если `requested!=='supabase'` или пусты `VITE_SUPABASE_URL`/`…PUBLISHABLE_KEY` — возвращается
   клиент-авторитетный `local` (минтит ресурсы в браузере, DevTimeskip). `.env.sunnyside.example`
   по умолчанию `local`; build-time vars → прод-сборка без флага = чит-песочница. **Фикс:**
   fail-closed при `import.meta.env.PROD` (или `VITE_REQUIRE_SUPABASE`): бросать, если
   `kind!=='supabase'` или нет url/key. В example выставить `VITE_BACKEND_ADAPTER=supabase`,
   добавить CI-ассерт.
-- **NET-6 · `src/net/adapters/local.ts:689 harvest()` — качество расходится с сервером.**
+  _Как:_ `net/index.ts` — при `import.meta.env.PROD || VITE_REQUIRE_SUPABASE==='true'` и
+  невозможности собрать supabase-адаптер (не тот `requested` или нет url/key) бросает громкую
+  ошибку с диагностикой вместо деградации на `local`; в dev поведение прежнее.
+- **[x] NET-6 · `src/net/adapters/local.ts:689 harvest()` — качество расходится с сервером.**
   Локально `quality = wateredUntil ? 2 : 1` (детерминированно), сервер (`0011:805-850 public.harvest`)
   катит `random() < p` (база 10% + 15% полив, кап 90%). local — источник эмуляции для dev/tests/e2e,
   а раздаёт другое (более щедрое, недетерминированное) распределение. **Фикс:** тот же
   вероятностный ролл (`base/water/cap` из `harvest_quality`-конфига, `Math.random()<p`); как
   минимум обновить комментарий-«гипотезу» о неполном паритете.
+  _Как:_ `harvest()` катит `Math.random() < pSelect`, `pSelect = min(BASE 0.10 + (watered?0.15:0),
+  CAP 0.90)` — те же числа, что `public.harvest` (константы `HARVEST_SELECT_BASE/WATER_BONUS/CAP_PCT`);
+  детерминированный `wateredUntil?2:1` убран.
 
 ---
 
@@ -393,7 +437,7 @@
 ## state/ (src/data каталоги + state-слайсы)
 
 ### major
-- **STATE-1 · `src/data/catalogs/ingredients.ts` + `recipes.ts` — 14 bridge-полуфабрикатов
+- [x] **STATE-1 · `src/data/catalogs/ingredients.ts` + `recipes.ts` — 14 bridge-полуфабрикатов
   продаются ниже себестоимости входов.** `basePrice` используется универсально как цена продажи
   любого item (нет блокировки для `itemClass:'ingredient'`) → реальная брешь. Примеры:
   `ingr_cheese_curds` вход $3.15 → $1.70 (−46%); `ingr_candied_citrus_peel` вход $211.80 → $115
@@ -402,58 +446,93 @@
   перечисленных `ingr_*` минимум до суммы `basePrice` их recipe-входов (паттерн уже применён к
   `ingr_flour` $0.35→$0.50) **и** расширить проверку маржи в `validate.test.ts` на
   `itemClass==='ingredient'`.
-- **STATE-2 · `src/data/schema.ts (MachineSchema)` + `catalogs/machines.ts` — нет стоимости
+  ПРИМЕНЕНО: `basePrice` поднят для всех 18 затронутых `ingr_*` (butter/cheese_curds/cream/
+  basic_dough/pie_crust_basic/refined_sugar/roasted_coffee/cherry_pie_filling/whipped_cream/
+  pumpkin_puree/pecan_praline/pie_crust_deluxe/peach_cobbler_filling/shrimp_bisque_base/
+  smoked_brisket/refined_praline_sauce/truffle_butter/candied_citrus_peel/bread/biscuit/roux —
+  каждый выше суммы `basePrice` своих recipe-входов, инлайн-коммент `ЦЕНА ПОДНЯТА X→Y (STATE-1)`
+  на каждой строке); в `validate.test.ts` добавлен тест «[Recipe] цена продажи полуфабриката
+  (itemClass ingredient) превышает сумму basePrice его прямых входов» — 41/41 зелёные.
+- [x] **STATE-2 · `src/data/schema.ts (MachineSchema)` + `catalogs/machines.ts` — нет стоимости
   апгрейда станков.** `MachineSchema` без поля цены (в отличие от `BuildingDefSchema.levels[].
   upgradeCostBucks`), хотя `14-economy §4.2` называет апгрейды станков «главным Bucks-синком» и
   даёт `base_cost` (Grill 60/Oven 90/Churn 70/Soda Fountain 35/Ice Cream Maker 75/Coffee
   Percolator 150). Числа не заведены нигде. **Фикс:** добавить поле стоимости
   (`levels:MachineLevelSchema[]` или `baseCost` + кривая ×2.2) и заполнить `machines.ts`
   значениями из §4.2 (остальные станки — диапазон 300–600).
+  ПРИМЕНЕНО: `MachineSchema.baseCost: z.number().positive()` (кривая ×2.2/уровень задокументирована
+  в схеме); `machines.ts` заполнен — MVP-станки дословно из §4.2 (Grill 60/Oven 90/Churn 70/
+  Soda Fountain 35/Ice Cream Maker 75/Coffee Percolator 150), Prep Counter + 4 поздних станка —
+  гипотеза 300–600 (нет явного числа в §4.2, помечено инлайн-комментом).
 
 ### minor
-- **STATE-3 · `src/data/catalogs/recipes.ts` (докстринг ~24-131) — устаревший, вводит в
+- [x] **STATE-3 · `src/data/catalogs/recipes.ts` (докстринг ~24-131) — устаревший, вводит в
   заблуждение.** Описывает уже устранённые пробелы (134 `dish_*`, `mch_prep_counter`,
   `ingr_flour` $0.35) как ТЕКУЩИЕ; `validate.test.ts` зелёный. **Фикс:** свернуть разделы 3–5 до
   «см. git-историю ingredients.ts/machines.ts — синхронизировано» или пометить РЕШЕНО.
-- **STATE-4 · `src/state/net.ts` (докстринг) vs `src/state/index.ts` (partialize).**
+  ПРИМЕНЕНО: разделы докстринга помечены `[СИНХРОНИЗИРОВАНО — STATE-3]` инлайн, п.5 свёрнут до
+  ссылки на git-историю `ingredients.ts`/`machines.ts` вместо описания пробелов как текущих.
+- [x] **STATE-4 · `src/state/net.ts` (докстринг) vs `src/state/index.ts` (partialize).**
   Докстринг утверждает «Только queueLen персистится», но `partialize` включает только `ui.*` и
   `scene.active` — `net.queueLen` не персистится. **Фикс:** привести комментарий к факту (очередь
   и так в IndexedDB, ресинк на бутстрапе) — убрать ложное «персистится».
+  ПРИМЕНЕНО: докстринг `net.ts` переписан — явно `[STATE-4] слайс НЕ персистится вообще`, ссылка
+  на белый список `partialize` (`ui.*`/`scene.active`) и на IndexedDB-очередь как источник истины.
 
 ---
 
 ## tests/
 
 ### major
-- **TEST-1 · `src/net/adapters/local.test.ts` + `src/net/local/town.ts:170-177 catchUpRollover`
+- **[x] TEST-1 · `src/net/adapters/local.test.ts` + `src/net/local/town.ts:170-177 catchUpRollover`
   — мульти-недельный catch-up не тестируется.** Все тесты двигают часы ровно на 1 неделю; цикл
   `while (weekIndex<targetWeek) resetWeek(...)` (для возврата после 2+ пропущенных недель,
   Vacation до 30 дней) не покрыт. **Фикс:** тест `clock.advance(3*WEEK_MS)` за раз, проверить:
   (a) `weekIndex` +3; (b) `routePass.tier` +3 (кап 100); (c) coop/contests/event принадлежат
   ФИНАЛЬной неделе (seed/deadline); (d) нет остаточных fair-лотов/`personalFp`.
-- **TEST-2 · `src/net/adapters/local.ts` (processFairSales/fairOpen/fairList) + local.test.ts —
+  _Как:_ добавлен `describe('…многонедельный catch-up rollover (TEST-1)')` в `local.test.ts` —
+  засевает незакрытый fair-лот + личный вклад ивента на неделе W, `clock.advance(3*WEEK_MS)` разом,
+  проверяет (a) `weekIndex+3`, (b) `routePass.tier+3`/`xp=0`, (c) coop/contest/event id и
+  seed/deadline привязаны к `calAfter.weekIndex` (финальной неделе, не промежуточным), (d) `fair.lots`
+  пуст, `fair.openedAt` не задан, `event.personalFp=0`. Зелёный (уже был закоммичен в c4b7ab3,
+  переверено: 31/31 в `local.test.ts`, tsc чист).
+- **[x] TEST-2 · `src/net/adapters/local.ts` (processFairSales/fairOpen/fairList) + local.test.ts —
   граница закрытия окна ярмарки не покрыта.** `processFairSales` (`:408-424`) продаёт по
   `openedAt` + прошедшим часам, не проверяя `FAIR_CLOSE_OFFSET`/`isWindowOpen`; `fairOpen`/
   `fairList` (`:854-889`) фазу не смотрят. Промежуток Вс 12:00→23:59 не тестируется. **Фикс:**
   тест: открыть ярмарку, листнуть лот, продвинуть часы за `FAIR_CLOSE_OFFSET` (в `sun_event`) до
   rollover, проверить остановку пассивных продаж / `window_closed` — зафиксировать контракт.
+  _Как:_ добавлен `describe('…граница закрытия окна ярмарки (TEST-2)')` — большой сток, `fairOpen`+
+  `fairList`, `clock.advance` ровно до `weekStartOfIndex(WEEK)+FAIR_CLOSE_OFFSET`, затем ещё
+  `+2*HOUR_MS`: подтверждено (регресс-тест текущего контракта, не баг-фикс) — `processFairSales`
+  не смотрит `FAIR_CLOSE_OFFSET`, остаток лота продолжает уменьшаться после закрытия окна вплоть
+  до rollover. Код `processFairSales`/`fairOpen`/`fairList` не менялся (TEST-зона фиксирует
+  наблюдаемое поведение, а не чинит его — правка поведения не входит в TEST-scope).
 
 ### minor
-- **TEST-3 · `src/net/adapters/local.test.ts` — граница coop-дедлайна.**
+- **[x] TEST-3 · `src/net/adapters/local.test.ts` — граница coop-дедлайна.**
   `now() > deadlineAt` (`local.ts:949`) тестируется только глубоко за дедлайном. **Фикс:** два
   boundary-теста: contribute при `== deadlineAt` (успех, half-open thu_push) и `deadlineAt+1`
   (`window_closed`) — ловит `>` ⇄ `>=`.
-- **TEST-4 · `src/net/adapters/supabase.test.ts` — флейки `tick()` (setTimeout 5ms).**
+  _Как:_ два теста в `describe('…анти-чит валидация')`: `clock.advance(order.deadlineAt-clock.now())`
+  → `coopContribute` `ok:true` (граница `==` ещё успех, half-open); `+1мс` → `window_closed`.
+  Подтверждает `now() > order.deadlineAt` в `local.ts:963` — именно `>`, не `>=`.
+- **[x] TEST-4 · `src/net/adapters/supabase.test.ts` — флейки `tick()` (setTimeout 5ms).**
   Фиксированный 5ms-сон гоняется с fire-and-forget `flush()` из `monitor.onChange`. **Фикс:**
   детерминированно ждать дренаж (await промис `flush()` через `onQueueChange`, либо `vi.waitFor`
   на состояние моков) вместо magic-константы.
+  _Как:_ magic `tick()` (`setTimeout(5)`) заменён на `waitFor(assertion)` = `vi.waitFor(assertion,
+  {timeout:1000, interval:5})` — поллит наблюдаемый эффект дренажа (`confirms`/`rollbacks`/`calls`)
+  вместо фиксированной паузы, в 3 местах офлайн-очереди/реконнекта. Заодно синхронизирован
+  `Edge оффлайн` тест на реальную Edge-функцию `iapVerify` (после NET-2 `migrateFarm` стал RPC) —
+  оставлено как есть (соседняя NET-зона, тест уже зелёный).
 
 ---
 
 ## app/ (композиция и разводка core-loop) — согласовать с архитектурой (`App.tsx` — общий файл)
 
 ### critical
-- **APP-1 · `src/app/PanelHost.tsx` + `src/scene/**` + `src/ui/hud/HudRoot.tsx` — core-loop
+- [x] **APP-1 · `src/app/PanelHost.tsx` + `src/scene/**` + `src/ui/hud/HudRoot.tsx` — core-loop
   панели смонтированы, но недостижимы.** `openPanel()` зовётся только для `ui_chat`,
   `ui_notif_log`, `ui_recipe_box`, `ui_shift`. Недостижимы: **`ui_demand_board`, `ui_shop`,
   `ui_coop_orders`, `ui_potluck`, `ui_fair_stall`, `ui_appetite_meter`** — при том что FTUE учит
@@ -463,9 +542,13 @@
   'ui_coop_orders' | 'ui_potluck')`; кликабельный меш прилавка/контест-борда на ярмарке →
   `ui_fair_stall`/`ui_appetite_meter` (паттерн `Buildings.tsx`/`Machines.tsx onClick →
   useFarmActions`). Минимум — HUD-лаунчер «панели» на каждый смонтированный `ui_*`.
+  ПРИМЕНЕНО: заведён `src/app/PanelLauncher.tsx` (смонтирован в `App.tsx` под `SystemsProvider`) —
+  HUD-кнопка «Панели» раскрывает индекс всех core-панелей (`ui_demand_board`/`ui_recipe_box`/
+  `ui_shop`/`ui_coop_orders`/`ui_potluck`/`ui_fair_stall`/`ui_appetite_meter`), каждый пункт →
+  `openPanel(key)`; достижимость из прод-UI без dev-`?panel=`. Показан только после FTUE (`phase==='done'`).
 
 ### major
-- **APP-2 · `src/app/PanelHost.tsx` — meta-панели тоже осиротели.**
+- [x] **APP-2 · `src/app/PanelHost.tsx` — meta-панели тоже осиротели.**
   Смонтированы, но никто не зовёт opener: `ui_prize_machine`, `ui_route_pass`, `ui_neon_builder`,
   `ui_toy_shelf`, `ui_ribbon_wall`, `ui_postcards`, `ui_photo_mode`, `ui_mentor`,
   `ui_vacation_toggle`, `ui_pet_card`, `ui_contest_gallery`, `ui_moving_truck`. Меш
@@ -473,19 +556,29 @@
   openers (контест-борд → `ui_contest_gallery`; shop/prize/route-pass POI или HUD;
   diner-фасад → `ui_neon_builder`; collections HUD → toy_shelf/ribbon_wall/postcards/photo_mode;
   coop/pet/mentor/vacation из Town); дать мешу `onClick`.
-- **APP-3 · `src/App.tsx (Canvas key={active})` — ремаунт Canvas на каждую смену сцены.**
+  ПРИМЕНЕНО: те же `PanelLauncher` секции — блок «Ещё» (`MORE_PANELS`) даёт opener всем мета-панелям
+  (`ui_route_pass`/`ui_prize_machine`/`ui_neon_builder`/`ui_toy_shelf`/`ui_ribbon_wall`/`ui_postcards`/
+  `ui_photo_mode`/`ui_contest_gallery`/`ui_pet_card`/`ui_mentor`/`ui_vacation_toggle`/`ui_moving_truck`).
+  Реализован минимум из плана (HUD-индекс достижимости); контекстные POI/фасады оставлены зонам сцен/ui.
+- [x] **APP-3 · `src/App.tsx (Canvas key={active})` — ремаунт Canvas на каждую смену сцены.**
   Каждый свитч Farm/Town/Fair диспозит рендерер и теряет WebGL-контекст («Context Lost»); после
   нескольких свитчей сцена рендерится пустой. Один свитч выживает (e2e проходит), повторная
   навигация — флейк/пустой канвас без восстановления кроме reload. **Фикс:** один персистентный
   `<Canvas>`, свапать только его scene-graph детей (`<ActiveScene active=…/>` внутри стабильного
   Canvas); освобождать GPU анмаунтом внутреннего графа, не рендерера; если нужен `key` — на
   внутреннем `<group>`, не на `<Canvas>`.
+  ПРИМЕНЕНО: `<Canvas>` в `App.tsx` больше не ключуется по сцене (рендерер персистентен); `key={active}`
+  перенесён на внутренний `<ActiveScene>` под `<Suspense>`/`SceneBoundary` — смена сцены размонтирует
+  scene-граф (r3f/drei авто-диспозят GPU-объекты), WebGL-контекст переживает переходы (нет «Context Lost»).
 
 ### minor
-- **APP-4 · `src/App.tsx (OnboardingHost)` — не передан `personalDay`.**
+- [x] **APP-4 · `src/App.tsx (OnboardingHost)` — не передан `personalDay`.**
   Без него пост-FTUE `DailyGoalCard` («next up») не рендерится → выпускник FTUE остаётся без
   направляющей подсказки (усугубляет APP-1). **Фикс:** передать реальный `personalDay` (1..7 из
   clock/progression) в `OnboardingHost`, либо постоянный HUD-хинт daily-goal; парно с APP-1.
+  ПРИМЕНЕНО: `App.tsx` читает `personalDay` из `progression.streak.streakDays` (счётчик активных
+  дней, ближайший источник 1..7) и прокидывает в `<OnboardingHost personalDay={…}>`; вне 1..7
+  `DailyGoalCard` сам вернёт `null`, нет прогрессии → `undefined` (безопасно).
 
 ---
 
