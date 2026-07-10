@@ -10,17 +10,12 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { emptyToolbar, moveItem, reconcileToolbar, type ToolbarLayout } from './toolbar'
+import type { CropId, ForageId, Inventory, ItemId, Seeds } from './items'
 
-export type CropId = 'carrot' | 'greens' | 'tomato'
-
-/**
- * Лесные находки. Их не сажают и не покупают — их находят, поэтому у них нет
- * ни семян, ни цены. Отдельный тип от CropId: в грядку гриб не воткнёшь.
- */
-export type ForageId = 'mushroom' | 'egg'
-
-/** Всё, что лежит в сумке героя: и урожай, и находки. */
-export type ItemId = CropId | ForageId
+// Предметы живут в items.ts — иначе store и toolbar импортировали бы друг
+// друга по кругу. Реэкспорт, чтобы остальной код по-прежнему брал их отсюда.
+export { CROPS, FORAGE_IDS, ITEM_IDS } from './items'
+export type { CropId, ForageId, Inventory, ItemId, Seeds } from './items'
 
 export type RecipeId = 'salad' | 'soup' | 'taco' | 'mushroom_soup' | 'omelette'
 export type Phase = 'farm' | 'truck'
@@ -93,12 +88,6 @@ export interface Notice {
 /** Сколько тостов держим на экране одновременно. */
 const MAX_NOTICES = 4
 
-/** Сумка героя. Находки лежат в ней рядом с урожаем — тратятся они одинаково. */
-export type Inventory = Record<ItemId, number>
-
-/** Семена на руках. Только культуры: находки не сеют. */
-export type Seeds = Record<CropId, number>
-
 /**
  * Цвет одежды героя. Хранится строкой `#rrggbb`: сцена красит им материал
  * `Hero`, портрет в инвентаре — тот же цвет. Значение по умолчанию совпадает
@@ -125,13 +114,6 @@ export const SLOTS_PER_BED = 3
 export const SLOT_IDS: SlotId[] = Array.from({ length: BEDS }, (_, bed) =>
   Array.from({ length: SLOTS_PER_BED }, (_, slot) => `${bed}:${slot}`),
 ).flat()
-
-export const CROPS: CropId[] = ['carrot', 'greens', 'tomato']
-
-export const FORAGE_IDS: ForageId[] = ['mushroom', 'egg']
-
-/** Порядок ячеек в сумке: сперва урожай, потом находки. */
-export const ITEM_IDS: ItemId[] = [...CROPS, ...FORAGE_IDS]
 
 /** Индекс грядки из slotId (`${bed}:${slot}`). */
 export function bedOf(slotId: SlotId): number {

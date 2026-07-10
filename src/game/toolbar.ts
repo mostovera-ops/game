@@ -11,8 +11,10 @@
  *
  * Чистые функции без React и без zustand: их зовёт стор, а тесты — напрямую.
  */
-import type { CropId, Inventory, ItemId, Seeds } from './store'
-import { CROPS, ITEM_IDS } from './store'
+// Из items.ts, а не из store.ts: стор сам импортирует этот модуль, и кольцо
+// импортов рушило бы загрузку (см. items.ts).
+import type { CropId, Inventory, ItemId, Seeds } from './items'
+import { CROPS, ITEM_IDS } from './items'
 
 export const TOOLBAR_CELLS = 10
 
