@@ -7,7 +7,7 @@
  *   node scripts/db-apply.mjs --status  # показать применённые/ожидающие
  *   node scripts/db-apply.mjs --dry     # показать, что было бы применено
  *
- * Токен: env SUPABASE_ACCESS_TOKEN, иначе macOS Keychain ("Supabase CLI",
+ * Токен: env SUPABASE_ACCESS_TOKEN → .env.sunnyside → Keychain "Supabase Sunnyside PAT" (запись "Supabase CLI" НЕ читать —
  * затем "Supabase Sunnyside PAT"). Токен в файлы не пишем.
  * Реестр применённого — таблица public._sunnyside_migrations в самой БД.
  */
@@ -23,13 +23,18 @@ const API = `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`
 
 function getToken() {
   if (process.env.SUPABASE_ACCESS_TOKEN) return process.env.SUPABASE_ACCESS_TOKEN.trim()
-  for (const service of ['Supabase CLI', 'Supabase Sunnyside PAT']) {
-    try {
-      const t = execSync(`security find-generic-password -s ${JSON.stringify(service)} -w`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
-      if (t.startsWith('sbp_')) return t
-    } catch { /* try next */ }
-  }
-  console.error('Не найден access token (env SUPABASE_ACCESS_TOKEN или Keychain).')
+  // .env.sunnyside в корне репо (гитигнорен) — основной источник
+  try {
+    const env = readFileSync(join(ROOT, '.env.sunnyside'), 'utf8')
+    const m = env.match(/^SUPABASE_ACCESS_TOKEN=(sbp_\S+)/m)
+    if (m) return m[1]
+  } catch { /* нет файла — пробуем keychain */ }
+  // ТОЛЬКО наша запись — чтение "Supabase CLI" вызывает GUI-запрос пароля, не трогать!
+  try {
+    const t = execSync(`security find-generic-password -s "Supabase Sunnyside PAT" -w`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+    if (t.startsWith('sbp_')) return t
+  } catch { /* fallthrough */ }
+  console.error('Не найден access token (env SUPABASE_ACCESS_TOKEN / .env.sunnyside / Keychain "Supabase Sunnyside PAT").')
   process.exit(1)
 }
 
