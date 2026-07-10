@@ -7,7 +7,8 @@
  */
 import { useEffect } from 'react'
 import { CROPS, FORAGE_IDS, HERO_COLORS, useGameStore } from '../game/store'
-import { ITEM_EMOJI, ITEM_NAME } from './crops'
+import { ITEM_NAME } from './crops'
+import { ItemIcon } from './ItemIcon'
 import { HeroPortrait } from './HeroPortrait'
 
 export function Inventory({ onClose }: { onClose: () => void }) {
@@ -92,7 +93,7 @@ export function Inventory({ onClose }: { onClose: () => void }) {
                     title={`${ITEM_NAME[c]}: урожай ${inventory[c]}, семян ${seeds[c]}`}
                     className="flex items-center gap-2 rounded bg-white/5 px-3 py-2 text-sm"
                   >
-                    <span>{ITEM_EMOJI[c]}</span>
+                    <ItemIcon item={c} />
                     <span className="font-bold">{inventory[c]}</span>
                     <span className="opacity-40">·</span>
                     <span className="opacity-60">🌱 {seeds[c]}</span>
@@ -118,7 +119,7 @@ export function Inventory({ onClose }: { onClose: () => void }) {
                       inventory[f] ? '' : 'opacity-30'
                     }`}
                   >
-                    <span>{ITEM_EMOJI[f]}</span>
+                    <ItemIcon item={f} />
                     <span className="font-bold">{inventory[f]}</span>
                   </div>
                 ))}

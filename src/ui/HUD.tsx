@@ -27,6 +27,7 @@ import {
 import { uiClick } from '../audio/engine'
 import { getHoveredOrder, subscribeOrderHover } from '../scene/orderHover'
 import { ITEM_EMOJI, ITEM_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
+import { ItemIcon } from './ItemIcon'
 import { HeroPortrait } from './HeroPortrait'
 import { Inventory } from './Inventory'
 import { RecipeBook } from './RecipeBook'
@@ -44,7 +45,8 @@ const panel = 'pointer-events-auto rounded-lg bg-[#241a20]/70 backdrop-blur'
 /** Тост: текст и тон по виду события. Тон — единственный носитель «плохо/хорошо». */
 type Tone = 'good' | 'warn' | 'bad'
 
-function noticeText(n: Notice): { text: string; tone: Tone } {
+// ReactNode, а не строка: у гриба нет своего эмодзи, и его значок — <svg>.
+function noticeText(n: Notice): { text: React.ReactNode; tone: Tone } {
   switch (n.kind) {
     case 'served':
       return {
@@ -74,7 +76,14 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
         ? { text: `Удачный сбор! ${ITEM_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
         : { text: `${ITEM_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
     case 'foraged':
-      return { text: `Находка: ${ITEM_EMOJI[n.item!]} ${ITEM_NAME[n.item!]}`, tone: 'good' }
+      return {
+        text: (
+          <>
+            Находка: <ItemIcon item={n.item!} /> {ITEM_NAME[n.item!]}
+          </>
+        ),
+        tone: 'good',
+      }
     case 'recipe-found':
       return {
         text: `Новый рецепт: ${RECIPE_EMOJI[n.recipe!]} ${RECIPE_NAME[n.recipe!]} — смотрите книгу (B)`,
@@ -449,7 +458,7 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
       {...hoverTip(hint)}
       className={`${DRAGGABLE} grid h-12 w-12 place-items-center bg-white/5 text-2xl ${ring}`}
     >
-      <span>{ITEM_EMOJI[cell.item]}</span>
+      <ItemIcon item={cell.item} />
       <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
       <GripDots />
     </div>
@@ -629,7 +638,7 @@ function OrderTooltip() {
             }`}
           >
             <span>
-              {ITEM_EMOJI[c]} {ITEM_NAME[c]}
+              <ItemIcon item={c} /> {ITEM_NAME[c]}
             </span>
             <span className="font-mono">
               {have}/{need}

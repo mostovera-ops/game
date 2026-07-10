@@ -9,6 +9,11 @@
  */
 import type { ForageId, ItemId, RecipeId } from '../game/store'
 
+/**
+ * Значки предметов. Рисовать ими гриб нельзя: 🍄 — мухомор, а собирают в игре
+ * боровик. Для показа берите <ItemIcon>: он подменяет гриб своим рисунком.
+ * Строка тут осталась ради предметов, у которых эмодзи честное.
+ */
 export const ITEM_EMOJI: Record<ItemId, string> = {
   carrot: '🥕',
   greens: '🥬',
