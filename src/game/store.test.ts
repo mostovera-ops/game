@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BEDS,
+  craftableCount,
   CROPS,
   RECIPES,
   RECIPE_IDS,
@@ -158,6 +159,30 @@ describe('инструменты', () => {
     S().endDay() // созрело
     expect(slotActionable(slot(id), 'can')).toBe(true)
     expect(slotActionable(slot(id), 'hand')).toBe(true)
+  })
+})
+
+describe('полив принадлежит грядке, а не растению', () => {
+  it('сбор урожая не осушает грядку', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 0.5)
+    S().water(id)
+    expect(slot(id).watered).toBe(true)
+
+    S().harvest(id)
+    expect(slot(id).crop).toBeNull()
+    expect(slot(id).watered).toBe(true)
+  })
+
+  it('посадка в мокрую грядку сохраняет полив, и росток растёт', () => {
+    const id = SLOT_IDS[1]
+    S().water(id) // поливаем пустую грядку
+    S().plant(id)
+    expect(slot(id).watered).toBe(true)
+
+    S().endDay()
+    expect(slot(id).stage).toBe(1) // политый — вырос, а не погиб
+    expect(slot(id).crop).not.toBeNull()
   })
 })
 
@@ -432,6 +457,38 @@ describe('день фудтрака (Task 3)', () => {
     ended: false,
     nextCustomerId: 1,
     ...over,
+  })
+
+  it('пропуск заказа отпускает первого и двигает очередь', () => {
+    useGameStore.setState({
+      phase: 'truck',
+      money: 0,
+      truck: mkTruck({
+        queue: [
+          { id: 1, want: 'taco' as const, patience: 16, maxPatience: 16 },
+          { id: 2, want: 'soup' as const, patience: 16, maxPatience: 16 },
+        ],
+      }),
+    })
+    S().skipCustomer()
+    expect(S().truck!.queue.map((c) => c.id)).toEqual([2])
+    expect(S().truck!.served).toBe(0) // пропуск — не продажа
+    expect(S().money).toBe(0)
+    const n = S().notices.at(-1)!
+    expect(n.kind).toBe('skipped')
+    expect(n.recipe).toBe('taco')
+  })
+
+  it('пропускать некого — тост, очередь не трогаем', () => {
+    useGameStore.setState({ phase: 'truck', truck: mkTruck() })
+    S().skipCustomer()
+    expect(S().notices.at(-1)!.kind).toBe('no-customer')
+  })
+
+  it('craftableCount ограничен самым дефицитным ингредиентом', () => {
+    expect(craftableCount('soup', { carrot: 5, greens: 0, tomato: 0 })).toBe(2) // 2 моркови на порцию
+    expect(craftableCount('taco', { carrot: 3, greens: 1, tomato: 9 })).toBe(1) // зелень в дефиците
+    expect(craftableCount('salad', { carrot: 9, greens: 0, tomato: 9 })).toBe(0)
   })
 
   it('endDay на дне 6 открывает фудтрек', () => {

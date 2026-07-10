@@ -40,8 +40,11 @@ export const HERO_SEAT = new THREE.Vector3(SERVE_X, 0, FACE_Z - 0.43)
  */
 export const QUEUE_HEAD = new THREE.Vector3(SERVE_X + 0.35, 0, FACE_Z + 0.5)
 
-/** Шаг между клиентами в очереди. */
-export const QUEUE_STEP = 0.85
+/**
+ * Шаг между клиентами. Метр, а не 0.85: очередь должна дотягиваться до ёлки
+ * справа, иначе хвост толпится у самого окна.
+ */
+export const QUEUE_STEP = 1.0
 
 /**
  * Хвост очереди уходит вдоль +X — вправо по экрану от фудтрака.
@@ -52,7 +55,7 @@ export const QUEUE_STEP = 0.85
 export const QUEUE_DIR = new THREE.Vector3(1, 0, 0)
 
 /** Откуда клиенты приходят: справа, из-за деревьев, вдоль хвоста очереди. */
-export const SPAWN = new THREE.Vector3(SERVE_X + 6.0, 0, FACE_Z + 0.72)
+export const SPAWN = new THREE.Vector3(SERVE_X + 7.0, 0, FACE_Z + 0.5)
 
 /** Место i-го в очереди. */
 export function queueSpot(i: number, out = new THREE.Vector3()): THREE.Vector3 {

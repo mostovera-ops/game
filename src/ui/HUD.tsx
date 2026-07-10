@@ -13,6 +13,7 @@
  */
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
+  craftableCount,
   RECIPE_IDS,
   RECIPES,
   useGameStore,
@@ -80,6 +81,11 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
       return { text: 'Не хватает денег', tone: 'bad' }
     case 'bought':
       return { text: `Куплено семян: ${CROP_EMOJI[n.crop!]} ×${n.amount}`, tone: 'good' }
+    case 'skipped':
+      return {
+        text: `Заказ пропущен: ${RECIPE_EMOJI[n.recipe!]} ${RECIPE_NAME[n.recipe!]}`,
+        tone: 'warn',
+      }
   }
 }
 
@@ -197,16 +203,35 @@ function ToolButton({
   )
 }
 
-const TOOL_HINT: Record<Exclude<Tool, 'seed'>, string> = {
-  can: 'Лейка — полить росток',
-  hand: 'Рука — собрать созревшее',
-}
-
-const TOOL_GLYPH: Record<Exclude<Tool, 'seed'>, string> = { can: '💧', hand: '✋' }
-const TOOL_ACTIVE: Record<Exclude<Tool, 'seed'>, string> = {
-  can: 'bg-[#6db3f2]',
-  hand: 'bg-[#f4b942]',
-}
+/**
+ * Действия героя. Клавиши буквенные: цифры разобраны ячейками инвентаря, а
+ * WASD и E уже заняты ходьбой и сумкой.
+ */
+const ACTIONS: {
+  tool: Exclude<Tool, 'seed'>
+  glyph: string
+  hint: string
+  hotkey: string
+  code: string
+  activeClass: string
+}[] = [
+  {
+    tool: 'can',
+    glyph: '💧',
+    hint: 'Полить (Q)',
+    hotkey: 'Q',
+    code: 'KeyQ',
+    activeClass: 'bg-[#6db3f2]',
+  },
+  {
+    tool: 'hand',
+    glyph: '✋',
+    hint: 'Собрать (R)',
+    hotkey: 'R',
+    code: 'KeyR',
+    activeClass: 'bg-[#f4b942]',
+  },
+]
 
 /**
  * Пустая ячейка: рамка есть, содержимого нет. Цифру не пишем — нажимать нечего,
@@ -216,12 +241,33 @@ function EmptyCell() {
   return <div className="h-12 w-12 rounded-md bg-black/20" />
 }
 
+/** Лейка и рука: не имущество, а действия — поэтому отдельно от ячеек. */
+function Actions() {
+  const tool = useGameStore((s) => s.tool)
+  const selectTool = useGameStore((s) => s.selectTool)
+  return (
+    <div className="flex items-center gap-2">
+      {ACTIONS.map((a) => (
+        <ToolButton
+          key={a.tool}
+          active={tool === a.tool}
+          activeClass={a.activeClass}
+          hint={a.hint}
+          hotkey={a.hotkey}
+          onClick={() => selectTool(a.tool)}
+        >
+          {a.glyph}
+        </ToolButton>
+      ))}
+    </div>
+  )
+}
+
 function ToolbarCell({ slot }: { slot: Slot }) {
   const selectedSeed = useGameStore((s) => s.selectedSeed)
   const tool = useGameStore((s) => s.tool)
   const seeds = useGameStore((s) => s.seeds)
   const selectSeed = useGameStore((s) => s.selectSeed)
-  const selectTool = useGameStore((s) => s.selectTool)
 
   const cell = slot.cell
   if (!cell) return <EmptyCell />
@@ -244,20 +290,6 @@ function ToolbarCell({ slot }: { slot: Slot }) {
     )
   }
 
-  if (cell.kind === 'tool') {
-    return (
-      <ToolButton
-        active={tool === cell.tool}
-        activeClass={TOOL_ACTIVE[cell.tool]}
-        hint={TOOL_HINT[cell.tool]}
-        hotkey={slot.hotkey}
-        onClick={() => selectTool(cell.tool)}
-      >
-        {TOOL_GLYPH[cell.tool]}
-      </ToolButton>
-    )
-  }
-
   // Урожай: он не инструмент, кликать нечего — только счётчик.
   return (
     <div
@@ -271,10 +303,12 @@ function ToolbarCell({ slot }: { slot: Slot }) {
 }
 
 /**
- * Нижняя панель: слева герой, посередине десять ячеек, справа — действие фазы.
+ * Нижняя панель: слева герой, посередине десять ячеек инвентаря, справа —
+ * действия (лейка и рука).
  *
  * Урожай лежит в тех же ячейках, что и семена: это одна экипировка, а не два
  * разных списка. Чего нет — того нет: ни нулей, ни приглушённых иконок.
+ * Действия отделены чертой: они не имущество, их нельзя потратить.
  */
 function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
   const phase = useGameStore((s) => s.phase)
@@ -300,6 +334,14 @@ function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
       {slots.map((slot, i) => (
         <ToolbarCell key={i} slot={slot} />
       ))}
+
+      {/* Действия — только на ферме: в день торговли грядки на замке. */}
+      {phase === 'farm' && (
+        <>
+          <div className="mx-1 h-10 w-px bg-white/15" />
+          <Actions />
+        </>
+      )}
     </div>
   )
 }
@@ -326,43 +368,58 @@ function FarmAction() {
   )
 }
 
-/** Хватает ли в сумке ингредиентов на блюдо. */
-function canCook(recipe: RecipeId, inventory: Record<CropId, number>): boolean {
-  const needs = RECIPES[recipe].needs
-  return (Object.keys(needs) as CropId[]).every((c) => inventory[c] >= (needs[c] ?? 0))
-}
-
 /**
- * Меню выдачи. Только блюдо и клавиша: цену игрок и так видит в счётчике денег,
- * а состав — там, где он нужен, над заказом клиента.
+ * Кнопка выдачи. Число справа — сколько таких порций герой соберёт из того,
+ * что в сумке. Не цена и не номер клавиши: у прилавка важно, хватит ли.
  */
-function DishCard({ recipe, hotkey }: { recipe: RecipeId; hotkey: number }) {
+function DishCard({ recipe }: { recipe: RecipeId }) {
   const serveCustomer = useGameStore((s) => s.serveCustomer)
   const inventory = useGameStore((s) => s.inventory)
-  const enough = canCook(recipe, inventory)
+  const count = craftableCount(recipe, inventory)
 
   return (
     <button
       onClick={() => serveCustomer(recipe)}
+      title={`${RECIPE_NAME[recipe]}: можно собрать ${count}`}
       className={`relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-bold text-[#241a20] transition hover:brightness-110 ${
-        enough ? 'bg-[#ff8b5e]/90' : 'bg-[#ff8b5e]/40'
+        count > 0 ? 'bg-[#ff8b5e]/90' : 'bg-[#ff8b5e]/40'
       }`}
     >
       <span className="text-xl">{RECIPE_EMOJI[recipe]}</span>
       <span>{RECIPE_NAME[recipe]}</span>
-      <span className="text-[10px] opacity-70">{hotkey}</span>
+      <span
+        className={`ml-1 min-w-5 rounded px-1.5 py-0.5 text-center text-xs ${
+          count > 0 ? 'bg-[#241a20]/25' : 'bg-[#241a20]/10 opacity-60'
+        }`}
+      >
+        {count}
+      </span>
     </button>
   )
 }
 
 function TruckAction() {
+  const skipCustomer = useGameStore((s) => s.skipCustomer)
+  const hasQueue = useGameStore((s) => (s.truck?.queue.length ?? 0) > 0)
+
   return (
     <div className={`${panel} flex flex-col items-start gap-1.5 p-2`}>
       <span className="px-1 text-[9px] uppercase tracking-wide opacity-50">выдать</span>
       <div className="flex items-center gap-2">
-        {RECIPE_IDS.map((r, i) => (
-          <DishCard key={r} recipe={r} hotkey={i + 1} />
+        {RECIPE_IDS.map((r) => (
+          <DishCard key={r} recipe={r} />
         ))}
+
+        <div className="mx-1 h-9 w-px bg-white/15" />
+
+        <button
+          onClick={skipCustomer}
+          disabled={!hasQueue}
+          title="Отпустить первого в очереди, ничего не подав"
+          className="rounded-md bg-white/10 px-3 py-2 text-sm font-bold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          Пропустить заказ
+        </button>
       </div>
     </div>
   )
@@ -462,13 +519,18 @@ export function HUD() {
         return
       }
 
+      // Действия — по букве: цифры разобраны ячейками инвентаря.
+      const action = ACTIONS.find((a) => a.code === e.code)
+      if (action) {
+        selectTool(action.tool)
+        return
+      }
+
       // На ферме цифра — номер ячейки тулбара, ровно та, что под ней нарисована.
       const index = TOOLBAR_KEYS.indexOf(e.key)
       if (index < 0) return
       const cell = buildToolbar(phase, seeds, inventory)[index].cell
-      if (!cell) return
-      if (cell.kind === 'seed') selectSeed(cell.crop)
-      else if (cell.kind === 'tool') selectTool(cell.tool)
+      if (cell?.kind === 'seed') selectSeed(cell.crop)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

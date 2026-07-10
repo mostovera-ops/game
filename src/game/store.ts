@@ -66,6 +66,7 @@ export type NoticeKind =
   | 'no-seeds'
   | 'no-money'
   | 'bought'
+  | 'skipped'
 
 export interface Notice {
   id: number
@@ -143,6 +144,18 @@ export const START_SEEDS = 3
 export const START_MONEY = 20
 
 export const RECIPE_IDS = Object.keys(RECIPES) as RecipeId[]
+
+/**
+ * Сколько порций блюда герой соберёт из того, что в сумке.
+ *
+ * Ограничивает самый дефицитный ингредиент. Это число HUD пишет на кнопке
+ * выдачи вместо цены: игроку важно, хватит ли, а не сколько это стоит.
+ */
+export function craftableCount(recipe: RecipeId, inventory: Inventory): number {
+  const needs = RECIPES[recipe].needs
+  const ids = Object.keys(needs) as CropId[]
+  return ids.reduce((min, crop) => Math.min(min, Math.floor(inventory[crop] / needs[crop]!)), Infinity)
+}
 
 export interface Customer {
   /**
@@ -261,6 +274,8 @@ interface GameActions {
   tickTruck: (dt: number) => void
   /** Подать блюдо первому клиенту очереди. */
   serveCustomer: (recipeId: RecipeId) => ServeResult
+  /** Отпустить первого в очереди, ничего ему не подав. */
+  skipCustomer: () => void
   /** Начать новую неделю (день 1, чистые грядки; деньги/инвентарь остаются). */
   nextWeek: () => void
   /** Полный сброс к первому дню. */
@@ -360,10 +375,10 @@ export const useGameStore = create<GameState>()(
           if (s.seeds[crop] < 1) return withNotice(s, { kind: 'no-seeds', crop })
           return {
             seeds: { ...s.seeds, [crop]: s.seeds[crop] - 1 },
+            // Полив принадлежит земле, а не растению: посадка в мокрую грядку
+            // не высушивает её.
             slots: s.slots.map((x) =>
-              x.id === slotId
-                ? { ...x, crop, stage: 0 as Stage, watered: false, lucky: false }
-                : x,
+              x.id === slotId ? { ...x, crop, stage: 0 as Stage, lucky: false } : x,
             ),
           }
         }),
@@ -382,7 +397,10 @@ export const useGameStore = create<GameState>()(
           const crop = slot.crop
           const amount = slot.lucky ? LUCKY_YIELD : 1
           return {
-            slots: s.slots.map((x) => (x.id === slotId ? emptySlot(x.id) : x)),
+            // Грядка остаётся политой: собрали растение, а не воду из земли.
+            slots: s.slots.map((x) =>
+              x.id === slotId ? { ...emptySlot(x.id), watered: x.watered } : x,
+            ),
             inventory: { ...s.inventory, [crop]: s.inventory[crop] + amount },
             ...withNotice(s, { kind: 'harvest', crop, amount }),
           }
@@ -496,6 +514,21 @@ export const useGameStore = create<GameState>()(
         })
         return 'ok'
       },
+
+      // Заказ, который нечем закрыть, держит очередь: пропускаем его руками,
+      // не дожидаясь, пока у клиента кончится терпение.
+      skipCustomer: () =>
+        set((s) => {
+          const t = s.truck
+          if (!t || t.ended || t.queue.length === 0) {
+            return withNotice(s, { kind: 'no-customer' })
+          }
+          const front = t.queue[0]
+          return {
+            truck: { ...t, queue: t.queue.slice(1) },
+            ...withNotice(s, { kind: 'skipped', recipe: front.want }),
+          }
+        }),
 
       // Семена и деньги переезжают в новую неделю: они и есть накопленный
       // прогресс. Даром их больше не выдают — только лавка.
