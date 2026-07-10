@@ -30,6 +30,8 @@ import { FACE_EPS, hero, HERO_RADIUS } from './heroState'
 import { clearIntent } from './intent'
 import { resolveCollisions, type Collider } from './collision'
 import { getSpeech, subscribeSpeech } from './heroSpeech'
+import { faceForNotice, getExpression, subscribeFace } from './heroFace'
+import { applyEyes, Blinker, collectEyes, gazeTarget } from './heroEyes'
 import { HeroBubble } from './HeroBubble'
 import { HERO_SEAT, yawTo as faceTo } from './truckStage'
 
@@ -118,7 +120,7 @@ export function Hero({
   // Белок и зрачок берём из палитры, одежду — из стора: её красит игрок.
   // Материал создаётся один раз, цвет в него доливает эффект ниже.
   const body = useMemo(() => smoothLambert('Hero', HERO_COLOR_DEFAULT), [])
-  const eyes = useMemo(
+  const eyeMats = useMemo(
     () => ({
       HeroEyeWhite: smoothLambert('HeroEyeWhite', palette.HeroEyeWhite ?? '#f7f7f5'),
       HeroEyePupil: smoothLambert('HeroEyePupil', palette.HeroEyePupil ?? '#0d0d12'),
@@ -135,10 +137,10 @@ export function Hero({
       if (!mesh.isMesh) return
       mesh.castShadow = true
       const name = (mesh.material as THREE.Material).name
-      mesh.material = name in eyes ? eyes[name as keyof typeof eyes] : body
+      mesh.material = name in eyeMats ? eyeMats[name as keyof typeof eyeMats] : body
     })
     return clone
-  }, [scene, body, eyes])
+  }, [scene, body, eyeMats])
 
   const legs = useMemo(
     () => ({
@@ -147,6 +149,23 @@ export function Hero({
     }),
     [model],
   )
+
+  const eyes = useMemo(() => collectEyes(model), [model])
+  const expression = useSyncExternalStore(subscribeFace, getExpression, getExpression)
+  const blinker = useRef(new Blinker())
+  const gaze = useRef(new THREE.Vector3())
+  const hasGaze = useRef(false)
+
+  // Игровое событие → гримаса. Реагируем только на тост, которого ещё не
+  // видели: когда истёкший тост уходит с экрана, последним снова становится
+  // предыдущий, и без этой проверки лицо переигрывало бы старое событие.
+  const notice = useGameStore((s) => s.notices.at(-1))
+  const seen = useRef(0)
+  useEffect(() => {
+    if (!notice || notice.id <= seen.current) return
+    seen.current = notice.id
+    faceForNotice(notice.kind, notice.amount)
+  }, [notice])
 
   const group = useRef<THREE.Group>(null)
   const phase = useRef(0)
@@ -162,7 +181,7 @@ export function Hero({
   const fwd = useRef(new THREE.Vector3())
   const right = useRef(new THREE.Vector3())
 
-  useFrame((_, rawDt) => {
+  useFrame((state, rawDt) => {
     const g = group.current
     if (!g) return
 
@@ -278,6 +297,21 @@ export function Hero({
     const swing = Math.sin(phase.current) * amp.current
     if (legs.l) legs.l.rotation.x = swing
     if (legs.r) legs.r.rotation.x = -swing
+
+    // Лицо. Цель взгляда ищем на уровне глаз: курсор в небе плоскость не
+    // пересекает — тогда держим прежнюю цель, а не роняем взгляд в ноль.
+    if (eyes.length) {
+      const eyeY = g.position.y + eyes[0].center.y
+      if (gazeTarget(state.pointer, camera, eyeY, gaze.current)) hasGaze.current = true
+      applyEyes(
+        eyes,
+        g,
+        hasGaze.current ? gaze.current : null,
+        expression,
+        blinker.current.step(dt),
+        dt,
+      )
+    }
   })
 
   return (
