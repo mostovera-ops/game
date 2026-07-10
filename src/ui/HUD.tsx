@@ -11,9 +11,8 @@
  *
  * По E открывается инвентарь героя — портрет и цвет одежды.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
-  CROPS,
   RECIPE_IDS,
   RECIPES,
   useGameStore,
@@ -22,11 +21,16 @@ import {
   type RecipeId,
   type Tool,
 } from '../game/store'
+import { getHoveredOrder, subscribeOrderHover } from '../scene/orderHover'
 import { CROP_EMOJI, CROP_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
 import { HeroPortrait } from './HeroPortrait'
 import { Inventory } from './Inventory'
 import { SeedPacket } from './SeedPacket'
 import { Shop } from './Shop'
+import { buildToolbar, hotkeyFor, TOOLBAR_CELLS, type Slot } from './toolbar'
+
+/** Клавиши ячеек тулбара в их порядке: 1…9, 0. */
+const TOOLBAR_KEYS = Array.from({ length: TOOLBAR_CELLS }, (_, i) => hotkeyFor(i))
 
 const panel = 'pointer-events-auto rounded-lg bg-[#241a20]/70 backdrop-blur'
 
@@ -76,8 +80,6 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
       return { text: 'Не хватает денег', tone: 'bad' }
     case 'bought':
       return { text: `Куплено семян: ${CROP_EMOJI[n.crop!]} ×${n.amount}`, tone: 'good' }
-    case 'sold':
-      return { text: `${CROP_EMOJI[n.crop!]} продан · +${n.amount}💰`, tone: 'good' }
   }
 }
 
@@ -195,21 +197,95 @@ function ToolButton({
   )
 }
 
-/** Единый тулбар внизу: слева инструменты, справа сумка с ресурсами. */
+const TOOL_HINT: Record<Exclude<Tool, 'seed'>, string> = {
+  can: 'Лейка — полить росток',
+  hand: 'Рука — собрать созревшее',
+}
+
+const TOOL_GLYPH: Record<Exclude<Tool, 'seed'>, string> = { can: '💧', hand: '✋' }
+const TOOL_ACTIVE: Record<Exclude<Tool, 'seed'>, string> = {
+  can: 'bg-[#6db3f2]',
+  hand: 'bg-[#f4b942]',
+}
+
+/**
+ * Пустая ячейка: рамка есть, содержимого нет. Цифру не пишем — нажимать нечего,
+ * а подписанная клавиша обещала бы действие.
+ */
+function EmptyCell() {
+  return <div className="h-12 w-12 rounded-md bg-black/20" />
+}
+
+function ToolbarCell({ slot }: { slot: Slot }) {
+  const selectedSeed = useGameStore((s) => s.selectedSeed)
+  const tool = useGameStore((s) => s.tool)
+  const seeds = useGameStore((s) => s.seeds)
+  const selectSeed = useGameStore((s) => s.selectSeed)
+  const selectTool = useGameStore((s) => s.selectTool)
+
+  const cell = slot.cell
+  if (!cell) return <EmptyCell />
+
+  if (cell.kind === 'seed') {
+    const active = tool === 'seed' && selectedSeed === cell.crop
+    return (
+      <ToolButton
+        active={active}
+        activeClass="bg-[#9fc25f]"
+        hint={`Семена: ${CROP_NAME[cell.crop]} — ${seeds[cell.crop]} шт.`}
+        hotkey={slot.hotkey}
+        onClick={() => selectSeed(cell.crop)}
+      >
+        <SeedPacket crop={cell.crop} active={active} />
+        <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">
+          {seeds[cell.crop]}
+        </span>
+      </ToolButton>
+    )
+  }
+
+  if (cell.kind === 'tool') {
+    return (
+      <ToolButton
+        active={tool === cell.tool}
+        activeClass={TOOL_ACTIVE[cell.tool]}
+        hint={TOOL_HINT[cell.tool]}
+        hotkey={slot.hotkey}
+        onClick={() => selectTool(cell.tool)}
+      >
+        {TOOL_GLYPH[cell.tool]}
+      </ToolButton>
+    )
+  }
+
+  // Урожай: он не инструмент, кликать нечего — только счётчик.
+  return (
+    <div
+      title={CROP_NAME[cell.crop]}
+      className="relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl"
+    >
+      <span>{CROP_EMOJI[cell.crop]}</span>
+      <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{cell.count}</span>
+    </div>
+  )
+}
+
+/**
+ * Нижняя панель: слева герой, посередине десять ячеек, справа — действие фазы.
+ *
+ * Урожай лежит в тех же ячейках, что и семена: это одна экипировка, а не два
+ * разных списка. Чего нет — того нет: ни нулей, ни приглушённых иконок.
+ */
 function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
   const phase = useGameStore((s) => s.phase)
   const heroColor = useGameStore((s) => s.heroColor)
   const inventory = useGameStore((s) => s.inventory)
   const seeds = useGameStore((s) => s.seeds)
-  const selectedSeed = useGameStore((s) => s.selectedSeed)
-  const tool = useGameStore((s) => s.tool)
-  const selectSeed = useGameStore((s) => s.selectSeed)
-  const selectTool = useGameStore((s) => s.selectTool)
 
-  const farm = phase === 'farm'
+  const slots = buildToolbar(phase, seeds, inventory)
 
   return (
-    <div className={`${panel} flex flex-wrap items-center gap-2 p-2`}>
+    <div className={`${panel} flex items-center gap-2 p-2`}>
       <button
         onClick={onOpenInventory}
         title="Инвентарь героя (E)"
@@ -221,65 +297,8 @@ function Toolbar({ onOpenInventory }: { onOpenInventory: () => void }) {
 
       <div className="mx-1 h-10 w-px bg-white/15" />
 
-      {farm && (
-        <>
-          {CROPS.map((c, i) => (
-            <ToolButton
-              key={c}
-              active={tool === 'seed' && selectedSeed === c}
-              activeClass="bg-[#9fc25f]"
-              hint={
-                seeds[c]
-                  ? `Семена: ${CROP_NAME[c]} — ${seeds[c]} шт.`
-                  : `Семена: ${CROP_NAME[c]} — кончились, купите в лавке`
-              }
-              hotkey={String(i + 1)}
-              onClick={() => selectSeed(c)}
-            >
-              {/* Пустой пакетик приглушён: сажать нечем, пока не сходишь в лавку. */}
-              <span className={seeds[c] ? '' : 'opacity-30'}>
-                <SeedPacket crop={c} active={tool === 'seed' && selectedSeed === c} />
-              </span>
-              <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">
-                {seeds[c]}
-              </span>
-            </ToolButton>
-          ))}
-
-          <ToolButton
-            active={tool === 'can'}
-            activeClass="bg-[#6db3f2]"
-            hint="Лейка — полить росток"
-            hotkey="4"
-            onClick={() => selectTool('can')}
-          >
-            💧
-          </ToolButton>
-
-          <ToolButton
-            active={tool === 'hand'}
-            activeClass="bg-[#f4b942]"
-            hint="Рука — собрать созревшее"
-            hotkey="5"
-            onClick={() => selectTool('hand')}
-          >
-            ✋
-          </ToolButton>
-
-          <div className="mx-1 h-10 w-px bg-white/15" />
-        </>
-      )}
-
-      <span className="px-1 text-[9px] uppercase tracking-wide opacity-50">сумка</span>
-      {CROPS.map((c) => (
-        <div
-          key={c}
-          title={CROP_NAME[c]}
-          className="flex items-center gap-1 rounded bg-white/5 px-2 py-1.5 text-sm"
-        >
-          <span>{CROP_EMOJI[c]}</span>
-          <span className="font-bold">{inventory[c]}</span>
-        </div>
+      {slots.map((slot, i) => (
+        <ToolbarCell key={i} slot={slot} />
       ))}
     </div>
   )
@@ -307,81 +326,87 @@ function FarmAction() {
   )
 }
 
-/** Хватает ли в сумке ингредиентов на блюдо — от этого блёкнет карточка. */
+/** Хватает ли в сумке ингредиентов на блюдо. */
 function canCook(recipe: RecipeId, inventory: Record<CropId, number>): boolean {
   const needs = RECIPES[recipe].needs
   return (Object.keys(needs) as CropId[]).every((c) => inventory[c] >= (needs[c] ?? 0))
 }
 
 /**
- * Карточка блюда. Свёрнутая — эмодзи и цена; под курсором разворачивается и
- * показывает состав. Состав нужен ровно в тот миг, когда игрок примеряется
- * к кнопке, поэтому он живёт в ховере, а не занимает место постоянно.
+ * Меню выдачи. Только блюдо и клавиша: цену игрок и так видит в счётчике денег,
+ * а состав — там, где он нужен, над заказом клиента.
  */
 function DishCard({ recipe, hotkey }: { recipe: RecipeId; hotkey: number }) {
   const serveCustomer = useGameStore((s) => s.serveCustomer)
   const inventory = useGameStore((s) => s.inventory)
-  const [open, setOpen] = useState(false)
-
-  const needs = RECIPES[recipe].needs
   const enough = canCook(recipe, inventory)
 
   return (
     <button
       onClick={() => serveCustomer(recipe)}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
-      className={`relative flex flex-col items-start gap-1 rounded-md px-3 py-2 text-sm font-bold text-[#241a20] transition hover:brightness-110 ${
+      className={`relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-bold text-[#241a20] transition hover:brightness-110 ${
         enough ? 'bg-[#ff8b5e]/90' : 'bg-[#ff8b5e]/40'
       }`}
     >
-      <span className="flex items-center gap-2">
-        <span className="text-xl">{RECIPE_EMOJI[recipe]}</span>
-        <span>
-          {RECIPE_NAME[recipe]} · {RECIPES[recipe].price}💰
-        </span>
-        <span className="text-[10px] opacity-70">{hotkey}</span>
-      </span>
-
-      {open && (
-        <span className="flex w-full flex-col gap-0.5 border-t border-[#241a20]/25 pt-1 text-[11px] font-normal">
-          {(Object.keys(needs) as CropId[]).map((c) => {
-            const need = needs[c] ?? 0
-            const have = inventory[c]
-            return (
-              <span
-                key={c}
-                className={`flex items-center justify-between gap-3 ${
-                  have >= need ? '' : 'text-[#7a1f12]'
-                }`}
-              >
-                <span>
-                  {CROP_EMOJI[c]} {CROP_NAME[c]}
-                </span>
-                <span className="font-mono">
-                  {have}/{need}
-                </span>
-              </span>
-            )
-          })}
-          <span className="mt-0.5 flex items-center justify-between gap-3 border-t border-[#241a20]/25 pt-0.5">
-            <span>Выручка</span>
-            <span className="font-mono">{RECIPES[recipe].price} 💰</span>
-          </span>
-        </span>
-      )}
+      <span className="text-xl">{RECIPE_EMOJI[recipe]}</span>
+      <span>{RECIPE_NAME[recipe]}</span>
+      <span className="text-[10px] opacity-70">{hotkey}</span>
     </button>
   )
 }
 
 function TruckAction() {
   return (
-    <div className={`${panel} flex items-end gap-2 p-2`}>
-      {RECIPE_IDS.map((r, i) => (
-        <DishCard key={r} recipe={r} hotkey={i + 1} />
-      ))}
+    <div className={`${panel} flex flex-col items-start gap-1.5 p-2`}>
+      <span className="px-1 text-[9px] uppercase tracking-wide opacity-50">выдать</span>
+      <div className="flex items-center gap-2">
+        {RECIPE_IDS.map((r, i) => (
+          <DishCard key={r} recipe={r} hotkey={i + 1} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Состав заказа — по ховеру облачка над клиентом. Панель встаёт у курсора и
+ * говорит ровно то, что нужно решить: хватит ли того, что в сумке.
+ */
+function OrderTooltip() {
+  const hovered = useSyncExternalStore(subscribeOrderHover, getHoveredOrder, getHoveredOrder)
+  const inventory = useGameStore((s) => s.inventory)
+  if (!hovered) return null
+
+  const needs = RECIPES[hovered.recipe].needs
+  return (
+    <div
+      className="pointer-events-none fixed z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-[#f4b942]/60 bg-[#241a20]/95 px-3 py-2 text-xs"
+      style={{ left: hovered.x, top: hovered.y - 12 }}
+    >
+      <div className="mb-1 flex items-center gap-2 font-bold text-[#f4b942]">
+        <span>{RECIPE_EMOJI[hovered.recipe]}</span>
+        <span>{RECIPE_NAME[hovered.recipe]}</span>
+        <span className="ml-auto">{RECIPES[hovered.recipe].price}💰</span>
+      </div>
+      {(Object.keys(needs) as CropId[]).map((c) => {
+        const need = needs[c] ?? 0
+        const have = inventory[c]
+        return (
+          <div
+            key={c}
+            className={`flex items-center justify-between gap-4 ${
+              have >= need ? 'opacity-80' : 'text-[#ff8b5e]'
+            }`}
+          >
+            <span>
+              {CROP_EMOJI[c]} {CROP_NAME[c]}
+            </span>
+            <span className="font-mono">
+              {have}/{need}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -410,11 +435,10 @@ function WeekSummary() {
   )
 }
 
-/** 1–3 семена, 4 лейка, 5 рука; в фазе фудтрака 1–3 подают блюдо. */
-const TOOL_KEYS: Record<string, Tool> = { '4': 'can', '5': 'hand' }
-
 export function HUD() {
   const phase = useGameStore((s) => s.phase)
+  const seeds = useGameStore((s) => s.seeds)
+  const inventory = useGameStore((s) => s.inventory)
   const selectSeed = useGameStore((s) => s.selectSeed)
   const selectTool = useGameStore((s) => s.selectTool)
   const serveCustomer = useGameStore((s) => s.serveCustomer)
@@ -430,19 +454,25 @@ export function HUD() {
         return
       }
       if (inventoryOpen) return // за модалкой инструменты не переключаем
-      const asTool = TOOL_KEYS[e.key]
-      if (asTool) {
-        if (phase === 'farm') selectTool(asTool) // лейка и рука есть только на ферме
+
+      // В день торговли цифры подают блюда: тулбар там держит только урожай.
+      if (phase === 'truck') {
+        const dish = { '1': 0, '2': 1, '3': 2 }[e.key]
+        if (dish !== undefined) serveCustomer(RECIPE_IDS[dish])
         return
       }
-      const idx = { '1': 0, '2': 1, '3': 2 }[e.key]
-      if (idx === undefined) return
-      if (phase === 'farm') selectSeed(CROPS[idx])
-      else serveCustomer(RECIPE_IDS[idx])
+
+      // На ферме цифра — номер ячейки тулбара, ровно та, что под ней нарисована.
+      const index = TOOLBAR_KEYS.indexOf(e.key)
+      if (index < 0) return
+      const cell = buildToolbar(phase, seeds, inventory)[index].cell
+      if (!cell) return
+      if (cell.kind === 'seed') selectSeed(cell.crop)
+      else if (cell.kind === 'tool') selectTool(cell.tool)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, selectSeed, selectTool, serveCustomer, inventoryOpen, shopOpen])
+  }, [phase, seeds, inventory, selectSeed, selectTool, serveCustomer, inventoryOpen, shopOpen])
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none p-4 font-mono text-[#f0e4c9]">
@@ -462,6 +492,8 @@ export function HUD() {
         <Toolbar onOpenInventory={() => setInventoryOpen(true)} />
         {phase === 'farm' ? <FarmAction /> : <TruckAction />}
       </div>
+
+      {phase === 'truck' && <OrderTooltip />}
 
       {inventoryOpen && <Inventory onClose={() => setInventoryOpen(false)} />}
       {shopOpen && <Shop />}

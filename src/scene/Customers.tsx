@@ -17,7 +17,7 @@ import { useGLTF } from '@react-three/drei'
 import { applyPalette, type Palette } from '../assets/scene'
 import { useGameStore, type Customer } from '../game/store'
 import { OrderBubble } from './OrderBubble'
-import { SPAWN, queueSpot, yawTo } from './truckStage'
+import { QUEUE_DIR, SPAWN, queueSpot, yawTo } from './truckStage'
 
 const HERO_URL = '/assets/props/hero.glb'
 
@@ -96,8 +96,11 @@ function CustomerFigure({
       moved = true
       step.current += STEP_RATE * dt
       want = yawTo(dx, dz)
+    } else if (index === 0) {
+      want = yawTo(0, -1) // первый смотрит в окно
     } else {
-      want = yawTo(0, -1) // дошёл — разворачивается к окну
+      // Остальные — в затылок переднему, то есть против хвоста очереди.
+      want = yawTo(-QUEUE_DIR.x, -QUEUE_DIR.z)
     }
 
     const delta = ((want - g.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI
@@ -112,7 +115,11 @@ function CustomerFigure({
   return (
     <group ref={group}>
       <primitive object={model} />
-      <OrderBubble recipe={customer.want} patience={customer.patience / customer.maxPatience} />
+      <OrderBubble
+        customerId={customer.id}
+        recipe={customer.want}
+        patience={customer.patience / customer.maxPatience}
+      />
     </group>
   )
 }

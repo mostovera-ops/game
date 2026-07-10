@@ -5,11 +5,12 @@
  * а полоса терпения — отдельный меш: она меняется каждый кадр, и перерисовывать
  * ради неё холст было бы расточительно.
  */
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { type RecipeId } from '../game/store'
+import { hoverOrder, unhoverOrder } from './orderHover'
 
 const RECIPE_GLYPH: Record<RecipeId, string> = { salad: '🥗', soup: '🍲', taco: '🌮' }
 
@@ -83,11 +84,13 @@ function bubbleTexture(recipe: RecipeId): THREE.CanvasTexture {
 }
 
 export function OrderBubble({
+  customerId,
   recipe,
   patience,
   // Выше макушки: на 0.72 облачко пряталось внутри фигуры.
   y = 1.35,
 }: {
+  customerId: number
   recipe: RecipeId
   /** Доля оставшегося терпения, 0..1. */
   patience: number
@@ -108,9 +111,27 @@ export function OrderBubble({
     mat.current?.color.copy(PANIC).lerp(CALM, THREE.MathUtils.smoothstep(pct.current, 0.2, 0.6))
   })
 
+  // Ховер по облачку — состав блюда рисует HUD (см. orderHover.ts).
+  const onOver = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    hoverOrder({ customerId, recipe, x: e.nativeEvent.clientX, y: e.nativeEvent.clientY })
+    document.body.style.cursor = 'help'
+  }
+  const onMove = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    hoverOrder({ customerId, recipe, x: e.nativeEvent.clientX, y: e.nativeEvent.clientY })
+  }
+  const onOut = () => {
+    unhoverOrder(customerId)
+    document.body.style.cursor = ''
+  }
+
+  // Подсказка гаснет вместе с клиентом: обслужили — курсор «уходит» сам.
+  useEffect(() => () => unhoverOrder(customerId), [customerId])
+
   return (
     <Billboard position={[0, y, 0]}>
-      <mesh>
+      <mesh onPointerOver={onOver} onPointerMove={onMove} onPointerOut={onOut}>
         <planeGeometry args={[0.34, 0.34 * (H / W)]} />
         <meshBasicMaterial map={texture} transparent depthWrite={false} />
       </mesh>

@@ -106,12 +106,12 @@ const FARM_CAM = {
   target: num3(params.get('tgt'), [2.17, 0.27, -0.39]),
   zoom: params.get('zoom') ? Number(params.get('zoom')) : 148,
 }
-// День 7 идёт крупным планом: в кадре только окно фудтрака и очередь у него.
-// Камера ортографическая, поэтому «ближе» — это zoom, а не короче вектор.
+// День 7 идёт крупным планом: в кадре окно фудтрака и очередь, уходящая от него
+// вправо. Камера ортографическая, поэтому «ближе» — это zoom, а не короче вектор.
 const TRUCK_CAM = {
-  pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [6.0, 3.8, 1.4]),
-  target: num3(FRAME_SCENE === 'truck' ? params.get('tgt') : null, [1.9, 0.75, -3.9]),
-  zoom: FRAME_SCENE === 'truck' && params.get('zoom') ? Number(params.get('zoom')) : 155,
+  pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [7.7, 4.0, 1.2]),
+  target: num3(FRAME_SCENE === 'truck' ? params.get('tgt') : null, [3.6, 0.8, -4.0]),
+  zoom: FRAME_SCENE === 'truck' && params.get('zoom') ? Number(params.get('zoom')) : 115,
 }
 
 // Начальный кадр: в режиме кадрирования — под выбранную сцену; иначе ферма.

@@ -66,7 +66,6 @@ export type NoticeKind =
   | 'no-seeds'
   | 'no-money'
   | 'bought'
-  | 'sold'
 
 export interface Notice {
   id: number
@@ -125,29 +124,21 @@ export const RECIPES: Record<
 }
 
 /**
- * Экономика лавки.
- *
- * Купля дороже продажи по каждой культуре — иначе игрок крутил бы деньги из
- * воздуха, покупая и тут же сбывая семена обратно урожаем.
- *
- * Продать урожай в лавку всегда невыгоднее, чем сварить из него блюдо
- * (морковь: 1 за штуку против 3 в супе). Лавка — это способ добыть деньги на
- * семена в дни фермы, когда фудтрак ещё не открылся, а не второй источник
- * дохода.
+ * Экономика лавки. Лавка только продаёт семена: скупки урожая нет, и весь
+ * урожай уходит в блюда. Единственный источник денег — день фудтрака.
  *
  * Маржа блюда за вычетом семян: суп +2, салат +3, тако +7. Тако — цель недели,
  * суп — способ не остаться без денег.
  */
 export const SEED_PRICE: Record<CropId, number> = { carrot: 2, greens: 2, tomato: 3 }
-export const SELL_PRICE: Record<CropId, number> = { carrot: 1, greens: 1, tomato: 2 }
 
 /** По три семени каждой культуры — ровно на все девять слотов. */
 export const START_SEEDS = 3
 
 /**
- * Стартовый капитал. Полная пересадка всех девяти слотов стоит 21, так что
- * после первого урожая двадцатки чуть-чуть не хватает: одну морковку придётся
- * продать. Это и знакомит игрока с правой половиной лавки.
+ * Стартовый капитал. Полная пересадка всех девяти слотов стоит 21 — на монету
+ * больше, чем есть. Первую неделю засеваем стартовыми семенами, а деньги
+ * приходят только с ярмарки.
  */
 export const START_MONEY = 20
 
@@ -256,8 +247,6 @@ interface GameActions {
   closeShop: () => void
   /** Купить семена. Не хватает денег — ничего не меняется, летит тост. */
   buySeeds: (crop: CropId, qty: number) => void
-  /** Продать урожай лавке. Продать больше, чем есть, нельзя. */
-  sellCrops: (crop: CropId, qty: number) => void
   /** Посадить выбранное семя в пустой слот. Тратит одно семя. */
   plant: (slotId: SlotId) => void
   /** Полить растущий слот (stage < 2). */
@@ -360,16 +349,6 @@ export const useGameStore = create<GameState>()(
             money: s.money - cost,
             seeds: { ...s.seeds, [crop]: s.seeds[crop] + qty },
             ...withNotice(s, { kind: 'bought', crop, amount: qty }),
-          }
-        }),
-
-      sellCrops: (crop, qty) =>
-        set((s) => {
-          if (qty <= 0 || s.inventory[crop] < qty) return {}
-          return {
-            money: s.money + SELL_PRICE[crop] * qty,
-            inventory: { ...s.inventory, [crop]: s.inventory[crop] - qty },
-            ...withNotice(s, { kind: 'sold', crop, amount: SELL_PRICE[crop] * qty }),
           }
         }),
 

@@ -32,18 +32,35 @@ const FACE_Z = -4.35
 /** Герой за прилавком, лицом к очереди. */
 export const HERO_SEAT = new THREE.Vector3(SERVE_X, 0, FACE_Z - 0.43)
 
-/** Первый в очереди — вплотную к прилавку; остальные за ним, вдоль +Z. */
-export const QUEUE_HEAD = new THREE.Vector3(SERVE_X, 0, FACE_Z + 0.72)
+/**
+ * Первый в очереди — у края прилавка, чуть правее героя.
+ *
+ * Ровно напротив окна он вставать не должен: ось +Z уходит по экрану влево, и
+ * стоящий «перед» героем клиент оказывается слева от него, будто мимо проходил.
+ */
+export const QUEUE_HEAD = new THREE.Vector3(SERVE_X + 0.35, 0, FACE_Z + 0.5)
 
 /** Шаг между клиентами в очереди. */
 export const QUEUE_STEP = 0.85
 
-/** Откуда клиенты приходят: сбоку, из-за деревьев. */
-export const SPAWN = new THREE.Vector3(SERVE_X + 4.4, 0, FACE_Z + 2.1)
+/**
+ * Хвост очереди уходит вдоль +X — вправо по экрану от фудтрака.
+ *
+ * Раньше он шёл вдоль +Z и на экране заворачивал влево, к дому: очередь
+ * упиралась в грядки и читалась как толпа у крыльца.
+ */
+export const QUEUE_DIR = new THREE.Vector3(1, 0, 0)
+
+/** Откуда клиенты приходят: справа, из-за деревьев, вдоль хвоста очереди. */
+export const SPAWN = new THREE.Vector3(SERVE_X + 6.0, 0, FACE_Z + 0.72)
 
 /** Место i-го в очереди. */
 export function queueSpot(i: number, out = new THREE.Vector3()): THREE.Vector3 {
-  return out.set(QUEUE_HEAD.x, 0, QUEUE_HEAD.z + i * QUEUE_STEP)
+  return out.set(
+    QUEUE_HEAD.x + QUEUE_DIR.x * i * QUEUE_STEP,
+    0,
+    QUEUE_HEAD.z + QUEUE_DIR.z * i * QUEUE_STEP,
+  )
 }
 
 /** Куда смотреть, чтобы видеть точку (dx, dz). Модель глядит на −Z. */
