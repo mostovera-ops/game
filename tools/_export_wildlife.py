@@ -8,7 +8,8 @@
     bird.glb                BirdBody · BirdWingL · BirdWingR
     rabbit.glb              RabbitBody · RabbitEarL · RabbitEarR
     boar.glb                BoarBody · BoarLegFL/FR/BL/BR · BoarTail
-    mushroom.glb            Mushroom
+    mushroom.glb            Mushroom    — съедобный, коричневая шапка без точек
+    toadstool.glb           Toadstool   — мухомор, в супе ему не место
     nest.glb                Nest · Egg
 
 Отдельный скрипт, а не часть _build_and_export.py, по той же причине, что
@@ -78,12 +79,19 @@ COLORS = {
     "BoarSnout": "#8f7361",
     "BoarTusk": "#f0e6d2",
     "BoarEye": "#201a16",
-    "MushroomCap": "#b1503f",
-    "MushroomStem": "#efe3cd",
-    "MushroomSpot": "#f6f0e2",
+    "MushroomCap": "#7a5334",
+    "MushroomStem": "#e6d6b8",
+    "ToadstoolCap": "#b1503f",
+    "ToadstoolStem": "#efe3cd",
+    "ToadstoolSpot": "#f6f0e2",
     "NestTwig": "#8a6b48",
     "NestEgg": "#f6efdd",
 }
+
+# Ключи, которые скрипт писал раньше и больше не пишет. upsert_palette их
+# вычищает: сам он только добавляет, и брошенный цвет жил бы в palette.json
+# вечно, сбивая с толку следующего читателя.
+RETIRED = ["MushroomSpot"]
 
 
 def srgb_to_linear(c):
@@ -460,14 +468,29 @@ def build_boar():
 
 
 def build_mushroom():
-    cap = dome((0, 0, 0.110), (0.085, 0.085, 0.062), "MushroomCap")
+    """Съедобный гриб: коричневая шапка без единой точки, толстая ножка.
+
+    Читается издалека именно отсутствием пятен — рядом растёт мухомор ровно
+    того же силуэта, и спутать их игрок не должен.
+    """
+    cap = dome((0, 0, 0.100), (0.092, 0.092, 0.058), "MushroomCap")
+    # Ножка боровика: книзу толще. Без утолщения гриб выглядит поганкой.
+    stem = cone((0, 0, 0.052), 0.040, 0.029, 0.104, "MushroomStem", 10)
+    obj = join([cap, stem], "Mushroom")
+    ground_origin(obj)
+    return [obj]
+
+
+def build_toadstool():
+    """Мухомор: красная шапка в белую крапину. Не собирается, только пугает."""
+    cap = dome((0, 0, 0.110), (0.085, 0.085, 0.062), "ToadstoolCap")
     spots = []
     for sx, sy in ((0.030, 0.018), (-0.026, 0.030), (0.006, -0.038), (-0.040, -0.020)):
         t = 1 - (sx / 0.085) ** 2 - (sy / 0.085) ** 2
         spots.append(uv((sx, sy, 0.110 + 0.062 * math.sqrt(max(t, 0.0)) - 0.006),
-                        (0.014, 0.014, 0.010), "MushroomSpot", 6, 4))
-    stem = cone((0, 0, 0.058), 0.030, 0.022, 0.116, "MushroomStem", 10)
-    obj = join([cap, *spots, stem], "Mushroom")
+                        (0.014, 0.014, 0.010), "ToadstoolSpot", 6, 4))
+    stem = cone((0, 0, 0.058), 0.030, 0.022, 0.116, "ToadstoolStem", 10)
+    obj = join([cap, *spots, stem], "Toadstool")
     ground_origin(obj)
     return [obj]
 
@@ -499,6 +522,7 @@ CREATURES = [
     ("rabbit", build_rabbit),
     ("boar", build_boar),
     ("mushroom", build_mushroom),
+    ("toadstool", build_toadstool),
     ("nest", build_nest),
 ]
 
@@ -542,6 +566,8 @@ def upsert_palette(used):
     """Дописывает цвета живности в palette.json, не трогая остальные ключи."""
     with open(PALETTE, encoding="utf-8") as f:
         palette = json.load(f)
+    for name in RETIRED:
+        palette.pop(name, None)
     palette.update({name: COLORS[name] for name in sorted(used)})
     with open(PALETTE, "w", encoding="utf-8") as f:
         json.dump(dict(sorted(palette.items())), f, indent=2, ensure_ascii=False)

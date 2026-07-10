@@ -13,7 +13,15 @@
 const TRUCK = 'Он поможет мне разбогатеть!'
 const LOG = 'Совсем скоро я смогу посидеть тут.'
 
+/** Мухомор. Единственный несъедобный гриб в лесу — и единственный говорящий. */
+export const TOADSTOOL = 'Этим можно отравиться.'
+
 export const PHRASES: Record<string, string> = {
+  // Мухомор: клик по любой его части — одна и та же реплика.
+  ToadstoolCap: TOADSTOOL,
+  ToadstoolStem: TOADSTOOL,
+  ToadstoolSpot: TOADSTOOL,
+
   // Дом: только окно и дверь. Стена и крыша молчат.
   Window: 'Не хотелось бы его разбить.',
   Door: 'Пока рано отдыхать.',

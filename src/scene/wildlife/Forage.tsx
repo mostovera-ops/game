@@ -1,9 +1,13 @@
 /**
- * Находки в лесу: грибы и птичьи гнёзда с яйцом.
+ * Что растёт в лесу: съедобные грибы, птичьи гнёзда с яйцом и мухоморы.
  *
- * Клик по находке не подбирает её на месте — он ставит намерение и ведёт героя,
- * ровно как клик по грядке или по лавке. Подбирает <Interactions> в Farm.tsx,
- * когда герой дошёл.
+ * Клик не подбирает находку на месте — он ставит намерение и ведёт героя,
+ * ровно как клик по грядке или по лавке. Дело доводит <Interactions> в
+ * Farm.tsx, когда герой дошёл.
+ *
+ * Мухомор ходит по тому же пути, но с намерением 'speak': герой подойдёт и
+ * скажет, что этим можно отравиться. В стор он не попадает вовсе — для правил
+ * игры его не существует.
  *
  * Собранный гриб исчезает целиком, а гнездо остаётся — гаснет только узел Egg:
  * гнездо птица не уносит. За ночь и то, и другое возвращается (endDay чистит
@@ -17,22 +21,25 @@ import { useGameStore } from '../../game/store'
 import { REACH } from '../heroState'
 import { heroTarget } from '../heroTarget'
 import { setIntent } from '../intent'
+import { TOADSTOOL } from '../phrases'
 import { critterUrl, node, useCreature } from './model'
-import type { ForageSpot } from './forageSpots'
+import type { FindKind, FindSpot } from './forageSpots'
 
-const MUSHROOM_URL = critterUrl('mushroom')
-const NEST_URL = critterUrl('nest')
+const URLS: Record<FindKind, string> = {
+  mushroom: critterUrl('mushroom'),
+  egg: critterUrl('nest'),
+  toadstool: critterUrl('toadstool'),
+}
 
-useGLTF.preload(MUSHROOM_URL)
-useGLTF.preload(NEST_URL)
+for (const url of Object.values(URLS)) useGLTF.preload(url)
 
-function Pickup({ spot, palette }: { spot: ForageSpot; palette: Palette }) {
-  const url = spot.item === 'mushroom' ? MUSHROOM_URL : NEST_URL
-  const model = useCreature(url, palette, { cast: true, clickable: true })
+function Find({ spot, palette }: { spot: FindSpot; palette: Palette }) {
+  const model = useCreature(URLS[spot.kind], palette, { cast: true, clickable: true })
+  // Мухомор не собирается, поэтому его id в takenForage не появится никогда.
   const taken = useGameStore((s) => s.takenForage.includes(spot.id))
 
   // У гнезда прячем только яйцо: само гнездо остаётся лежать под деревом.
-  const egg = useMemo(() => (spot.item === 'egg' ? node(model, 'Egg') : null), [model, spot.item])
+  const egg = useMemo(() => (spot.kind === 'egg' ? node(model, 'Egg') : null), [model, spot.kind])
   useEffect(() => {
     if (egg) egg.visible = !taken
   }, [egg, taken])
@@ -42,24 +49,34 @@ function Pickup({ spot, palette }: { spot: ForageSpot; palette: Palette }) {
       if (e.intersections[0]?.object !== e.object) return
       e.stopPropagation()
       const st = useGameStore.getState()
-      if (st.phase !== 'farm' || st.takenForage.includes(spot.id)) return
-      setIntent({ kind: 'forage', id: spot.id, item: spot.item, x: spot.x, z: spot.z, reach: REACH })
+      if (st.phase !== 'farm') return // день 7 — герой за прилавком
+
+      if (spot.kind === 'toadstool') {
+        setIntent({ kind: 'speak', text: TOADSTOOL, x: spot.x, z: spot.z, reach: REACH })
+      } else {
+        if (st.takenForage.includes(spot.id)) return
+        setIntent({ kind: 'forage', id: spot.id, item: spot.kind, x: spot.x, z: spot.z, reach: REACH })
+      }
       heroTarget.set(spot.x, 0, spot.z)
     },
     [spot],
   )
 
-  // Курсор ведёт себя как над грядкой: пустое гнездо брать нечего.
+  /**
+   * Курсор ведёт себя как над грядкой. Мухомор — не «нельзя», а «можно
+   * посмотреть»: клик по нему всегда что-то даёт, пусть и одну реплику.
+   */
   const onOver = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    document.body.style.cursor = taken ? 'not-allowed' : 'pointer'
+    if (spot.kind === 'toadstool') document.body.style.cursor = 'help'
+    else document.body.style.cursor = taken ? 'not-allowed' : 'pointer'
   }
   const onOut = () => {
     document.body.style.cursor = ''
   }
 
-  // Гриб уносят целиком; гнездо остаётся лежать и пустым.
-  if (spot.item === 'mushroom' && taken) return null
+  // Гриб уносят целиком; гнездо остаётся лежать и пустым, мухомор — навсегда.
+  if (spot.kind === 'mushroom' && taken) return null
 
   return (
     <primitive
@@ -73,11 +90,11 @@ function Pickup({ spot, palette }: { spot: ForageSpot; palette: Palette }) {
   )
 }
 
-export function Forage({ spots, palette }: { spots: ForageSpot[]; palette: Palette }) {
+export function Forage({ spots, palette }: { spots: FindSpot[]; palette: Palette }) {
   return (
     <>
       {spots.map((spot) => (
-        <Pickup key={spot.id} spot={spot} palette={palette} />
+        <Find key={spot.id} spot={spot} palette={palette} />
       ))}
     </>
   )
