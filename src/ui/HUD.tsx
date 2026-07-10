@@ -246,6 +246,13 @@ function MusicToggle() {
   )
 }
 
+/**
+ * Бейджи ячейки в одну колонку у левого края: клавиша вызова сверху, число
+ * штук снизу. Правый-верхний угол оставлен точкам перетаскивания (GripDots).
+ */
+const HOTKEY_BADGE = 'pointer-events-none absolute top-0 left-1 text-[9px] opacity-60'
+const COUNT_BADGE = 'pointer-events-none absolute bottom-0 left-1 text-[9px] font-bold opacity-90'
+
 function ToolButton({
   active,
   hint,
@@ -270,7 +277,7 @@ function ToolButton({
       }`}
     >
       {children}
-      <span className="absolute bottom-0 right-1 text-[9px] opacity-60">{hotkey}</span>
+      <span className={HOTKEY_BADGE}>{hotkey}</span>
     </button>
   )
 }
@@ -444,7 +451,7 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
           onClick={() => selectSeed(cell.crop)}
         >
           <SeedPacket crop={cell.crop} active={active} />
-          <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
+          <span className={COUNT_BADGE}>{count}</span>
         </ToolButton>
         <GripDots />
       </div>
@@ -459,7 +466,7 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
       className={`${DRAGGABLE} grid h-12 w-12 place-items-center bg-white/5 text-2xl ${ring}`}
     >
       <ItemIcon item={cell.item} />
-      <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
+      <span className={COUNT_BADGE}>{count}</span>
       <GripDots />
     </div>
   )
