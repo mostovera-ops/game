@@ -399,7 +399,18 @@ const RAYCAST_PROP = { raycast: THREE.InstancedMesh.prototype.raycast } as unkno
   never
 >
 
-/** Один материал пропса, размноженный по инстансам. */
+/**
+ * Один материал пропса, размноженный по инстансам.
+ *
+ * frustumCulled выключен намеренно. `InstancedMesh` отсекается по своей
+ * boundingSphere, а она считается лениво, при первом же проходе отсечения, и
+ * кешируется навсегда. Если этот проход застал матрицы инстансов ещё пустыми,
+ * сфера получается крошечной, вокруг начала координат, — и стоит камере отойти
+ * от дома, как все 65 ёлок пропадают разом. На земле при этом остаются их тени:
+ * карта теней рисуется из фрустума солнца, а он широкий.
+ *
+ * Отсечение здесь ничего и не экономит: на весь лес приходится три меша.
+ */
 function InstancedPart({
   part,
   list,
@@ -416,6 +427,7 @@ function InstancedPart({
       range={list.length}
       geometry={part.geometry}
       material={part.material}
+      frustumCulled={false}
       castShadow={cast}
       onClick={speak}
       onPointerMove={hoverProp}
