@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "pnpm@9", "dev"],
+      "port": 5173
+    },
+    {
       "name": "sunnyside-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["-C", "sunnyside", "dev", "--port", "5173", "--strictPort"],
-      "port": 5173
+      "runtimeArgs": ["-C", "sunnyside", "dev", "--port", "5174", "--strictPort"],
+      "port": 5174
     }
   ]
 }

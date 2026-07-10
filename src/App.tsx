@@ -5,6 +5,8 @@ import { OrbitControls, OrthographicCamera } from '@react-three/drei'
 import { Perf } from 'r3f-perf'
 import { Farm } from './scene/Farm'
 import { HUD } from './ui/HUD'
+import { useAmbience } from './audio/useAmbience'
+import { useGameSfx } from './audio/useGameSfx'
 
 interface CamState {
   pos: [number, number, number]
@@ -102,20 +104,29 @@ const num3 = (v: string | null, fallback: [number, number, number]): [number, nu
 
 // Две сцены — два ракурса. ?cam/tgt/zoom переопределяют текущий кадрируемый.
 const FARM_CAM = {
-  pos: num3(params.get('cam'), [10.7, 6.7, 12.8]),
-  target: num3(params.get('tgt'), [2.2, 0.3, 0]),
-  zoom: params.get('zoom') ? Number(params.get('zoom')) : 78,
+  pos: num3(params.get('cam'), [10.67, 6.67, 12.41]),
+  target: num3(params.get('tgt'), [2.17, 0.27, -0.39]),
+  zoom: params.get('zoom') ? Number(params.get('zoom')) : 148,
 }
+// День 7 идёт крупным планом: в кадре окно фудтрака и очередь, уходящая от него
+// вправо. Камера ортографическая, поэтому «ближе» — это zoom, а не короче вектор.
+//
+// Смотрим строго вдоль −FACE_DIR из truckStage.ts (грузовик стоит наискось) и
+// не выше 30° над горизонтом: круче — и открытая створка перехватит луч из окна,
+// и вместо героя мы увидим её изнанку.
 const TRUCK_CAM = {
-  pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [6.84, 4.5, 0.61]),
-  target: num3(FRAME_SCENE === 'truck' ? params.get('tgt') : null, [1.84, 0.9, -5.89]),
-  zoom: FRAME_SCENE === 'truck' && params.get('zoom') ? Number(params.get('zoom')) : 95,
+  pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [7.52, 2.63, -2.93]),
+  target: num3(FRAME_SCENE === 'truck' ? params.get('tgt') : null, [3.52, 1.0, -5.93]),
+  zoom: FRAME_SCENE === 'truck' && params.get('zoom') ? Number(params.get('zoom')) : 120,
 }
 
 // Начальный кадр: в режиме кадрирования — под выбранную сцену; иначе ферма.
 const START = FRAME_SCENE === 'truck' ? TRUCK_CAM : FARM_CAM
 
 export default function App() {
+  // В режиме кадрирования звук не нужен.
+  useAmbience(FRAME_SCENE === null)
+  useGameSfx(FRAME_SCENE === null)
   return (
     <div className="relative h-full w-full">
       <Canvas flat shadows dpr={[1, 2]}>

@@ -11,6 +11,8 @@ dist-ssr/
 # env / editor
 .env
 .env.*
+# шаблон без значений — его коммитим
+!.env.example
 .DS_Store
 .vscode/
 .idea/

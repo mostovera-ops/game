@@ -78,6 +78,9 @@ export function lambert(name: string, palette: Palette): THREE.MeshLambertMateri
     transparent: glass,
     opacity: glass ? 0.35 : 1,
   })
+  // Имя переживает подмену материала: по нему клик отличает окно от стены
+  // (GLB кладёт каждый материал в свой примитив → свой меш).
+  mat.name = name
   if (isCropMaterial(name)) applySway(mat) // культуры качаются на ветру
   materials.set(name, mat)
   return mat
