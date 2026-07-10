@@ -21,7 +21,8 @@ import { Beds } from './Beds'
 import { Slot } from './Slot'
 import { Hero } from './Hero'
 import { heroTarget } from './heroTarget'
-import { hero } from './heroState'
+import { hero, distanceToHero, REACH } from './heroState'
+import { intent, clearIntent } from './intent'
 import { halfExtentsXZ, type Collider } from './collision'
 import { say } from './heroSpeech'
 import { PHRASES } from './phrases'
@@ -80,6 +81,67 @@ function TruckTick() {
   useFrame((_, dt) => {
     const st = useGameStore.getState()
     if (st.phase === 'truck' && st.truck && !st.truck.ended) tick(Math.min(dt, 0.1))
+  })
+  return null
+}
+
+/**
+ * Сколько герой должен простоять без движения, прежде чем мы признаем цель
+ * недостижимой. В кадре клика он ещё не тронулся, поэтому нужен запас.
+ */
+const STUCK_SEC = 0.4
+
+/**
+ * Исполняет отложенное действие, когда герой доходит до цели.
+ *
+ * Один на всю сцену, а не по компоненту на слот: намерение всегда одно, и
+ * девять слотов, каждый кадр меряющих расстояние, — лишняя работа.
+ */
+function Interactions() {
+  const idle = useRef(0)
+
+  useFrame((_, rawDt) => {
+    const it = intent.current
+    if (!it) {
+      idle.current = 0
+      return
+    }
+
+    // Слот мог измениться, пока герой шёл: росток погиб, сосед его полил.
+    // Действие решаем по состоянию на момент прихода, а не на момент клика.
+    const st = useGameStore.getState()
+    const slot = st.slots.find((s) => s.id === it.id)
+    if (!slot) {
+      clearIntent()
+      return
+    }
+    const can =
+      st.tool === 'can'
+        ? !!slot.crop && slot.stage < 2
+        : st.tool === 'hand'
+          ? !!slot.crop && slot.stage === 2
+          : !slot.crop
+    if (!can) {
+      clearIntent()
+      return
+    }
+
+    if (distanceToHero(it.x, it.z) <= REACH) {
+      if (st.tool === 'can') st.water(it.id)
+      else if (st.tool === 'hand') st.harvest(it.id)
+      else st.plant(it.id)
+      clearIntent()
+      // Дошёл — дальше идти незачем, иначе упрётся в борт грядки.
+      heroTarget.set(hero.pos.x, 0, hero.pos.z)
+      return
+    }
+
+    // Не дошёл и никуда не идёт — значит упёрся: цель недостижима.
+    idle.current = hero.moving ? 0 : idle.current + Math.min(rawDt, 0.1)
+    if (idle.current >= STUCK_SEC) {
+      st.notify('too-far')
+      clearIntent()
+    }
   })
   return null
 }
@@ -315,6 +377,7 @@ function Ground({ size, color }: { size: number; color: string }) {
       receiveShadow
       onClick={(e: ThreeEvent<MouseEvent>) => {
         e.stopPropagation()
+        clearIntent() // повёл героя в другое место — прежнее дело отменено
         heroTarget.set(e.point.x, 0, e.point.z)
       }}
     >
@@ -411,6 +474,7 @@ export function Farm({
       ))}
       <SwayClock />
       <TruckTick />
+      <Interactions />
       {rig && <CameraRig farm={farmCam} truck={truckCam} />}
     </>
   )

@@ -2,7 +2,9 @@
  * <Slot> — одна клетка посадки. Рендерит культуру по состоянию из стора
  * (scale по стадии, tween ~400мс) и невидимый box-хитбокс для кликов/ховера.
  *
- * Клик зависит от инструмента в руках:
+ * Клик не выполняет действие, а ставит намерение (intent.ts) и ведёт героя к
+ * слоту. Само действие сработает в <Interactions> (Farm.tsx), когда герой
+ * войдёт в REACH. Что именно случится — решает инструмент в руках:
  *   семена — пусто → посадить;
  *   лейка  — растёт → полить;
  *   рука   — созрело → собрать.
@@ -20,9 +22,10 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import { applyPalette, CROP_ASSET, type Palette, type Vec3 } from '../assets/scene'
-import { useGameStore, type CropId, type Tool } from '../game/store'
+import { useGameStore, type CropId } from '../game/store'
 import { SpeechBubble } from './SpeechBubble'
-import { distanceToHero, REACH } from './heroState'
+import { heroTarget } from './heroTarget'
+import { setIntent } from './intent'
 
 // Ростки крупные: слот читается с дефолтного зума, без приближения камеры.
 const STAGE_SCALE = [0.32, 0.8, 1.35]
@@ -34,13 +37,6 @@ const DROP_MS = 1000
 const WET_COLOR = '#4f3826'
 const DROP_COLOR = '#6db3f2'
 const GOLD = '#f4b942'
-
-/** Подсветка зоны красится в цвет инструмента — как кнопка в тулбаре. */
-const TOOL_COLOR: Record<Tool, string> = {
-  seed: '#9fc25f',
-  can: '#6db3f2',
-  hand: '#f4b942',
-}
 
 function CropModel({ crop, palette }: { crop: CropId; palette: Palette }) {
   const { scene } = useGLTF(`/assets/props/${CROP_ASSET[crop]}.glb`)
@@ -159,40 +155,18 @@ export function Slot({
 }) {
   const slot = useGameStore((s) => s.slots.find((x) => x.id === slotId)!)
   const tool = useGameStore((s) => s.tool)
-  const plant = useGameStore((s) => s.plant)
-  const water = useGameStore((s) => s.water)
-  const harvest = useGameStore((s) => s.harvest)
-  const notify = useGameStore((s) => s.notify)
 
   const [hover, setHover] = useState(false)
   const [splash, setSplash] = useState(false) // капля живёт отдельно от watered
   const growRef = useRef<THREE.Group>(null)
-  const zoneRef = useRef<THREE.Mesh>(null)
-  const zoneMat = useRef<THREE.MeshBasicMaterial>(null)
-  /** Дотягивается ли герой прямо сейчас. Ref, а не state: обновляем в кадре. */
-  const inReach = useRef(false)
 
   const target = slot.crop ? STAGE_SCALE[slot.stage] : 0
   useLayoutEffect(() => {
     growRef.current?.scale.setScalar(0.0001) // новый саженец растёт с нуля
   }, [slot.crop])
-  useFrame((state, dt) => {
+  useFrame((_, dt) => {
     const g = growRef.current
     if (g) g.scale.setScalar(THREE.MathUtils.damp(g.scale.x, target, 10, dt))
-
-    // Дотянется ли герой. Считаем в кадре, а не в рендере: позиция героя
-    // меняется каждый кадр и через React её гонять незачем.
-    inReach.current = distanceToHero(position[0], position[2]) <= REACH
-
-    const zone = zoneRef.current
-    if (zone) {
-      zone.visible = inReach.current && actionable
-      if (zone.visible && zoneMat.current) {
-        // Еле заметное дыхание: подсветка живая, но не мигает в глаза.
-        const pulse = 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.5
-        zoneMat.current.opacity = 0.3 + pulse * 0.22
-      }
-    }
   })
 
   // Капля всплывает в момент полива (false → true) и уходит через секунду.
@@ -210,23 +184,18 @@ export function Slot({
   const actionable =
     tool === 'can' ? growing : tool === 'hand' ? ripe : !slot.crop
 
+  // Клик только просит: герой идёт к слоту, а действие выполнит <Interactions>,
+  // когда тот войдёт в радиус. Здесь ничего не меняем в игровом состоянии.
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
     if (!actionable) return
-    // Расстояние меряем здесь, а не берём из последнего кадра: между отрисовкой
-    // и кликом герой мог уйти, а на замершей вкладке кадра не было вовсе.
-    if (distanceToHero(position[0], position[2]) > REACH) {
-      notify('too-far')
-      return
-    }
-    if (tool === 'can') water(slotId)
-    else if (tool === 'hand') harvest(slotId)
-    else plant(slotId)
+    setIntent({ kind: 'slot', id: slotId, x: position[0], z: position[2] })
+    heroTarget.set(position[0], 0, position[2])
   }
   const onOver = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     setHover(true)
-    document.body.style.cursor = actionable && inReach.current ? 'pointer' : 'not-allowed'
+    document.body.style.cursor = actionable ? 'pointer' : 'not-allowed'
   }
   const onOut = () => {
     setHover(false)
@@ -235,19 +204,6 @@ export function Slot({
 
   return (
     <group position={position}>
-      {/* Зона взаимодействия: видна, только когда герой рядом и инструмент
-          что-то может сделать. Цвет — цвет инструмента в тулбаре. */}
-      <mesh ref={zoneRef} visible={false} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]}>
-        <ringGeometry args={[0.19, 0.245, 28]} />
-        <meshBasicMaterial
-          ref={zoneMat}
-          color={TOOL_COLOR[tool]}
-          transparent
-          opacity={0.45}
-          depthWrite={false}
-        />
-      </mesh>
-
       {slot.watered && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]}>
           <circleGeometry args={[0.2, 20]} />

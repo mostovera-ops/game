@@ -20,6 +20,7 @@ import { useGLTF } from '@react-three/drei'
 import { applyPalette, type Palette, type Vec3 } from '../assets/scene'
 import { heroTarget } from './heroTarget'
 import { hero, HERO_RADIUS } from './heroState'
+import { clearIntent } from './intent'
 import { resolveCollisions, type Collider } from './collision'
 import { getSpeech, subscribeSpeech } from './heroSpeech'
 import { HeroBubble } from './HeroBubble'
@@ -58,6 +59,9 @@ function usePressedKeys() {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (!(e.code in KEY_DIRS)) return
+      // Пошёл сам — значит передумал: отложенное дело у грядки отменяется,
+      // иначе оно сработало бы, стоит ему случайно пройти мимо.
+      clearIntent()
       pressed.current.add(e.code)
       e.preventDefault() // стрелки иначе скроллят страницу
     }
