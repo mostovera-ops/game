@@ -21,10 +21,12 @@ const CROWD = `${A}/crowd-murmur.mp3`
 // Усиления не на глаз, а от измеренных пиков файлов: gain = цель / пик.
 // Подложка фермы: пик 0.742 → в миксе 0.37. Музыка дня торговли: пик 0.877,
 // она заметно громче сама по себе, поэтому усиление втрое меньше.
-const FARM_BED_LOOP = { gain: 0.5, tailTrim: 1.6, crossfade: 2.5 }
-const TRUCK_BED_LOOP = { gain: 0.26, tailTrim: 0.7, crossfade: 2.5 }
+// Подложки — на музыкальной шине: их и глушит кнопка в HUD.
+const FARM_BED_LOOP = { gain: 0.5, tailTrim: 1.6, crossfade: 2.5, bus: 'music' } as const
+const TRUCK_BED_LOOP = { gain: 0.26, tailTrim: 0.7, crossfade: 2.5, bus: 'music' } as const
 // Толпа сидит под музыкой, а не поверх: пик 0.64 → в миксе 0.15.
-const CROWD_LOOP = { gain: 0.22, tailTrim: 0.45, crossfade: 1.5 }
+// Это звук, а не музыка: с выключенной музыкой ярмарка всё равно гудит.
+const CROWD_LOOP = { gain: 0.22, tailTrim: 0.45, crossfade: 1.5, bus: 'ambient' } as const
 
 /** Длина перехода между фермой и днём торговли. */
 const SCENE_FADE = 1.5

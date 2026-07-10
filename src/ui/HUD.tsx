@@ -169,8 +169,31 @@ function WeekBar() {
           {phase === 'farm' ? `День ${day} из 6` : 'День 7 — Фудтрак'}
         </span>
       </div>
-      <div className={`${panel} px-4 py-2 text-lg font-bold text-[#f4b942]`}>💰 {money}</div>
+      <div className="flex items-center gap-2">
+        <MusicToggle />
+        <div className={`${panel} px-4 py-2 text-lg font-bold text-[#f4b942]`}>💰 {money}</div>
+      </div>
     </div>
+  )
+}
+
+/** Глушит только музыку: шаги, природа и толпа продолжают звучать. */
+function MusicToggle() {
+  const musicOn = useGameStore((s) => s.musicOn)
+  const toggleMusic = useGameStore((s) => s.toggleMusic)
+  const label = musicOn ? 'Выключить музыку' : 'Включить музыку'
+  return (
+    <button
+      onClick={toggleMusic}
+      title={label}
+      aria-label={label}
+      aria-pressed={musicOn}
+      className={`${panel} pointer-events-auto grid h-11 w-11 place-items-center text-lg transition hover:brightness-125 ${
+        musicOn ? 'text-[#f4b942]' : 'text-white/40'
+      }`}
+    >
+      {musicOn ? '🎵' : '🔇'}
+    </button>
   )
 }
 

@@ -11,7 +11,23 @@
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
+/** Шина музыки: её глушит кнопка в HUD. Звуки идут мимо неё, прямо в master. */
+let musicBus: GainNode | null = null
+let musicEnabled = true
 const buffers = new Map<string, AudioBuffer>()
+
+/** Гасим не мгновенно: ступенька в громкости слышна как щелчок. */
+const MUSIC_TOGGLE_SEC = 0.25
+
+/** Помнит выбор и до создания контекста: кнопку могли нажать раньше первого жеста. */
+export function setMusicEnabled(on: boolean): void {
+  musicEnabled = on
+  if (!ctx || !musicBus) return
+  const t = ctx.currentTime
+  musicBus.gain.cancelScheduledValues(t)
+  musicBus.gain.setValueAtTime(musicBus.gain.value, t)
+  musicBus.gain.linearRampToValueAtTime(on ? 1 : 0.0001, t + MUSIC_TOGGLE_SEC)
+}
 
 const rand = (min: number, max: number): number => min + Math.random() * (max - min)
 
@@ -38,6 +54,10 @@ export async function initAudio(urls: readonly string[]): Promise<void> {
   m.gain.value = 1
   m.connect(c.destination)
 
+  const bus = c.createGain()
+  bus.gain.value = musicEnabled ? 1 : 0.0001
+  bus.connect(m)
+
   await Promise.all(
     urls.map(async (url) => {
       const res = await fetch(url)
@@ -48,12 +68,14 @@ export async function initAudio(urls: readonly string[]): Promise<void> {
 
   ctx = c
   master = m
+  musicBus = bus
 }
 
 export function closeAudio(): void {
   void ctx?.close()
   ctx = null
   master = null
+  musicBus = null
   buffers.clear()
 }
 
@@ -126,6 +148,8 @@ export interface LoopOptions {
   crossfade: number
   /** Стартовать в тишине — чтобы затем ввести слой через fadeIn. */
   silent?: boolean
+  /** 'music' — слой глушится кнопкой в HUD; 'ambient' — звучит всегда. */
+  bus: 'music' | 'ambient'
 }
 
 /** За сколько секунд до старта следующей копии её ставим в расписание. */
@@ -136,14 +160,14 @@ const SCHEDULE_AHEAD = 5
  * loop = true давал бы слышимый провал: хвост режем, копии сшиваем кроссфейдом.
  */
 export function startLoop(url: string, o: LoopOptions): LoopHandle {
-  if (!ctx || !master) throw new Error('audio: startLoop до initAudio')
+  if (!ctx || !master || !musicBus) throw new Error('audio: startLoop до initAudio')
   const c = ctx
   const buffer = buffers.get(url)
   if (!buffer) throw new Error(`audio: буфер ${url} не загружен`)
 
   const out = c.createGain()
   out.gain.value = o.silent ? 0.0001 : o.gain
-  out.connect(master)
+  out.connect(o.bus === 'music' ? musicBus : master)
 
   const playFor = buffer.duration - o.tailTrim
   const period = playFor - o.crossfade

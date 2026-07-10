@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useGameStore } from '../game/store'
+import { setMusicEnabled } from './engine'
 import { startAmbience, type Ambience } from './ambience'
 
 /**
@@ -8,6 +9,7 @@ import { startAmbience, type Ambience } from './ambience'
  */
 export function useAmbience(enabled: boolean): void {
   const phase = useGameStore((s) => s.phase)
+  const musicOn = useGameStore((s) => s.musicOn)
   const ambience = useRef<Ambience | null>(null)
 
   useEffect(() => {
@@ -41,4 +43,7 @@ export function useAmbience(enabled: boolean): void {
   useEffect(() => {
     ambience.current?.setScene(phase)
   }, [phase])
+
+  // Движок помнит выбор и до первого жеста: контекста ещё нет, а кнопку уже нажали.
+  useEffect(() => setMusicEnabled(musicOn), [musicOn])
 }

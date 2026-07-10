@@ -239,6 +239,8 @@ interface GameData {
   shopOpen: boolean
   /** Цвет одежды героя, `#rrggbb`. */
   heroColor: string
+  /** Играет ли музыка. Звуки и природа от этого не зависят. */
+  musicOn: boolean
   /** Очередь тостов. Не персистится: события живут только в текущей сессии. */
   notices: Notice[]
   nextNoticeId: number
@@ -251,6 +253,8 @@ interface GameActions {
   selectTool: (tool: Tool) => void
   /** Перекрасить одежду героя. */
   setHeroColor: (color: string) => void
+  /** Включить/выключить музыку. Звуки продолжают играть. */
+  toggleMusic: () => void
   /** Убрать тост по id (истёк таймер или клик). */
   dismissNotice: (id: number) => void
   /** Сообщить о событии без данных. Подряд один и тот же вид не дублируется. */
@@ -297,6 +301,7 @@ function initialData(): GameData {
     truck: null,
     shopOpen: false,
     heroColor: HERO_COLOR_DEFAULT,
+    musicOn: true,
     notices: [],
     nextNoticeId: 1,
   }
@@ -340,6 +345,8 @@ export const useGameStore = create<GameState>()(
       selectTool: (tool) => set({ tool }),
 
       setHeroColor: (heroColor) => set({ heroColor }),
+
+      toggleMusic: () => set((s) => ({ musicOn: !s.musicOn })),
 
       dismissNotice: (id) =>
         set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
@@ -542,7 +549,8 @@ export const useGameStore = create<GameState>()(
           notices: [],
         })),
 
-      resetGame: () => set(initialData()),
+      // Музыка переживает сброс: это настройка звука, а не игровой прогресс.
+      resetGame: () => set((s) => ({ ...initialData(), musicOn: s.musicOn })),
     }),
     {
       name: 'farm-truck',
@@ -557,7 +565,10 @@ export const useGameStore = create<GameState>()(
       //     и стартовые деньги сверху: раньше семена были бесплатны и копить
       //     на них было незачем, так что честного баланса из него не достать.
       // День и инвентарь переживают все миграции.
-      version: 4,
+      // v5: кнопка музыки в HUD. Старому сохранению включаем её — так было
+      //     до появления кнопки, и молчащая после обновления игра выглядела
+      //     бы поломкой, а не настройкой.
+      version: 5,
       migrate: (persisted, from) => {
         let s = persisted as GameData
         if (from < 1) s = { ...s, slots: emptySlots(), tool: 'seed' }
@@ -572,6 +583,7 @@ export const useGameStore = create<GameState>()(
           }
         }
         if (from < 4) s = { ...s, seeds: startingSeeds(), money: s.money + START_MONEY }
+        if (from < 5) s = { ...s, musicOn: true }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.
@@ -587,6 +599,7 @@ export const useGameStore = create<GameState>()(
         truck: s.truck,
         shopOpen: false, // лавка закрывается вместе с вкладкой
         heroColor: s.heroColor,
+        musicOn: s.musicOn,
         notices: [],
         nextNoticeId: 1,
       }),

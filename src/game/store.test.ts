@@ -566,3 +566,27 @@ describe('день фудтрака (Task 3)', () => {
     expect(S().money).toBe(20)
   })
 })
+
+describe('музыка', () => {
+  // resetGame намеренно не трогает флаг, поэтому beforeEach его не вернёт:
+  // без этого тесты зависели бы от порядка выполнения.
+  afterEach(() => useGameStore.setState({ musicOn: true }))
+
+  it('по умолчанию включена', () => {
+    expect(S().musicOn).toBe(true)
+  })
+
+  it('toggleMusic переключает флаг', () => {
+    S().toggleMusic()
+    expect(S().musicOn).toBe(false)
+    S().toggleMusic()
+    expect(S().musicOn).toBe(true)
+  })
+
+  it('переживает сброс игры: это настройка звука, а не прогресс', () => {
+    S().toggleMusic()
+    S().resetGame()
+    expect(S().musicOn).toBe(false)
+    expect(S().day).toBe(1)
+  })
+})
