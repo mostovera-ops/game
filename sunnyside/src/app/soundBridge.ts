@@ -33,6 +33,7 @@ import {
   playMusicContext,
   playSfx,
   setBusVolume,
+  setSoundMasterEnabled,
   startAmbientLoop,
   stopAmbientLoop,
   type MusicContext,
@@ -102,6 +103,17 @@ export function initSoundBridge(): () => void {
   })
   // Реакция на слайдеры настроек звука (immediate — не ждём следующего тика опроса).
   const unsubVolume = useStore.subscribe((s) => s.ui.volume, syncVolumes)
+  // Мастер-выключатель: синк в sound.ts (выключение глушит петли немедленно); при включении
+  // возобновляем текущий музыкальный контекст, который до этого выбирался «немо».
+  const syncMaster = (on: boolean): void => {
+    setSoundMasterEnabled(on)
+    if (on) {
+      syncVolumes()
+      if (currentMusic !== null) playMusicContext(currentMusic)
+    }
+  }
+  syncMaster(useStore.getState().ui.soundEnabled)
+  const unsubMaster = useStore.subscribe((s) => s.ui.soundEnabled, syncMaster)
 
   function scheduleMusic(next: MusicContext): void {
     if (next === currentMusic) {
@@ -212,5 +224,6 @@ export function initSoundBridge(): () => void {
     detachUnlock()
     detachUnlockedSync()
     unsubVolume()
+    unsubMaster()
   }
 }

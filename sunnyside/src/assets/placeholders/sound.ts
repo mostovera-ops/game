@@ -70,6 +70,26 @@ let ambientSource: AudioBufferSourceNode | null = null
 let ambientWanted: AmbientCategory | null = null
 let musicStop: (() => void) | null = null
 let noiseBuffer: AudioBuffer | null = null
+
+// ── Мастер-выключатель всего звука (по умолчанию ВЫКЛ — звук строго opt-in из настроек).
+// Единственная точка гейта: все play*-функции no-op при выключенном мастере, выключение
+// немедленно глушит уже играющие петли (музыка/эмбиент). Синк со стором — app/soundBridge.
+let masterEnabled = false
+
+/** Включить/выключить весь звук игры. Выключение немедленно глушит музыку и эмбиент. */
+export function setSoundMasterEnabled(on: boolean): void {
+  if (masterEnabled === on) return
+  masterEnabled = on
+  if (!on) {
+    stopMusic()
+    stopAmbientLoop()
+  }
+}
+
+/** Текущее состояние мастер-выключателя звука. */
+export function isSoundMasterEnabled(): boolean {
+  return masterEnabled
+}
 /** Слушатели «звук только что разблокирован» — см. `onAudioUnlocked`. */
 const unlockListeners = new Set<() => void>()
 
@@ -256,6 +276,7 @@ function playNoiseBurst(context: AudioContext, destination: GainNode, startAt: n
  * основное правило задачи: без юзер-жеста модуль нем.
  */
 export function playSfx(category: SfxCategory): void {
+  if (!masterEnabled) return
   if (!isAudioUnlocked() || ctx === null || buses === null) return
   const context = ctx
   const dest = buses.sfx.gain
@@ -328,6 +349,7 @@ export function playSfx(category: SfxCategory): void {
  */
 export function startAmbientLoop(category: AmbientCategory): void {
   stopAmbientLoop()
+  if (!masterEnabled) return
   ambientWanted = category
   if (!isAudioUnlocked() || ctx === null || buses === null) return
   const context = ctx
@@ -393,6 +415,7 @@ export function stubMusicLabel(context: MusicContext): string {
  */
 export function playMusicContext(musicContext: MusicContext, rootHz = 261.63 /* C4 */): void {
   stopMusic()
+  if (!masterEnabled) return
   if (!isAudioUnlocked() || ctx === null || buses === null) return
   const audioCtx = ctx
   const dest = buses.music.gain

@@ -25,6 +25,8 @@ export function SoundSettingsPanel() {
   const locale = useStore((s) => s.ui.locale)
   const volume = useStore((s) => s.ui.volume)
   const setVolume = useStore((s) => s.setVolume)
+  const soundEnabled = useStore((s) => s.ui.soundEnabled)
+  const setSoundEnabled = useStore((s) => s.setSoundEnabled)
   const close = () => useStore.getState().setSoundSettingsOpen(false)
 
   if (!open) return null
@@ -56,7 +58,21 @@ export function SoundSettingsPanel() {
           </button>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <label className="mb-4 flex items-center justify-between text-sm" style={{ color: 'var(--ink)' }}>
+          <span>
+            <span aria-hidden>{soundEnabled ? '🔊' : '🔇'}</span>{' '}
+            {ru ? 'Звук игры' : 'Game sound'}
+          </span>
+          <input
+            type="checkbox"
+            checked={soundEnabled}
+            data-testid="sound-master-toggle"
+            onChange={(e) => setSoundEnabled(e.target.checked)}
+            style={{ accentColor: 'var(--cherry)', width: 20, height: 20 }}
+          />
+        </label>
+
+        <div className={`flex flex-col gap-4 ${soundEnabled ? '' : 'pointer-events-none opacity-40'}`}>
           {SLIDER_ROWS.map((row) => (
             <label key={row.bus} className="flex flex-col gap-1 text-sm" style={{ color: 'var(--ink)' }}>
               <span className="flex items-center justify-between">

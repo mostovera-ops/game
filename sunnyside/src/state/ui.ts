@@ -60,6 +60,8 @@ export interface UiSlice {
     storageOpen: boolean
     /** Громкость трёх шин (persist whitelist, `state/index.ts`). */
     volume: VolumeSettings
+    /** Мастер-выключатель ВСЕГО звука (music/sfx/ambient). По умолчанию ВЫКЛ — звук opt-in. */
+    soundEnabled: boolean
     /** Открыта ли панель настроек звука (audio-wiring) — контекстный оверлей без canon-ключа. */
     soundSettingsOpen: boolean
   }
@@ -81,6 +83,8 @@ export interface UiSlice {
   setStorageOpen: (open: boolean) => void
   /** Установить громкость одной шины (клампится в [0,1]). */
   setVolume: (bus: keyof VolumeSettings, value: number) => void
+  /** Включить/выключить весь звук игры (мастер). */
+  setSoundEnabled: (on: boolean) => void
   /** Открыть/закрыть панель настроек звука. */
   setSoundSettingsOpen: (open: boolean) => void
 }
@@ -97,6 +101,7 @@ const initial: UiSlice['ui'] = {
   kitchenMachineId: null,
   storageOpen: false,
   volume: DEFAULT_VOLUME,
+  soundEnabled: false,
   soundSettingsOpen: false,
 }
 
@@ -123,5 +128,6 @@ export const createUiSlice: SliceCreator<UiSlice> = (set) => ({
   setStorageOpen: (storageOpen) => set((s) => ({ ui: { ...s.ui, storageOpen } })),
   setVolume: (bus, value) =>
     set((s) => ({ ui: { ...s.ui, volume: { ...s.ui.volume, [bus]: clampVolume(value) } } })),
+  setSoundEnabled: (soundEnabled) => set((s) => ({ ui: { ...s.ui, soundEnabled } })),
   setSoundSettingsOpen: (soundSettingsOpen) => set((s) => ({ ui: { ...s.ui, soundSettingsOpen } })),
 })

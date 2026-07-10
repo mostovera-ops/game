@@ -72,6 +72,7 @@ export const useStore = create<StoreState>()(
             // Громкость шин (audio-wiring, 22-av §5) — небольшое пользовательское
             // предпочтение, не игровая истина/валюта — безопасно для persist (AGENTS.md §0.5).
             volume: s.ui.volume,
+            soundEnabled: s.ui.soundEnabled,
           },
           scene: { active: s.scene.active },
         }) as unknown as StoreState,
@@ -84,6 +85,7 @@ export const useStore = create<StoreState>()(
             activePanel?: StoreState['ui']['activePanel']
             perf?: { liteMode?: boolean }
             volume?: Partial<StoreState['ui']['volume']>
+            soundEnabled?: boolean
           }
           scene?: { active?: StoreState['scene']['active'] }
         }
@@ -95,6 +97,7 @@ export const useStore = create<StoreState>()(
             ...(p.ui && 'activePanel' in p.ui ? { activePanel: p.ui.activePanel ?? null } : {}),
             perf: { ...current.ui.perf, ...(p.ui?.perf ?? {}) },
             volume: { ...current.ui.volume, ...(p.ui?.volume ?? {}) },
+            ...(typeof p.ui?.soundEnabled === 'boolean' ? { soundEnabled: p.ui.soundEnabled } : {}),
           },
           scene: { ...current.scene, ...(p.scene?.active ? { active: p.scene.active } : {}) },
         }
