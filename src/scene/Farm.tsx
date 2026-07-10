@@ -161,10 +161,17 @@ function Interactions() {
       else if (it.kind === 'speak') say(it.text)
       else if (it.kind === 'forage') st.collectForage(it.id, it.item)
       else if (st.tool === 'can') {
+        // Файл перегенерирован тише прежнего (пик 0.09 против 0.25), поэтому
+        // усиление тут около единицы, а не доли.
         st.water(it.id)
-        playSfx(SFX.waterPour, { gain: 0.9, rate: [0.95, 1.05] })
-      } else if (st.tool === 'hand') st.harvest(it.id)
-      else {
+        playSfx(SFX.waterPour, { gain: 1, rate: [0.95, 1.05] })
+      } else if (st.tool === 'hand') {
+        // Сбор мог не удаться (слот успел погибнуть) — звук только по факту.
+        const had = st.slots.find((s) => s.id === it.id)?.crop
+        st.harvest(it.id)
+        const now = useGameStore.getState().slots.find((s) => s.id === it.id)?.crop
+        if (had && !now) playSfx(SFX.harvestCut, { gain: 0.16, rate: [0.95, 1.08] })
+      } else {
         // plant() молча ничего не делает, если семена кончились: звук — только
         // если растение действительно появилось.
         st.plant(it.id)

@@ -366,7 +366,9 @@ export function Hero({
         const half = Math.floor(phase.current / Math.PI)
         if (half !== halfSteps.current) {
           halfSteps.current = half
-          playSfx(SFX.footstep, { gain: 0.5, rate: [0.9, 1.1], pan: [-0.25, 0.25] })
+          // Тише прежнего вдвое: шаг звучит по два раза в секунду и на 0.5
+          // перекрикивал всё остальное.
+          playSfx(SFX.footstep, { gain: 0.28, rate: [0.9, 1.1], pan: [-0.25, 0.25] })
         }
       }
 

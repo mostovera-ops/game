@@ -18,7 +18,8 @@ import {
   type ItemId,
   type RecipeId,
 } from '../game/store'
-import { FORAGE_HINT, ITEM_EMOJI, ITEM_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
+import { FORAGE_HINT, ITEM_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
+import { ItemIcon } from './ItemIcon'
 
 /** Какая находка открывает этот рецепт, если он вообще из находок. */
 function unlockedBy(recipe: RecipeId): ForageId | null {
@@ -49,7 +50,7 @@ function KnownRecipe({ recipe }: { recipe: RecipeId }) {
                 have >= need ? 'opacity-80' : 'text-[#ff8b5e]'
               }`}
             >
-              {ITEM_EMOJI[item]} ×{need}
+              <ItemIcon item={item} /> ×{need}
             </span>
           )
         })}

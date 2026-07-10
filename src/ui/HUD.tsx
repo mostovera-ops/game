@@ -24,8 +24,10 @@ import {
   type RecipeId,
   type Tool,
 } from '../game/store'
+import { uiClick } from '../audio/engine'
 import { getHoveredOrder, subscribeOrderHover } from '../scene/orderHover'
 import { ITEM_EMOJI, ITEM_NAME, RECIPE_EMOJI, RECIPE_NAME } from './crops'
+import { ItemIcon } from './ItemIcon'
 import { HeroPortrait } from './HeroPortrait'
 import { Inventory } from './Inventory'
 import { RecipeBook } from './RecipeBook'
@@ -43,7 +45,8 @@ const panel = 'pointer-events-auto rounded-lg bg-[#241a20]/70 backdrop-blur'
 /** Тост: текст и тон по виду события. Тон — единственный носитель «плохо/хорошо». */
 type Tone = 'good' | 'warn' | 'bad'
 
-function noticeText(n: Notice): { text: string; tone: Tone } {
+// ReactNode, а не строка: у гриба нет своего эмодзи, и его значок — <svg>.
+function noticeText(n: Notice): { text: React.ReactNode; tone: Tone } {
   switch (n.kind) {
     case 'served':
       return {
@@ -73,7 +76,14 @@ function noticeText(n: Notice): { text: string; tone: Tone } {
         ? { text: `Удачный сбор! ${ITEM_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
         : { text: `${ITEM_EMOJI[n.crop!]} +${n.amount}`, tone: 'good' }
     case 'foraged':
-      return { text: `Находка: ${ITEM_EMOJI[n.item!]} ${ITEM_NAME[n.item!]}`, tone: 'good' }
+      return {
+        text: (
+          <>
+            Находка: <ItemIcon item={n.item!} /> {ITEM_NAME[n.item!]}
+          </>
+        ),
+        tone: 'good',
+      }
     case 'recipe-found':
       return {
         text: `Новый рецепт: ${RECIPE_EMOJI[n.recipe!]} ${RECIPE_NAME[n.recipe!]} — смотрите книгу (B)`,
@@ -236,6 +246,13 @@ function MusicToggle() {
   )
 }
 
+/**
+ * Бейджи ячейки в одну колонку у левого края: клавиша вызова сверху, число
+ * штук снизу. Правый-верхний угол оставлен точкам перетаскивания (GripDots).
+ */
+const HOTKEY_BADGE = 'pointer-events-none absolute top-0 left-1 text-[9px] opacity-60'
+const COUNT_BADGE = 'pointer-events-none absolute bottom-0 left-1 text-[9px] font-bold opacity-90'
+
 function ToolButton({
   active,
   hint,
@@ -260,7 +277,7 @@ function ToolButton({
       }`}
     >
       {children}
-      <span className="absolute bottom-0 right-1 text-[9px] opacity-60">{hotkey}</span>
+      <span className={HOTKEY_BADGE}>{hotkey}</span>
     </button>
   )
 }
@@ -324,6 +341,41 @@ function itemHint(cell: ToolbarItem, count: number): string {
 }
 
 /**
+ * Уголок с точками — то же, чем помечают перетаскиваемое во всех интерфейсах.
+ *
+ * Виден только под курсором: постоянный значок на десяти ячейках сразу — шум,
+ * а нужен он ровно в тот миг, когда игрок думает, за что схватиться. Лучей
+ * мыши не ловит, иначе перекрыл бы саму ячейку.
+ */
+function GripDots() {
+  return (
+    <svg
+      viewBox="0 0 6 10"
+      aria-hidden
+      className="pointer-events-none absolute right-1 top-1 h-2.5 w-1.5 fill-current opacity-0 transition group-hover:opacity-60"
+    >
+      {[1, 5, 9].map((cy) => (
+        <g key={cy}>
+          <circle cx={1} cy={cy} r={1} />
+          <circle cx={5} cy={cy} r={1} />
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+/**
+ * Занятую ячейку можно взять — об этом говорят курсор-рука, обводка на ховере
+ * и уголок с точками.
+ *
+ * Курсор дублируем на вложенную кнопку: у <button> он свой, `default`, и рука
+ * пропадала бы ровно над пакетиком семян — там, где по нему и целятся.
+ */
+const DRAGGABLE =
+  'group relative rounded-md cursor-grab active:cursor-grabbing' +
+  ' [&_button]:cursor-grab [&_button]:active:cursor-grabbing'
+
+/**
  * Ячейка тулбара. Она же цель перетаскивания: предмет держится своей ячейки,
  * пока игрок сам его не перенесёт, а пустая ячейка остаётся пустой — соседи
  * не сдвигаются, когда семена кончились.
@@ -351,21 +403,27 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
     e.preventDefault()
     setOver(true)
   }
-  const ring = over ? 'ring-2 ring-[#f4b942]' : ''
+  // Жёлтая обводка — «сюда упадёт», белая — «это можно взять». Первая главнее:
+  // пока игрок тащит предмет, ему важна цель, а не то, за что он ухватился.
+  const dropRing = 'ring-2 ring-[#f4b942]'
+  const grabRing = 'hover:ring-2 hover:ring-white/40'
 
   if (!cell) {
     // Пустая ячейка: рамка есть, содержимого нет. Цифру не пишем — нажимать
-    // нечего, а подписанная клавиша обещала бы действие.
+    // нечего, а подписанная клавиша обещала бы действие. Хватать её не за что,
+    // поэтому ни руки, ни точек — только подсветка цели под чужим предметом.
     return (
       <div
         onDragOver={dragOver}
         onDragLeave={() => setOver(false)}
         onDrop={drop}
         {...hoverTip('Пустая ячейка', ['Сюда можно перетащить предмет'])}
-        className={`h-12 w-12 rounded-md bg-black/20 ${ring}`}
+        className={`h-12 w-12 rounded-md bg-black/20 ${over ? dropRing : ''}`}
       />
     )
   }
+
+  const ring = over ? dropRing : grabRing
 
   const count = itemCount(cell, seeds, inventory)
   const hint = itemHint(cell, count)
@@ -384,7 +442,7 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
   if (cell.kind === 'seed') {
     const active = tool === 'seed' && selectedSeed === cell.crop
     return (
-      <div {...drag} className={`rounded-md ${ring}`}>
+      <div {...drag} className={`${DRAGGABLE} ${ring}`}>
         <ToolButton
           active={active}
           activeClass="bg-[#9fc25f]"
@@ -393,8 +451,9 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
           onClick={() => selectSeed(cell.crop)}
         >
           <SeedPacket crop={cell.crop} active={active} />
-          <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
+          <span className={COUNT_BADGE}>{count}</span>
         </ToolButton>
+        <GripDots />
       </div>
     )
   }
@@ -404,10 +463,11 @@ function ToolbarCell({ index, cell }: { index: number; cell: ToolbarItem | null 
     <div
       {...drag}
       {...hoverTip(hint)}
-      className={`relative grid h-12 w-12 place-items-center rounded-md bg-white/5 text-2xl ${ring}`}
+      className={`${DRAGGABLE} grid h-12 w-12 place-items-center bg-white/5 text-2xl ${ring}`}
     >
-      <span>{ITEM_EMOJI[cell.item]}</span>
-      <span className="absolute left-1 top-0 text-[9px] font-bold opacity-80">{count}</span>
+      <ItemIcon item={cell.item} />
+      <span className={COUNT_BADGE}>{count}</span>
+      <GripDots />
     </div>
   )
 }
@@ -519,7 +579,10 @@ function FarmAction() {
   const endDay = useGameStore((s) => s.endDay)
   return (
     <button
-      onClick={endDay}
+      onClick={() => {
+        uiClick()
+        endDay()
+      }}
       className="pointer-events-auto rounded-md bg-[#6b8f3f] px-4 py-2 text-sm font-bold text-[#f0e4c9] transition hover:brightness-110"
     >
       Закончить день →
@@ -619,7 +682,7 @@ function OrderTooltip() {
             }`}
           >
             <span>
-              {ITEM_EMOJI[c]} {ITEM_NAME[c]}
+              <ItemIcon item={c} /> {ITEM_NAME[c]}
             </span>
             <span className="font-mono">
               {have}/{need}
@@ -670,7 +733,10 @@ function WeekSummary() {
         </p>
         <p className="text-2xl font-bold text-[#ff8b5e]">💰 {money}</p>
         <button
-          onClick={nextWeek}
+          onClick={() => {
+            uiClick()
+            nextWeek()
+          }}
           className="mt-1 rounded-md bg-[#6b8f3f] px-5 py-2 text-sm font-bold text-[#f0e4c9] transition hover:brightness-110"
         >
           Новая неделя →

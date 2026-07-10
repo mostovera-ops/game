@@ -1,0 +1,130 @@
+/**
+ * tokens.css — токены дайнер-языка HUD (19-ui-ux §4.5). Только этот файл держит
+ * hex-значения дизайн-языка UI-слоя (аналог `scene/assets/palette.*` для 3D, но
+ * для DOM). Компоненты `ui/hud/**` используют var(--...) и классы ниже, не hex.
+ *
+ * Light — тёплая кремовая бумага (по умолчанию); Dark — по `prefers-color-scheme`
+ * либо явный `data-theme` (перекрывает системный, вперёд на M9 Settings/Display).
+ */
+
+:root {
+  --paper: #f5eddd;
+  --card: #fcf6e8;
+  --board: #1f2b37;
+  --board-ink: #f2e9d8;
+  --cherry: #c63f33;
+  --teal: #0b9077;
+  --mustard: #d89a2b;
+  --chrome: #b9c4cc;
+  --ink: #2a2420;
+  --ink-soft: rgba(42, 36, 32, 0.65);
+
+  --font-display: 'Futura', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-script: 'Snell Roundhand', 'Segoe Script', cursive;
+  --font-body: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+
+  --shadow-print: 4px 4px 0 rgba(0, 0, 0, 0.28);
+  --radius-diner: 13px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f1b24;
+    --card: #16242f;
+    --board: #1b2938;
+    --board-ink: #f2e9d8;
+    --cherry: #f0594a;
+    --teal: #2fa995;
+    --mustard: #e9ae4b;
+    --chrome: #5a6b78;
+    --ink: #f2e9d8;
+    --ink-soft: rgba(242, 233, 216, 0.7);
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #0f1b24;
+  --card: #16242f;
+  --board: #1b2938;
+  --board-ink: #f2e9d8;
+  --cherry: #f0594a;
+  --teal: #2fa995;
+  --mustard: #e9ae4b;
+  --chrome: #5a6b78;
+  --ink: #f2e9d8;
+  --ink-soft: rgba(242, 233, 216, 0.7);
+}
+
+:root[data-theme='light'] {
+  --paper: #f5eddd;
+  --card: #fcf6e8;
+  --board: #1f2b37;
+  --board-ink: #f2e9d8;
+  --cherry: #c63f33;
+  --teal: #0b9077;
+  --mustard: #d89a2b;
+  --chrome: #b9c4cc;
+  --ink: #2a2420;
+  --ink-soft: rgba(42, 36, 32, 0.65);
+}
+
+/* ── Letterboard (Demand Board / очереди / серии) ── */
+.hud-boardbox {
+  background: var(--board);
+  color: var(--board-ink);
+  border-radius: var(--radius-diner);
+  box-shadow: var(--shadow-print);
+  font-family: var(--font-display);
+}
+
+/* ── Чек (Shift/Week Receipt) — зубчатый край имитируется repeating-gradient ── */
+.hud-receipt {
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+  border-radius: 4px;
+  box-shadow: var(--shadow-print);
+}
+
+/* ── Талон-стаб (перфорация слева пунктиром) ── */
+.hud-ticket {
+  background: var(--card);
+  color: var(--ink);
+  border-left: 2px dashed var(--chrome);
+  border-radius: 8px;
+}
+
+/* ── Kicker — дэшированная плашка заголовка секции ── */
+.hud-kicker {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mustard);
+  border-bottom: 2px dashed var(--chrome);
+}
+
+/* ── Marquee — бегущая строка топ-бара ── */
+.hud-marquee {
+  background: var(--board);
+  color: var(--board-ink);
+  font-family: var(--font-display);
+  box-shadow: var(--shadow-print);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-marquee * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/*
+ * ── Тач-таргет ≥44×44 px (19-ui-ux §4.4 «тач-правила») ──
+ * Круглые иконки-кнопки marquee/nav держат свой визуальный размер (паддинг/шрифт как раньше) —
+ * этот класс лишь гарантирует минимальный кликабельный бокс, не раздувая иконку.
+ */
+.hud-tap-target {
+  min-width: 44px;
+  min-height: 44px;
+}
