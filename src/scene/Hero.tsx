@@ -46,6 +46,11 @@ const STEP_AMP = 0.5 // рад — размах ноги
 const TURN_LAMBDA = 10 // скорость доворота на цель
 const AMP_LAMBDA = 8 // с какой скоростью ноги замирают на месте
 const ARRIVE = 0.05 // ближе этого считаем, что пришли
+// Во сколько раз герой имеет право разогнаться, чтобы держать экранную скорость.
+// Камера смотрит с высоты ~23°, и «вглубь» экрана метр стоит вчетверо меньше
+// пикселей, чем вбок. Потолок не даёт ему телепортироваться, если игрок
+// завалит камеру совсем к горизонту.
+const MAX_BOOST = 3
 const MAX_DT = 0.1 // как в TruckTick: на фоновой вкладке dt огромен
 
 /** Материал героя: гладкий, в отличие от фасеточной сцены. */
@@ -58,6 +63,25 @@ function smoothLambert(name: string, hex: string) {
 /** Куда герой смотрит в модели — на −Z, как принято в three. */
 function yawTo(dx: number, dz: number) {
   return Math.atan2(-dx, -dz)
+}
+
+/**
+ * Мировая скорость такая, чтобы по экрану герой шёл всегда одинаково.
+ *
+ * Камера наклонена, и метр «вглубь» кадра рисуется куда короче метра «вбок»:
+ * с одинаковой мировой скоростью герой кажется вязким, когда идёт вверх-вниз.
+ * Считаем, во сколько раз экран сжимает этот шаг, и на столько же ускоряемся.
+ *
+ * Проекция для ортокамеры — просто длина вектора в её осях right/up.
+ */
+const camBasis = { right: new THREE.Vector3(), up: new THREE.Vector3(), fwd: new THREE.Vector3() }
+
+function screenSpeed(camera: THREE.Camera, vx: number, vz: number) {
+  camera.matrixWorld.extractBasis(camBasis.right, camBasis.up, camBasis.fwd)
+  const sx = vx * camBasis.right.x + vz * camBasis.right.z
+  const sy = vx * camBasis.up.x + vz * camBasis.up.z
+  const shrink = Math.hypot(sx, sy)
+  return SPEED / Math.max(shrink, 1 / MAX_BOOST)
 }
 
 /** Разница углов, сведённая в (−π, π]: иначе доворот идёт через полный круг. */
@@ -179,6 +203,8 @@ export function Hero({
   // Переиспользуем векторы: useFrame не место для аллокаций.
   const fwd = useRef(new THREE.Vector3())
   const right = useRef(new THREE.Vector3())
+  /** Сколько осталось до цели по клику: последний шаг её не перелетает. */
+  const toTarget = useRef(0)
 
   /**
    * Глаза: моргание и взгляд за курсором. Зовётся из обеих веток кадра —
@@ -278,10 +304,7 @@ export function Hero({
       if (dist > ARRIVE) {
         vx = dx / dist
         vz = dz / dist
-        // Не перелетаем цель на последнем шаге.
-        const step = Math.min(SPEED * dt, dist)
-        vx *= step / (SPEED * dt)
-        vz *= step / (SPEED * dt)
+        toTarget.current = dist
       }
     }
 
@@ -289,8 +312,13 @@ export function Hero({
 
     let moved = false
     if (walking) {
-      const wantX = g.position.x + vx * SPEED * dt
-      const wantZ = g.position.z + vz * SPEED * dt
+      // Шаг меряем по экрану, а не по земле — см. screenSpeed. По клику ещё и
+      // не перелетаем цель на последнем шаге.
+      let step = screenSpeed(camera, vx, vz) * dt
+      if (!pressed.current.size) step = Math.min(step, toTarget.current)
+
+      const wantX = g.position.x + vx * step
+      const wantZ = g.position.z + vz * step
       const { x, z } = resolveCollisions(wantX, wantZ, HERO_RADIUS, colliders)
       moved = Math.hypot(x - g.position.x, z - g.position.z) > 1e-4
       g.position.x = x

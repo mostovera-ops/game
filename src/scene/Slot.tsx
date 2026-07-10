@@ -182,17 +182,18 @@ function ripeLine(stage: number): string {
 /** Полив читается значком: капля — сухо, галочка — полито. */
 const waterLine = (watered: boolean) => (watered ? '✅ Полито' : '💧 Не полито')
 
-/** Что показать по ховеру: пустой слот зовёт посадить, занятый — карточка. */
+/**
+ * Что показать по ховеру.
+ *
+ * Про полив говорим только растущему: пустой грядке он ничего не обещает, а
+ * созревшей уже не нужен — собирают её и сухой.
+ */
 function slotLabel(slot: SlotState): { title: string; lines: string[] } {
-  if (!slot.crop) {
-    return {
-      title: 'Пустая грядка',
-      lines: ['Тут можно посадить семена', waterLine(slot.watered)],
-    }
-  }
+  if (!slot.crop) return { title: 'Пустая грядка', lines: ['Тут можно посадить семена'] }
+  const ripe = slot.stage === 2
   return {
     title: CROP_TITLE[slot.crop],
-    lines: [ripeLine(slot.stage), waterLine(slot.watered)],
+    lines: ripe ? [ripeLine(slot.stage)] : [ripeLine(slot.stage), waterLine(slot.watered)],
   }
 }
 
@@ -205,12 +206,14 @@ function slotLabel(slot: SlotState): { title: string; lines: string[] } {
  */
 function refusal(slot: SlotState, tool: Tool, hasSeed: boolean): string | null {
   if (!slot.crop) {
-    if (tool !== 'seed') return 'Мне выбрать семена для посадки.'
+    if (tool !== 'seed') return 'Мне надо выбрать семена для посадки.'
     if (!hasSeed) return 'У меня нет семян. Надо купить.'
     return null
   }
   if (tool === 'hand' && slot.stage < 2) {
-    return `Пока рано. Урожай будет через ${days(nightsLeft(slot.stage))}.`
+    const wait = `Пока рано. Урожай будет через ${days(nightsLeft(slot.stage))}.`
+    // Сухой росток до урожая и не доживёт — герой напоминает об этом сразу.
+    return slot.watered ? wait : `${wait} Сейчас его надо полить.`
   }
   return null
 }
