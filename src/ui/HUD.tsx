@@ -226,11 +226,11 @@ function WeekBar() {
   )
 }
 
-/** Глушит только музыку: шаги, природа и толпа продолжают звучать. */
+/** Глушит весь фон: музыку, птиц, стрекот, толпу. Звуки действий остаются. */
 function MusicToggle() {
   const musicOn = useGameStore((s) => s.musicOn)
   const toggleMusic = useGameStore((s) => s.toggleMusic)
-  const label = musicOn ? 'Выключить музыку' : 'Включить музыку'
+  const label = musicOn ? 'Выключить звук' : 'Включить звук'
   return (
     <button
       onClick={toggleMusic}
@@ -241,7 +241,7 @@ function MusicToggle() {
         musicOn ? 'text-[#f4b942]' : 'text-white/40'
       }`}
     >
-      {musicOn ? '🎵' : '🔇'}
+      {musicOn ? '🔊' : '🔇'}
     </button>
   )
 }

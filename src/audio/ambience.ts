@@ -25,14 +25,14 @@ const OWL = `${A}/owl-hoot.mp3`
 // Усиления не на глаз, а от измеренных пиков файлов: gain = цель / пик.
 // Подложка фермы: пик 0.742 → в миксе 0.37. Музыка дня торговли: пик 0.877,
 // она заметно громче сама по себе, поэтому усиление втрое меньше.
-// Подложки — на музыкальной шине: их и глушит кнопка в HUD.
-const FARM_BED_LOOP = { gain: 0.5, tailTrim: 1.6, crossfade: 2.5, bus: 'music' } as const
+// Все петли — фон: их глушит кнопка в HUD (startLoop сажает на bgBus).
+const FARM_BED_LOOP = { gain: 0.5, tailTrim: 1.6, crossfade: 2.5 } as const
 // Ночь: пик 0.89, RMS 0.103 — как у фермы, поэтому и усиление почти то же.
-const NIGHT_BED_LOOP = { gain: 0.45, tailTrim: 2.7, crossfade: 2.5, bus: 'music' } as const
-const TRUCK_BED_LOOP = { gain: 0.26, tailTrim: 0.7, crossfade: 2.5, bus: 'music' } as const
-// Толпа сидит под музыкой, а не поверх: пик 0.64 → в миксе 0.15.
-// Это звук, а не музыка: с выключенной музыкой ярмарка всё равно гудит.
-const CROWD_LOOP = { gain: 0.22, tailTrim: 0.45, crossfade: 1.5, bus: 'ambient' } as const
+const NIGHT_BED_LOOP = { gain: 0.45, tailTrim: 2.7, crossfade: 2.5 } as const
+const TRUCK_BED_LOOP = { gain: 0.26, tailTrim: 0.7, crossfade: 2.5 } as const
+// Толпа сидит под музыкой: пик 0.64 → в миксе 0.15. Тоже фон — с выключенным
+// звуком ярмарка стихает вместе с музыкой.
+const CROWD_LOOP = { gain: 0.22, tailTrim: 0.45, crossfade: 1.5 } as const
 
 /**
  * Длина перехода между сценами. Ночь длится NIGHT_SECONDS = 10 с, так что
@@ -88,7 +88,12 @@ function startNature(specs: readonly NatureSpec[]): () => void {
     const schedule = (): void => {
       const id = window.setTimeout(
         () => {
-          playSfx(spec.url, { gain: spec.gain * rand(0.7, 1), rate: [0.92, 1.08], pan: [-0.7, 0.7] })
+          playSfx(spec.url, {
+            gain: spec.gain * rand(0.7, 1),
+            rate: [0.92, 1.08],
+            pan: [-0.7, 0.7],
+            background: true, // птицы и стрекот — фон, их глушит кнопка
+          })
           schedule()
         },
         rand(...spec.delay) * 1000,
@@ -117,7 +122,7 @@ function startScene(scene: Scene, silent: boolean): SceneLayer {
   if (scene === 'night') {
     // Первый ух — сразу, не дожидаясь таймера: ночь должна заявить о себе,
     // а длится она всего десять секунд.
-    playSfx(OWL, { gain: 0.22, pan: [-0.5, 0.5] })
+    playSfx(OWL, { gain: 0.22, pan: [-0.5, 0.5], background: true })
     return {
       loops: [startLoop(NIGHT_BED, { ...NIGHT_BED_LOOP, silent })],
       stopNature: startNature(NIGHT_NATURE),

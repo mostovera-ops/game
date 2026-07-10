@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { getClock, isNight, subscribeClock } from '../game/dayClock'
 import { useGameStore, type Phase } from '../game/store'
-import { setMusicEnabled } from './engine'
+import { setBackgroundEnabled } from './engine'
 import { startAmbience, type Ambience, type Scene } from './ambience'
 
 /**
@@ -57,5 +57,5 @@ export function useAmbience(enabled: boolean): void {
   }, [phase, night])
 
   // Движок помнит выбор и до первого жеста: контекста ещё нет, а кнопку уже нажали.
-  useEffect(() => setMusicEnabled(musicOn), [musicOn])
+  useEffect(() => setBackgroundEnabled(musicOn), [musicOn])
 }

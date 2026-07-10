@@ -11,22 +11,26 @@
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
-/** Шина музыки: её глушит кнопка в HUD. Звуки идут мимо неё, прямо в master. */
-let musicBus: GainNode | null = null
-let musicEnabled = true
+/**
+ * Фоновая шина: музыка, птицы, стрекот, гул толпы — всё, что глушит кнопка
+ * в HUD. Звуки действий (шаги, вода, серп, касса) идут мимо неё, прямо в
+ * master, и звучат даже с выключенным фоном.
+ */
+let bgBus: GainNode | null = null
+let bgEnabled = true
 const buffers = new Map<string, AudioBuffer>()
 
 /** Гасим не мгновенно: ступенька в громкости слышна как щелчок. */
-const MUSIC_TOGGLE_SEC = 0.25
+const BG_TOGGLE_SEC = 0.25
 
 /** Помнит выбор и до создания контекста: кнопку могли нажать раньше первого жеста. */
-export function setMusicEnabled(on: boolean): void {
-  musicEnabled = on
-  if (!ctx || !musicBus) return
+export function setBackgroundEnabled(on: boolean): void {
+  bgEnabled = on
+  if (!ctx || !bgBus) return
   const t = ctx.currentTime
-  musicBus.gain.cancelScheduledValues(t)
-  musicBus.gain.setValueAtTime(musicBus.gain.value, t)
-  musicBus.gain.linearRampToValueAtTime(on ? 1 : 0.0001, t + MUSIC_TOGGLE_SEC)
+  bgBus.gain.cancelScheduledValues(t)
+  bgBus.gain.setValueAtTime(bgBus.gain.value, t)
+  bgBus.gain.linearRampToValueAtTime(on ? 1 : 0.0001, t + BG_TOGGLE_SEC)
 }
 
 const rand = (min: number, max: number): number => min + Math.random() * (max - min)
@@ -55,7 +59,7 @@ export async function initAudio(urls: readonly string[]): Promise<void> {
   m.connect(c.destination)
 
   const bus = c.createGain()
-  bus.gain.value = musicEnabled ? 1 : 0.0001
+  bus.gain.value = bgEnabled ? 1 : 0.0001
   bus.connect(m)
 
   await Promise.all(
@@ -68,14 +72,14 @@ export async function initAudio(urls: readonly string[]): Promise<void> {
 
   ctx = c
   master = m
-  musicBus = bus
+  bgBus = bus
 }
 
 export function closeAudio(): void {
   void ctx?.close()
   ctx = null
   master = null
-  musicBus = null
+  bgBus = null
   buffers.clear()
 }
 
@@ -85,10 +89,12 @@ export interface SfxOptions {
   rate?: [number, number]
   /** Разброс позиции в стерео. */
   pan?: [number, number]
+  /** Фоновый звук (птицы, стрекот): идёт через шину, которую глушит кнопка. */
+  background?: boolean
 }
 
 export function playSfx(url: string, opts: SfxOptions = {}): void {
-  if (!ctx || !master) return
+  if (!ctx || !master || !bgBus) return
   const buffer = buffers.get(url)
   if (!buffer) return
 
@@ -102,7 +108,7 @@ export function playSfx(url: string, opts: SfxOptions = {}): void {
   const pan = ctx.createStereoPanner()
   pan.pan.value = opts.pan ? rand(...opts.pan) : 0
 
-  src.connect(gain).connect(pan).connect(master)
+  src.connect(gain).connect(pan).connect(opts.background ? bgBus : master)
   src.start()
 }
 
@@ -172,8 +178,6 @@ export interface LoopOptions {
   crossfade: number
   /** Стартовать в тишине — чтобы затем ввести слой через fadeIn. */
   silent?: boolean
-  /** 'music' — слой глушится кнопкой в HUD; 'ambient' — звучит всегда. */
-  bus: 'music' | 'ambient'
 }
 
 /** За сколько секунд до старта следующей копии её ставим в расписание. */
@@ -182,16 +186,19 @@ const SCHEDULE_AHEAD = 5
 /**
  * Крутит файл в цикле. Треки затухают в тишину на концах, поэтому обычный
  * loop = true давал бы слышимый провал: хвост режем, копии сшиваем кроссфейдом.
+ *
+ * Все зацикленные слои (подложки, гул толпы) — фон: идут через bgBus и
+ * глушатся кнопкой.
  */
 export function startLoop(url: string, o: LoopOptions): LoopHandle {
-  if (!ctx || !master || !musicBus) throw new Error('audio: startLoop до initAudio')
+  if (!ctx || !master || !bgBus) throw new Error('audio: startLoop до initAudio')
   const c = ctx
   const buffer = buffers.get(url)
   if (!buffer) throw new Error(`audio: буфер ${url} не загружен`)
 
   const out = c.createGain()
   out.gain.value = o.silent ? 0.0001 : o.gain
-  out.connect(o.bus === 'music' ? musicBus : master)
+  out.connect(bgBus)
 
   const playFor = buffer.duration - o.tailTrim
   const period = playFor - o.crossfade
