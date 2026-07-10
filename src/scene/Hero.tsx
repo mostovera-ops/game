@@ -24,6 +24,7 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import type { Palette, Vec3 } from '../assets/scene'
+import { darkness, getClock } from '../game/dayClock'
 import { HERO_COLOR_DEFAULT, useGameStore } from '../game/store'
 import { heroTarget } from './heroTarget'
 import { FACE_EPS, hero, HERO_RADIUS } from './heroState'
@@ -47,6 +48,27 @@ const TURN_LAMBDA = 10 // скорость доворота на цель
 const AMP_LAMBDA = 8 // с какой скоростью ноги замирают на месте
 const ARRIVE = 0.05 // ближе этого считаем, что пришли
 const MAX_DT = 0.1 // как в TruckTick: на фоновой вкладке dt огромен
+
+/**
+ * Ночью герой чуть теплится сам: без этого он растворяется в темноте, и игрок
+ * теряет из виду того, кем управляет. Свечение слабое — это не фонарь, а намёк
+ * на силуэт; окружающего оно не освещает.
+ *
+ * Светится он оттенком собственной одежды. Оттенком, а не самим цветом: тёмная
+ * одежда светилась бы еле-еле, а светлая слепила бы. Яркость задаёт только
+ * HERO_GLOW_MAX, цвет для этого разгоняется до полной насыщенности.
+ */
+const HERO_GLOW_WARM = new THREE.Color('#ffd9a0')
+
+/** Примесь тёплого. Больше — и герой сереет: тёплый ярче любой одежды. */
+const HERO_GLOW_WARMTH = 0.15
+const HERO_GLOW_MAX = 0.055
+
+/** Разгоняет цвет до полной яркости, сохраняя оттенок. Чёрный оставляет чёрным. */
+function saturate(c: THREE.Color): THREE.Color {
+  const peak = Math.max(c.r, c.g, c.b)
+  return peak > 0 ? c.multiplyScalar(1 / peak) : c
+}
 
 /** Материал героя: гладкий, в отличие от фасеточной сцены. */
 function smoothLambert(name: string, hex: string) {
@@ -122,7 +144,11 @@ export function Hero({
 
   // Белок и зрачок берём из палитры, одежду — из стора: её красит игрок.
   // Материал создаётся один раз, цвет в него доливает эффект ниже.
-  const body = useMemo(() => smoothLambert('Hero', HERO_COLOR_DEFAULT), [])
+  const body = useMemo(() => {
+    const mat = smoothLambert('Hero', HERO_COLOR_DEFAULT)
+    mat.emissiveIntensity = 0 // разгорается по темноте, см. useFrame
+    return mat
+  }, [])
   const eyeMats = useMemo(
     () => ({
       HeroEyeWhite: smoothLambert('HeroEyeWhite', palette.HeroEyeWhite ?? '#f7f7f5'),
@@ -131,7 +157,10 @@ export function Hero({
     [palette],
   )
 
-  useEffect(() => void body.color.set(heroColor), [body, heroColor])
+  useEffect(() => {
+    body.color.set(heroColor)
+    saturate(body.emissive.set(heroColor)).lerp(HERO_GLOW_WARM, HERO_GLOW_WARMTH)
+  }, [body, heroColor])
 
   const model = useMemo(() => {
     const clone = scene.clone(true)
@@ -202,6 +231,9 @@ export function Hero({
     // и один длинный кадр (свёрнутая вкладка, пауза GC) проходит весь путь.
     const dt = Math.min(rawDt, MAX_DT)
     if (dt <= 0) return
+
+    // Днём свечения нет вовсе: darkness на свету равен нулю.
+    body.emissiveIntensity = HERO_GLOW_MAX * darkness(getClock())
 
     // День 7: герой внутри фудтрака и никуда не ходит. Он оказывается там
     // сразу, а не идёт пешком: кузов закрыт, дверь со стороны кабины вне кадра,
