@@ -2,8 +2,8 @@
  * Раскладка нижнего тулбара: десять ячеек инвентаря, слева направо.
  *
  * В ячейках лежит то, чем герой владеет: пакетики семян в порядке CROPS, затем
- * собранный урожай. Лейка и рука сюда не попадают — это не имущество, а
- * действия, и живут они отдельной панелью справа (см. HUD).
+ * содержимое сумки — урожай и лесные находки. Лейка и рука сюда не попадают —
+ * это не имущество, а действия, и живут они отдельной панелью справа (см. HUD).
  *
  * Пустого не показываем — ни нулей, ни блёклых иконок: кончились семена, и
  * ячейку занимает следующий предмет.
@@ -14,16 +14,16 @@
  *
  * Чистая функция без React: её зовут и тулбар, и обработчик клавиш в HUD.
  */
-import type { CropId, Inventory, Phase } from '../game/store'
-import { CROPS } from '../game/store'
+import type { CropId, Inventory, ItemId, Phase, Seeds } from '../game/store'
+import { CROPS, ITEM_IDS } from '../game/store'
 
 export const TOOLBAR_CELLS = 10
 
 export type Cell =
   /** Пакетик семян: клик берёт их в руки. */
   | { kind: 'seed'; crop: CropId }
-  /** Собранный урожай: показывает счётчик, кликать нечего. */
-  | { kind: 'crop'; crop: CropId; count: number }
+  /** Добро в сумке — урожай или находка. Показывает счётчик, кликать нечего. */
+  | { kind: 'item'; item: ItemId; count: number }
 
 /**
  * Ячейка и её горячая клавиша; null — пустая ячейка.
@@ -47,7 +47,7 @@ export function hotkeyFor(index: number): string {
  * В день торговли семена бесполезны — грядки на замке, — поэтому остаётся
  * только урожай: из него игрок собирает блюда.
  */
-export function buildToolbar(phase: Phase, seeds: Inventory, inventory: Inventory): Slot[] {
+export function buildToolbar(phase: Phase, seeds: Seeds, inventory: Inventory): Slot[] {
   const cells: Cell[] = []
 
   if (phase === 'farm') {
@@ -56,8 +56,9 @@ export function buildToolbar(phase: Phase, seeds: Inventory, inventory: Inventor
     }
   }
 
-  for (const crop of CROPS) {
-    if (inventory[crop] > 0) cells.push({ kind: 'crop', crop, count: inventory[crop] })
+  // Грибы и яйца ложатся в те же ячейки следом за урожаем: сумка одна.
+  for (const item of ITEM_IDS) {
+    if (inventory[item] > 0) cells.push({ kind: 'item', item, count: inventory[item] })
   }
 
   return Array.from({ length: TOOLBAR_CELLS }, (_, i) => ({

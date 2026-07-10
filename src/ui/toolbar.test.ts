@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { buildToolbar, hotkeyFor, TOOLBAR_CELLS } from './toolbar'
-import type { Inventory } from '../game/store'
+import type { Inventory, Seeds } from '../game/store'
 
-const none: Inventory = { carrot: 0, greens: 0, tomato: 0 }
-const kinds = (seeds: Inventory, inv: Inventory, phase: 'farm' | 'truck' = 'farm') =>
+const noSeeds: Seeds = { carrot: 0, greens: 0, tomato: 0 }
+const empty: Inventory = { carrot: 0, greens: 0, tomato: 0, mushroom: 0, egg: 0 }
+const bag = (patch: Partial<Inventory>): Inventory => ({ ...empty, ...patch })
+
+const kinds = (seeds: Seeds, inv: Inventory, phase: 'farm' | 'truck' = 'farm') =>
   buildToolbar(phase, seeds, inv).map((s) => (s.cell ? s.cell.kind : null))
 
 describe('раскладка тулбара', () => {
   it('всегда ровно десять ячеек', () => {
-    expect(buildToolbar('farm', none, none).length).toBe(TOOLBAR_CELLS)
-    expect(buildToolbar('truck', none, none).length).toBe(TOOLBAR_CELLS)
+    expect(buildToolbar('farm', noSeeds, empty).length).toBe(TOOLBAR_CELLS)
+    expect(buildToolbar('truck', noSeeds, empty).length).toBe(TOOLBAR_CELLS)
   })
 
   it('клавиши идут 1…9, потом 0', () => {
@@ -19,8 +22,8 @@ describe('раскладка тулбара', () => {
   })
 
   it('семян нет — ячейки нет, соседи сдвигаются влево', () => {
-    const seeds: Inventory = { carrot: 0, greens: 2, tomato: 0 }
-    expect(kinds(seeds, none)).toEqual([
+    const seeds: Seeds = { carrot: 0, greens: 2, tomato: 0 }
+    expect(kinds(seeds, empty)).toEqual([
       'seed', // зелень
       null,
       null,
@@ -35,36 +38,43 @@ describe('раскладка тулбара', () => {
   })
 
   it('в ячейках только имущество: инструментов там нет', () => {
-    const seeds: Inventory = { carrot: 3, greens: 3, tomato: 3 }
-    const slots = buildToolbar('farm', seeds, { carrot: 1, greens: 0, tomato: 0 })
+    const seeds: Seeds = { carrot: 3, greens: 3, tomato: 3 }
+    const slots = buildToolbar('farm', seeds, bag({ carrot: 1 }))
     expect(slots.every((s) => s.cell?.kind !== ('tool' as never))).toBe(true)
   })
 
   it('урожай занимает ячейки следом за семенами', () => {
-    const seeds: Inventory = { carrot: 1, greens: 0, tomato: 0 }
-    const inv: Inventory = { carrot: 0, greens: 3, tomato: 5 }
-    const slots = buildToolbar('farm', seeds, inv)
+    const seeds: Seeds = { carrot: 1, greens: 0, tomato: 0 }
+    const slots = buildToolbar('farm', seeds, bag({ greens: 3, tomato: 5 }))
     expect(slots[0].cell).toEqual({ kind: 'seed', crop: 'carrot' })
-    expect(slots[1].cell).toEqual({ kind: 'crop', crop: 'greens', count: 3 })
-    expect(slots[2].cell).toEqual({ kind: 'crop', crop: 'tomato', count: 5 })
+    expect(slots[1].cell).toEqual({ kind: 'item', item: 'greens', count: 3 })
+    expect(slots[2].cell).toEqual({ kind: 'item', item: 'tomato', count: 5 })
+    expect(slots[3].cell).toBeNull()
+  })
+
+  it('находки идут после урожая, в той же сумке', () => {
+    const slots = buildToolbar('farm', noSeeds, bag({ tomato: 1, mushroom: 2, egg: 1 }))
+    expect(slots[0].cell).toEqual({ kind: 'item', item: 'tomato', count: 1 })
+    expect(slots[1].cell).toEqual({ kind: 'item', item: 'mushroom', count: 2 })
+    expect(slots[2].cell).toEqual({ kind: 'item', item: 'egg', count: 1 })
     expect(slots[3].cell).toBeNull()
   })
 
   it('нулевого урожая в тулбаре нет', () => {
-    const inv: Inventory = { carrot: 0, greens: 0, tomato: 4 }
-    const slots = buildToolbar('truck', none, inv)
-    expect(slots[0].cell).toEqual({ kind: 'crop', crop: 'tomato', count: 4 })
+    const slots = buildToolbar('truck', noSeeds, bag({ tomato: 4 }))
+    expect(slots[0].cell).toEqual({ kind: 'item', item: 'tomato', count: 4 })
     expect(slots[1].cell).toBeNull()
   })
 
   it('в день торговли семян нет: остаётся только урожай', () => {
-    const seeds: Inventory = { carrot: 3, greens: 3, tomato: 3 }
-    expect(kinds(seeds, none, 'truck').every((k) => k === null)).toBe(true)
+    const seeds: Seeds = { carrot: 3, greens: 3, tomato: 3 }
+    expect(kinds(seeds, empty, 'truck').every((k) => k === null)).toBe(true)
   })
 
   it('всё сразу помещается в десять ячеек', () => {
-    const full: Inventory = { carrot: 9, greens: 9, tomato: 9 }
-    const slots = buildToolbar('farm', full, full)
-    expect(slots.filter((s) => s.cell).length).toBe(6) // 3 семени + 3 урожая
+    const seeds: Seeds = { carrot: 9, greens: 9, tomato: 9 }
+    const full: Inventory = { carrot: 9, greens: 9, tomato: 9, mushroom: 9, egg: 9 }
+    const slots = buildToolbar('farm', seeds, full)
+    expect(slots.filter((s) => s.cell).length).toBe(8) // 3 семени + 3 урожая + 2 находки
   })
 })

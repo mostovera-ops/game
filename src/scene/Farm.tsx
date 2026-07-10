@@ -139,6 +139,12 @@ function Interactions() {
       }
     }
 
+    // Наступил новый день, пока герой шёл через лес, — находка уже не та.
+    if (it.kind === 'forage' && st.takenForage.includes(it.id)) {
+      clearIntent()
+      return
+    }
+
     if (distanceToHero(it.x, it.z) <= it.reach) {
       // Дошёл — дальше идти незачем, иначе упрётся в борт грядки.
       heroTarget.set(hero.pos.x, 0, hero.pos.z)
@@ -148,6 +154,7 @@ function Interactions() {
 
       if (it.kind === 'shop') st.openShop()
       else if (it.kind === 'speak') say(it.text)
+      else if (it.kind === 'forage') st.collectForage(it.id, it.item)
       else if (st.tool === 'can') {
         st.water(it.id)
         playSfx(SFX.waterPour, { gain: 0.9, rate: [0.95, 1.05] })

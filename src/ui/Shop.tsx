@@ -11,7 +11,7 @@
  */
 import { useEffect } from 'react'
 import { CROPS, SEED_PRICE, useGameStore, type CropId } from '../game/store'
-import { CROP_NAME } from './crops'
+import { ITEM_NAME } from './crops'
 import { SeedPacket } from './SeedPacket'
 
 const panel = 'rounded-lg bg-white/5'
@@ -29,7 +29,7 @@ function Row({ crop }: { crop: CropId }) {
       <div className="flex min-w-36 items-center gap-2">
         <SeedPacket crop={crop} active={false} />
         <div className="flex flex-col">
-          <span className="text-sm">{CROP_NAME[crop]}</span>
+          <span className="text-sm">{ITEM_NAME[crop]}</span>
           <span className="text-[10px] opacity-50">семян: {seeds}</span>
         </div>
       </div>

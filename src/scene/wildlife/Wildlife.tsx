@@ -12,6 +12,8 @@ import type { Palette, SceneLayout } from '../../assets/scene'
 import { Birds } from './Birds'
 import { Boar } from './Boar'
 import { Bugs, bushPatches } from './Bugs'
+import { Forage } from './Forage'
+import { forageSpots } from './forageSpots'
 import { critterUrl } from './model'
 import { Rabbits } from './Rabbits'
 import type { Point } from './roam'
@@ -49,12 +51,15 @@ export function Wildlife({ layout, palette }: { layout: SceneLayout; palette: Pa
     [layout],
   )
 
+  const spots = useMemo(() => forageSpots(trees), [trees])
+
   return (
     <>
       <Bugs patches={patches} palette={palette} />
       <Rabbits trees={trees} palette={palette} />
       <Boar trees={trees} palette={palette} />
       <Birds palette={palette} />
+      <Forage spots={spots} palette={palette} />
     </>
   )
 }

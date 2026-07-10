@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  BASE_RECIPE_IDS,
   BEDS,
   craftableCount,
   CROPS,
@@ -13,6 +14,7 @@ import {
   bedOf,
   slotActionable,
   useGameStore,
+  type Inventory,
 } from './store'
 
 /** Доводит слот до stage 2, подсовывая нужный бросок удачи при созревании. */
@@ -28,6 +30,16 @@ function ripen(id: string, luckyRoll: number) {
 
 const S = () => useGameStore.getState()
 const slot = (id: string) => S().slots.find((x) => x.id === id)!
+
+/** Сумка: перечисляем только непустое, остальное — нули. */
+const bag = (patch: Partial<Inventory>): Inventory => ({
+  carrot: 0,
+  greens: 0,
+  tomato: 0,
+  mushroom: 0,
+  egg: 0,
+  ...patch,
+})
 
 beforeEach(() => {
   S().resetGame()
@@ -253,7 +265,7 @@ describe('уведомления', () => {
   it('торговля: нет ресурсов / не то блюдо / нет клиента', () => {
     useGameStore.setState({
       phase: 'truck',
-      inventory: { carrot: 0, greens: 0, tomato: 0 },
+      inventory: bag({}),
       truck: {
         timeLeft: 60, queue: [], served: 0, spawnTimer: 0, nextSpawnIn: 2.5, ended: false, nextCustomerId: 1,
       },
@@ -286,7 +298,7 @@ describe('уведомления', () => {
   it('успешная продажа сообщает цену', () => {
     useGameStore.setState({
       phase: 'truck',
-      inventory: { carrot: 2, greens: 0, tomato: 0 },
+      inventory: bag({ carrot: 2 }),
       truck: {
         timeLeft: 60,
         queue: [{ id: 1, want: 'soup', patience: 16, maxPatience: 16 }],
@@ -374,7 +386,7 @@ describe('дополнительные правила', () => {
     // Готовим soup: нужно 2 моркови.
     useGameStore.setState({
       phase: 'truck',
-      inventory: { carrot: 2, greens: 0, tomato: 0 },
+      inventory: bag({ carrot: 2 }),
     })
     const ok = S().serve('soup')
     expect(ok).toBe(true)
@@ -385,7 +397,7 @@ describe('дополнительные правила', () => {
   it('serve не проходит без ингредиентов', () => {
     useGameStore.setState({
       phase: 'truck',
-      inventory: { carrot: 1, greens: 0, tomato: 0 },
+      inventory: bag({ carrot: 1 }),
     })
     const ok = S().serve('soup')
     expect(ok).toBe(false)
@@ -444,9 +456,9 @@ describe('семена и лавка', () => {
   })
 
   it('новая неделя не выдаёт семян даром', () => {
-    useGameStore.setState({ seeds: { carrot: 0, greens: 0, tomato: 0 }, money: 7 })
+    useGameStore.setState({ seeds: bag({}), money: 7 })
     S().nextWeek()
-    expect(S().seeds).toEqual({ carrot: 0, greens: 0, tomato: 0 })
+    expect(S().seeds).toEqual(bag({}))
     expect(S().money).toBe(7)
   })
 })
@@ -490,9 +502,11 @@ describe('день фудтрака (Task 3)', () => {
   })
 
   it('craftableCount ограничен самым дефицитным ингредиентом', () => {
-    expect(craftableCount('soup', { carrot: 5, greens: 0, tomato: 0 })).toBe(2) // 2 моркови на порцию
-    expect(craftableCount('taco', { carrot: 3, greens: 1, tomato: 9 })).toBe(1) // зелень в дефиците
-    expect(craftableCount('salad', { carrot: 9, greens: 0, tomato: 9 })).toBe(0)
+    expect(craftableCount('soup', bag({ carrot: 5 }))).toBe(2) // 2 моркови на порцию
+    expect(craftableCount('taco', bag({ carrot: 3, greens: 1, tomato: 9 }))).toBe(1) // зелень в дефиците
+    expect(craftableCount('salad', bag({ carrot: 9, tomato: 9 }))).toBe(0)
+    // Находки считаются наравне с урожаем: грибов на два супа, моркови на одну.
+    expect(craftableCount('mushroom_soup', bag({ mushroom: 4, carrot: 1 }))).toBe(1)
   })
 
   it('endDay на дне 6 открывает фудтрек', () => {
@@ -520,7 +534,7 @@ describe('день фудтрака (Task 3)', () => {
     expect(S().truck!.nextCustomerId).toBeGreaterThan(Math.max(...ids))
 
     // Первого обслужили — его id не должен достаться следующему.
-    useGameStore.setState({ inventory: { carrot: 2, greens: 2, tomato: 2 } })
+    useGameStore.setState({ inventory: bag({ carrot: 2, greens: 2, tomato: 2 }) })
     S().serveCustomer(S().truck!.queue[0].want)
     S().tickTruck(7)
     expect(S().truck!.queue.map((c) => c.id)).not.toContain(first)
@@ -536,7 +550,7 @@ describe('день фудтрака (Task 3)', () => {
     useGameStore.setState({
       phase: 'truck',
       money: 0,
-      inventory: { carrot: 2, greens: 0, tomato: 0 },
+      inventory: bag({ carrot: 2 }),
       truck: mkTruck({ queue: [{ id: 1, want: 'soup', patience: 16, maxPatience: 16 }] }),
     })
     expect(S().serveCustomer('soup')).toBe('ok')
@@ -546,12 +560,12 @@ describe('день фудтрака (Task 3)', () => {
   })
 
   it('serveCustomer отклоняет: нет клиента / не то блюдо / нет ингредиентов', () => {
-    useGameStore.setState({ phase: 'truck', inventory: { carrot: 0, greens: 0, tomato: 0 }, truck: mkTruck() })
+    useGameStore.setState({ phase: 'truck', inventory: bag({}), truck: mkTruck() })
     expect(S().serveCustomer('soup')).toBe('no-customer')
     useGameStore.setState({ truck: mkTruck({ queue: [{ id: 1, want: 'salad', patience: 16, maxPatience: 16 }] }) })
     expect(S().serveCustomer('soup')).toBe('wrong-dish')
     useGameStore.setState({
-      inventory: { carrot: 1, greens: 1, tomato: 1 },
+      inventory: bag({ carrot: 1, greens: 1, tomato: 1 }),
       truck: mkTruck({ queue: [{ id: 1, want: 'soup', patience: 16, maxPatience: 16 }] }),
     })
     expect(S().serveCustomer('soup')).toBe('no-ingredients')
@@ -588,5 +602,99 @@ describe('музыка', () => {
     S().resetGame()
     expect(S().musicOn).toBe(false)
     expect(S().day).toBe(1)
+  })
+})
+
+describe('лесные находки и рецепты', () => {
+  it('на старте известны только базовые рецепты', () => {
+    expect(S().knownRecipes).toEqual(BASE_RECIPE_IDS)
+    expect(S().inventory.mushroom).toBe(0)
+    expect(S().inventory.egg).toBe(0)
+  })
+
+  it('первый гриб кладётся в сумку и открывает грибной суп', () => {
+    S().collectForage('mushroom:0', 'mushroom')
+    expect(S().inventory.mushroom).toBe(1)
+    expect(S().knownRecipes).toContain('mushroom_soup')
+    const kinds = S().notices.map((n) => n.kind)
+    expect(kinds).toContain('foraged')
+    expect(kinds).toContain('recipe-found')
+  })
+
+  it('первое яйцо открывает яичницу', () => {
+    S().collectForage('egg:0', 'egg')
+    expect(S().inventory.egg).toBe(1)
+    expect(S().knownRecipes).toContain('omelette')
+  })
+
+  it('второй гриб рецепт не переоткрывает', () => {
+    S().collectForage('mushroom:0', 'mushroom')
+    S().collectForage('mushroom:1', 'mushroom')
+    expect(S().inventory.mushroom).toBe(2)
+    expect(S().knownRecipes.filter((r) => r === 'mushroom_soup')).toHaveLength(1)
+    expect(S().notices.at(-1)!.kind).toBe('foraged')
+  })
+
+  it('одну и ту же точку дважды за день не собрать', () => {
+    S().collectForage('mushroom:0', 'mushroom')
+    S().collectForage('mushroom:0', 'mushroom')
+    expect(S().inventory.mushroom).toBe(1)
+    expect(S().takenForage).toEqual(['mushroom:0'])
+  })
+
+  it('за ночь находки возвращаются, а знание рецепта — нет', () => {
+    S().collectForage('mushroom:0', 'mushroom')
+    S().endDay()
+    expect(S().takenForage).toEqual([])
+    expect(S().knownRecipes).toContain('mushroom_soup')
+    S().collectForage('mushroom:0', 'mushroom')
+    expect(S().inventory.mushroom).toBe(2)
+  })
+
+  it('новая неделя обнуляет точки, но не забывает рецепты', () => {
+    S().collectForage('egg:0', 'egg')
+    S().nextWeek()
+    expect(S().takenForage).toEqual([])
+    expect(S().knownRecipes).toContain('omelette')
+  })
+
+  it('грибной суп готовится из находок и моркови', () => {
+    useGameStore.setState({
+      phase: 'truck',
+      money: 0,
+      knownRecipes: [...BASE_RECIPE_IDS, 'mushroom_soup'],
+      inventory: bag({ mushroom: 2, carrot: 1 }),
+      truck: {
+        timeLeft: 60,
+        queue: [{ id: 1, want: 'mushroom_soup', patience: 16, maxPatience: 16 }],
+        served: 0,
+        spawnTimer: 0,
+        nextSpawnIn: 2.5,
+        ended: false,
+        nextCustomerId: 2,
+      },
+    })
+    expect(S().serveCustomer('mushroom_soup')).toBe('ok')
+    expect(S().money).toBe(RECIPES.mushroom_soup.price)
+    expect(S().inventory.mushroom).toBe(0)
+    expect(S().inventory.carrot).toBe(0)
+  })
+
+  it('клиенты не заказывают того, чего герой не знает', () => {
+    useGameStore.setState({
+      phase: 'truck',
+      knownRecipes: ['soup'],
+      truck: {
+        timeLeft: 60,
+        queue: [],
+        served: 0,
+        spawnTimer: 10,
+        nextSpawnIn: 0,
+        ended: false,
+        nextCustomerId: 1,
+      },
+    })
+    S().tickTruck(0.1)
+    expect(S().truck!.queue.map((c) => c.want)).toEqual(['soup'])
   })
 })
