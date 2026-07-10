@@ -26,7 +26,7 @@ import { useGLTF } from '@react-three/drei'
 import type { Palette, Vec3 } from '../assets/scene'
 import { HERO_COLOR_DEFAULT, useGameStore } from '../game/store'
 import { heroTarget } from './heroTarget'
-import { hero, HERO_RADIUS } from './heroState'
+import { FACE_EPS, hero, HERO_RADIUS } from './heroState'
 import { clearIntent } from './intent'
 import { resolveCollisions, type Collider } from './collision'
 import { getSpeech, subscribeSpeech } from './heroSpeech'
@@ -36,7 +36,7 @@ import { HERO_SEAT, yawTo as faceTo } from './truckStage'
 const HERO_URL = '/assets/props/hero.glb'
 useGLTF.preload(HERO_URL)
 
-const SPEED = 1.6 // м/с
+const SPEED = 2.4 // м/с
 const STEP_RATE = 9 // рад/с — частота шага
 const STEP_AMP = 0.5 // рад — размах ноги
 const TURN_LAMBDA = 10 // скорость доворота на цель
@@ -54,6 +54,11 @@ function smoothLambert(name: string, hex: string) {
 /** Куда герой смотрит в модели — на −Z, как принято в three. */
 function yawTo(dx: number, dz: number) {
   return Math.atan2(-dx, -dz)
+}
+
+/** Разница углов, сведённая в (−π, π]: иначе доворот идёт через полный круг. */
+function shortestArc(from: number, to: number) {
+  return ((to - from + Math.PI) % (2 * Math.PI)) - Math.PI
 }
 
 /** code клавиши → орт в осях «вправо/вперёд» относительно камеры. */
@@ -249,8 +254,7 @@ export function Hero({
       g.position.x = x
       g.position.z = z
 
-      // Доворот по кратчайшей дуге: без нормализации герой крутится через полный круг.
-      const delta = ((yawTo(vx, vz) - g.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI
+      const delta = shortestArc(g.rotation.y, yawTo(vx, vz))
       g.rotation.y += delta * (1 - Math.exp(-TURN_LAMBDA * dt))
 
       if (moved) phase.current += STEP_RATE * dt
@@ -258,6 +262,12 @@ export function Hero({
       // Идём по клику и упёрлись в препятствие: цель недостижима, бросаем её,
       // иначе герой будет вечно перебирать ногами в стену.
       if (!moved && !pressed.current.size) heroTarget.set(g.position.x, 0, g.position.z)
+    } else if (hero.faceAt) {
+      // Дошёл до грядки или пропса: доворачиваемся лицом, и лишь потом
+      // <Interactions> выполнит дело. Ноги при этом стоят.
+      const want = yawTo(hero.faceAt.x - g.position.x, hero.faceAt.z - g.position.z)
+      g.rotation.y += shortestArc(g.rotation.y, want) * (1 - Math.exp(-TURN_LAMBDA * dt))
+      hero.facing = Math.abs(shortestArc(g.rotation.y, want)) < FACE_EPS
     }
 
     hero.pos.set(g.position.x, 0, g.position.z)

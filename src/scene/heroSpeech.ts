@@ -39,3 +39,8 @@ export function subscribeSpeech(listener: () => void): () => void {
 export function getSpeech(): string | null {
   return phrase
 }
+
+// Доступ из DevTools и автопроверок. В прод-сборку не попадает.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __speech?: unknown }).__speech = getSpeech
+}

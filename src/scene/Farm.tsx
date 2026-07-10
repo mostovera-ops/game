@@ -15,7 +15,7 @@ import {
   type PropInstance,
   type Vec3,
 } from '../assets/scene'
-import { useGameStore } from '../game/store'
+import { slotActionable, useGameStore } from '../game/store'
 import { swayUniforms } from './sway'
 import { Beds } from './Beds'
 import { Slot } from './Slot'
@@ -102,7 +102,7 @@ function TruckTick() {
 const STUCK_SEC = 0.4
 
 /**
- * Исполняет отложенное действие, когда герой доходит до цели.
+ * Исполняет отложенное действие, когда герой дошёл до цели и повернулся к ней.
  *
  * Один на всю сцену, а не по компоненту на слот: намерение всегда одно, и
  * девять слотов, каждый кадр меряющих расстояние, — лишняя работа.
@@ -117,48 +117,46 @@ function Interactions() {
       return
     }
 
-    // Слот мог измениться, пока герой шёл: росток погиб, сосед его полил.
-    // Действие решаем по состоянию на момент прихода, а не на момент клика.
     const st = useGameStore.getState()
+
     // День 7 застал героя в пути — дело отменяется, он за прилавком фудтрака.
     // Это верно и для грядки, и для лавки: та в день ярмарки закрыта.
     if (st.phase !== 'farm') {
       clearIntent()
       return
     }
+
+    // Слот мог измениться, пока герой шёл: росток погиб, сосед его полил.
+    // Действие решаем по состоянию на момент прихода, а не на момент клика.
     if (it.kind === 'slot') {
       const slot = st.slots.find((s) => s.id === it.id)
-      if (!slot) {
-        clearIntent()
-        return
-      }
-      const can =
-        st.tool === 'can'
-          ? !!slot.crop && slot.stage < 2
-          : st.tool === 'hand'
-            ? !!slot.crop && slot.stage === 2
-            : !slot.crop
-      if (!can) {
+      if (!slot || !slotActionable(slot, st.tool)) {
         clearIntent()
         return
       }
     }
 
     if (distanceToHero(it.x, it.z) <= it.reach) {
+      // Дошёл — дальше идти незачем, иначе упрётся в борт грядки.
+      heroTarget.set(hero.pos.x, 0, hero.pos.z)
+      // Сперва развернуться лицом к цели: доворот крутит <Hero>, мы его ждём.
+      hero.faceAt = { x: it.x, z: it.z }
+      if (!hero.facing) return
+
       if (it.kind === 'shop') st.openShop()
+      else if (it.kind === 'speak') say(it.text)
       else if (st.tool === 'can') st.water(it.id)
       else if (st.tool === 'hand') st.harvest(it.id)
       else st.plant(it.id)
       clearIntent()
-      // Дошёл — дальше идти незачем, иначе упрётся в борт грядки.
-      heroTarget.set(hero.pos.x, 0, hero.pos.z)
       return
     }
 
-    // Не дошёл и никуда не идёт — значит упёрся: цель недостижима.
+    // Не дошёл и никуда не идёт — значит упёрся: цель недостижима. Про грядку
+    // и лавку говорим игроку, про болтовню молчим: это не сорванное дело.
     idle.current = hero.moving ? 0 : idle.current + Math.min(rawDt, 0.1)
     if (idle.current >= STUCK_SEC) {
-      st.notify('too-far')
+      if (it.kind !== 'speak') st.notify('too-far')
       clearIntent()
     }
   })
@@ -240,9 +238,10 @@ function materialName(object: THREE.Object3D): string {
 }
 
 /**
- * Клик по пропсу: если у материала есть реплика — герой её произносит.
- * Если нет (стена, крыша, теплица), событие не перехватываем: оно дойдёт до
- * земли, и герой пойдёт туда, как и раньше.
+ * Клик по пропсу: если у материала есть реплика — герой идёт к пропсу и говорит
+ * её, придя. Как с грядкой, реплику выдаёт <Interactions>, а не этот клик.
+ * Если реплики нет (стена, крыша, теплица), событие не перехватываем: оно дойдёт
+ * до земли, и герой просто пойдёт туда.
  */
 function speak(e: ThreeEvent<MouseEvent>) {
   // Обработчик зовётся на каждом пересечении луча по очереди, а не только на
@@ -256,7 +255,11 @@ function speak(e: ThreeEvent<MouseEvent>) {
   const text = PHRASES[name]
   if (!text) return
   e.stopPropagation()
-  say(text)
+  // Целимся в точку клика, а не в центр пропса: у дома это стена, у дерева —
+  // крона над стволом. Герой упрётся в коллайдер рядом с ней, и REACH хватит.
+  // Высота не важна: дистанцию до цели меряем по земле.
+  setIntent({ kind: 'speak', text, x: e.point.x, z: e.point.z, reach: REACH })
+  heroTarget.set(e.point.x, 0, e.point.z)
 }
 
 function Singleton({

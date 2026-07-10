@@ -11,6 +11,7 @@ import {
   START_MONEY,
   START_SEEDS,
   bedOf,
+  slotActionable,
   useGameStore,
 } from './store'
 
@@ -106,10 +107,10 @@ describe('инструменты', () => {
     expect(S().selectedSeed).toBe('tomato')
   })
 
-  it('water красит слот только пока растение растёт', () => {
+  it('water красит любой слот: пустой, растущий, созревший', () => {
     const id = SLOT_IDS[0]
     S().water(id) // пустой слот
-    expect(slot(id).watered).toBe(false)
+    expect(slot(id).watered).toBe(true)
 
     S().plant(id)
     S().water(id)
@@ -120,8 +121,44 @@ describe('инструменты', () => {
     S().endDay() // stage 2 — созрело
     expect(slot(id).stage).toBe(2)
 
-    S().water(id) // созревшее не поливается
-    expect(slot(id).watered).toBe(false)
+    S().water(id)
+    expect(slot(id).watered).toBe(true)
+  })
+
+  it('полив пустого слота не заводит растение и не мешает росту', () => {
+    const id = SLOT_IDS[0]
+    S().water(id)
+    S().endDay()
+    expect(slot(id).crop).toBeNull()
+    expect(slot(id).watered).toBe(false) // сухая земля к утру
+  })
+
+  it('полив созревшего слота не сбрасывает и не двигает стадию', () => {
+    const id = SLOT_IDS[0]
+    ripen(id, 1) // 1 → не удачное
+    S().water(id)
+    S().endDay()
+    expect(slot(id).stage).toBe(2)
+    expect(slot(id).crop).not.toBeNull()
+  })
+
+  it('slotActionable: лейка берёт любой слот, рука — только созревший', () => {
+    const id = SLOT_IDS[0]
+    expect(slotActionable(slot(id), 'can')).toBe(true) // пустой
+    expect(slotActionable(slot(id), 'seed')).toBe(true)
+    expect(slotActionable(slot(id), 'hand')).toBe(false)
+
+    S().plant(id)
+    expect(slotActionable(slot(id), 'can')).toBe(true) // растущий
+    expect(slotActionable(slot(id), 'seed')).toBe(false)
+    expect(slotActionable(slot(id), 'hand')).toBe(false)
+
+    S().water(id)
+    S().endDay()
+    S().water(id)
+    S().endDay() // созрело
+    expect(slotActionable(slot(id), 'can')).toBe(true)
+    expect(slotActionable(slot(id), 'hand')).toBe(true)
   })
 })
 

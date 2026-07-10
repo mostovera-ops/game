@@ -35,6 +35,21 @@ export const LUCKY_CHANCE = 0.1
 export const LUCKY_YIELD = 2
 
 /**
+ * Сделает ли клик этим инструментом по этому слоту хоть что-нибудь. По тому же
+ * правилу слот рисует курсор и подсветку, а <Interactions> решает, доводить ли
+ * дело до конца, когда герой пришёл.
+ *
+ * Лейка берёт любой слот, даже пустой и созревший: выяснять, что именно можно
+ * полить, — забота игры, а не игрока. На рост это не влияет, см. endDay: пустой
+ * слот всё равно останется пустым, созревший — созревшим.
+ */
+export function slotActionable(slot: Slot, tool: Tool): boolean {
+  if (tool === 'can') return true
+  if (tool === 'hand') return !!slot.crop && slot.stage === 2
+  return !slot.crop
+}
+
+/**
  * Событие для тоста в HUD. Стор хранит только вид события и его данные —
  * текст живёт в ui/, чтобы game/ не знал про язык интерфейса.
  */
@@ -374,13 +389,11 @@ export const useGameStore = create<GameState>()(
           }
         }),
 
+      // Поливается любой слот: пустой, растущий, созревший. Рост от этого не
+      // меняется — endDay смотрит на watered только у растущего растения.
       water: (slotId) =>
         set((s) => ({
-          slots: s.slots.map((slot) =>
-            slot.id === slotId && slot.crop && slot.stage < 2
-              ? { ...slot, watered: true }
-              : slot,
-          ),
+          slots: s.slots.map((slot) => (slot.id === slotId ? { ...slot, watered: true } : slot)),
         })),
 
       harvest: (slotId) =>

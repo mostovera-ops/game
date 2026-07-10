@@ -4,9 +4,10 @@
  *
  * Клик не выполняет действие, а ставит намерение (intent.ts) и ведёт героя к
  * слоту. Само действие сработает в <Interactions> (Farm.tsx), когда герой
- * войдёт в REACH. Что именно случится — решает инструмент в руках:
+ * войдёт в REACH и развернётся к слоту. Что именно случится — решает инструмент
+ * в руках (slotActionable в game/store.ts):
  *   семена — пусто → посадить;
- *   лейка  — растёт → полить;
+ *   лейка  — любой слот → полить;
  *   рука   — созрело → собрать.
  *
  * Политый слот держит мокрое пятно на почве, пока не наступит новый день.
@@ -22,7 +23,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import { applyPalette, CROP_ASSET, type Palette, type Vec3 } from '../assets/scene'
-import { useGameStore, type CropId } from '../game/store'
+import { slotActionable, useGameStore, type CropId } from '../game/store'
 import { SpeechBubble } from './SpeechBubble'
 import { heroTarget } from './heroTarget'
 import { REACH } from './heroState'
@@ -182,14 +183,14 @@ export function Slot({
     return () => clearTimeout(t)
   }, [slot.watered])
 
-  const growing = !!slot.crop && slot.stage < 2
   const ripe = !!slot.crop && slot.stage === 2
 
   // Что произойдёт по клику этим инструментом — от этого же зависит курсор.
-  // В день 7 грядки мертвы: герой стоит за прилавком и подойти не может.
+  // Правило слота живёт в game/: его же читает <Interactions>, когда герой
+  // дошёл. Сверху два условия сцены: в день 7 грядки мертвы (герой за
+  // прилавком и подойти не может), а сеять нечем, если пакетик пуст.
   const actionable =
-    phase === 'farm' &&
-    (tool === 'can' ? growing : tool === 'hand' ? ripe : !slot.crop && hasSeed)
+    phase === 'farm' && slotActionable(slot, tool) && (tool !== 'seed' || hasSeed)
 
   // Клик только просит: герой идёт к слоту, а действие выполнит <Interactions>,
   // когда тот войдёт в радиус. Здесь ничего не меняем в игровом состоянии.
