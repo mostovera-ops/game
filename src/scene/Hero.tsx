@@ -6,9 +6,15 @@
  * Нажатие клавиши отменяет цель, поставленную кликом, иначе герой дёргался бы
  * между двумя приказами.
  *
- * Модель приезжает из hero.glb тремя узлами: HeroBody и две ноги, у которых
- * origin в бедре (см. tools/_export_hero.py). Ходьбу анимирует этот компонент,
- * а не AnimationMixer: ног две, цикл — синус, мешать сюда клипы незачем.
+ * Модель приезжает из hero.glb тремя узлами: HeroBody (туловище, голова, глаза)
+ * и две ноги, у которых origin в бедре (см. tools/_export_hero.py). Ходьбу
+ * анимирует этот компонент, а не AnimationMixer: ног две, цикл — синус,
+ * мешать сюда клипы незачем.
+ *
+ * Материалы герой собирает сам, а не берёт общий applyPalette: тому нужен
+ * flatShading на всю сцену, а у героя нормали сглажены — иначе голова гранёная.
+ * Цвет одежды живёт в сторе (инвентарь по E) и меняется на месте, без пересборки
+ * материала: одна мутация THREE.Color вместо перезагрузки модели.
  *
  * Позиция и признак движения публикуются в heroState — оттуда их читают слоты
  * (чтобы понять, дотянется ли герой) и камера (чтобы подкатиться).
@@ -17,7 +23,8 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
-import { applyPalette, type Palette, type Vec3 } from '../assets/scene'
+import type { Palette, Vec3 } from '../assets/scene'
+import { HERO_COLOR_DEFAULT, useGameStore } from '../game/store'
 import { heroTarget } from './heroTarget'
 import { hero, HERO_RADIUS } from './heroState'
 import { clearIntent } from './intent'
@@ -35,6 +42,13 @@ const TURN_LAMBDA = 10 // скорость доворота на цель
 const AMP_LAMBDA = 8 // с какой скоростью ноги замирают на месте
 const ARRIVE = 0.05 // ближе этого считаем, что пришли
 const MAX_DT = 0.1 // как в TruckTick: на фоновой вкладке dt огромен
+
+/** Материал героя: гладкий, в отличие от фасеточной сцены. */
+function smoothLambert(name: string, hex: string) {
+  const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(hex) })
+  mat.name = name
+  return mat
+}
 
 /** Куда герой смотрит в модели — на −Z, как принято в three. */
 function yawTo(dx: number, dz: number) {
@@ -93,12 +107,32 @@ export function Hero({
   const camera = useThree((s) => s.camera)
   const pressed = usePressedKeys()
   const phrase = useSyncExternalStore(subscribeSpeech, getSpeech, getSpeech)
+  const heroColor = useGameStore((s) => s.heroColor)
+
+  // Белок и зрачок берём из палитры, одежду — из стора: её красит игрок.
+  // Материал создаётся один раз, цвет в него доливает эффект ниже.
+  const body = useMemo(() => smoothLambert('Hero', HERO_COLOR_DEFAULT), [])
+  const eyes = useMemo(
+    () => ({
+      HeroEyeWhite: smoothLambert('HeroEyeWhite', palette.HeroEyeWhite ?? '#f7f7f5'),
+      HeroEyePupil: smoothLambert('HeroEyePupil', palette.HeroEyePupil ?? '#0d0d12'),
+    }),
+    [palette],
+  )
+
+  useEffect(() => void body.color.set(heroColor), [body, heroColor])
 
   const model = useMemo(() => {
     const clone = scene.clone(true)
-    applyPalette(clone, palette, { cast: true })
+    clone.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh) return
+      mesh.castShadow = true
+      const name = (mesh.material as THREE.Material).name
+      mesh.material = name in eyes ? eyes[name as keyof typeof eyes] : body
+    })
     return clone
-  }, [scene, palette])
+  }, [scene, body, eyes])
 
   const legs = useMemo(
     () => ({

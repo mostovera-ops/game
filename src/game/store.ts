@@ -62,6 +62,25 @@ const MAX_NOTICES = 4
 
 export type Inventory = Record<CropId, number>
 
+/**
+ * Цвет одежды героя. Хранится строкой `#rrggbb`: сцена красит им материал
+ * `Hero`, портрет в инвентаре — тот же цвет. Значение по умолчанию совпадает
+ * с `Hero` в palette.json — game/ не имеет права читать ассеты, поэтому дубль.
+ */
+export const HERO_COLOR_DEFAULT = '#3d4f63'
+
+/** Из чего игрок выбирает. Порядок — порядок кнопок в инвентаре. */
+export const HERO_COLORS: readonly string[] = [
+  HERO_COLOR_DEFAULT,
+  '#7a4b52',
+  '#8c6239',
+  '#4e6b3f',
+  '#5b4a7d',
+  '#2f6f6b',
+  '#c47669',
+  '#d9c58b',
+]
+
 export const BEDS = 3
 export const SLOTS_PER_BED = 3
 
@@ -147,6 +166,8 @@ interface GameData {
   selectedSeed: CropId
   tool: Tool
   truck: TruckState | null
+  /** Цвет одежды героя, `#rrggbb`. */
+  heroColor: string
   /** Очередь тостов. Не персистится: события живут только в текущей сессии. */
   notices: Notice[]
   nextNoticeId: number
@@ -157,6 +178,8 @@ interface GameActions {
   selectSeed: (seed: CropId) => void
   /** Переключить инструмент (семена / лейка / рука). */
   selectTool: (tool: Tool) => void
+  /** Перекрасить одежду героя. */
+  setHeroColor: (color: string) => void
   /** Убрать тост по id (истёк таймер или клик). */
   dismissNotice: (id: number) => void
   /** Сообщить о событии без данных. Подряд один и тот же вид не дублируется. */
@@ -193,6 +216,7 @@ function initialData(): GameData {
     selectedSeed: 'carrot',
     tool: 'seed',
     truck: null,
+    heroColor: HERO_COLOR_DEFAULT,
     notices: [],
     nextNoticeId: 1,
   }
@@ -234,6 +258,8 @@ export const useGameStore = create<GameState>()(
       selectSeed: (seed) => set({ selectedSeed: seed, tool: 'seed' }),
 
       selectTool: (tool) => set({ tool }),
+
+      setHeroColor: (heroColor) => set({ heroColor }),
 
       dismissNotice: (id) =>
         set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
@@ -397,14 +423,16 @@ export const useGameStore = create<GameState>()(
       // v1: грядка стала 3-слотовой, появился инструмент — старые id (`bed:3`)
       //     больше не существуют, поэтому грядки сбрасываем.
       // v2: у слота появилось поле lucky; дописываем его, грядки не трогаем.
-      // Деньги, день и инвентарь переживают обе миграции.
-      version: 2,
+      // v3: у героя появился цвет одежды — у старых сохранений его нет.
+      // Деньги, день и инвентарь переживают все миграции.
+      version: 3,
       migrate: (persisted, from) => {
         let s = persisted as GameData
         if (from < 1) s = { ...s, slots: emptySlots(), tool: 'seed' }
         if (from < 2) {
           s = { ...s, slots: s.slots.map((slot) => ({ ...slot, lucky: Boolean(slot.lucky) })) }
         }
+        if (from < 3) s = { ...s, heroColor: HERO_COLOR_DEFAULT }
         return s
       },
       // Персистим только данные, не экшены. Тосты — сессионные, их не храним.
@@ -417,6 +445,7 @@ export const useGameStore = create<GameState>()(
         selectedSeed: s.selectedSeed,
         tool: s.tool,
         truck: s.truck,
+        heroColor: s.heroColor,
         notices: [],
         nextNoticeId: 1,
       }),
