@@ -24,6 +24,7 @@ import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import { applyPalette, CROP_ASSET, type Palette, type Vec3 } from '../assets/scene'
 import {
+  CROPS,
   slotActionable,
   useGameStore,
   type CropId,
@@ -204,10 +205,18 @@ function slotLabel(slot: SlotState): { title: string; lines: string[] } {
  * Реплика произносится сразу, на месте: она про то, что у героя в руках, а не
  * про грядку, и идти ради неё через полкарты незачем.
  */
-function refusal(slot: SlotState, tool: Tool, hasSeed: boolean): string | null {
+function refusal(
+  slot: SlotState,
+  tool: Tool,
+  hasSeed: boolean,
+  hasAnySeed: boolean,
+): string | null {
   if (!slot.crop) {
+    // Пустая сумка важнее выбранного инструмента: советовать «выбери семена»
+    // тому, у кого их нет ни одного, — издевательство.
+    if (!hasAnySeed) return 'У меня нет семян для посадки. Нужно купить.'
     if (tool !== 'seed') return 'Мне надо выбрать семена для посадки.'
-    if (!hasSeed) return 'У меня нет семян. Надо купить.'
+    if (!hasSeed) return 'Эти семена кончились. Надо выбрать другие.'
     return null
   }
   if (tool === 'hand' && slot.stage < 2) {
@@ -233,9 +242,13 @@ export function Slot({
   // Семена кончились — сажать нечего, и слот об этом говорит курсором,
   // а не заставляет героя сходить впустую.
   const hasSeed = useGameStore((s) => s.seeds[s.selectedSeed] > 0)
+  // Есть ли у героя хоть какие-нибудь семена: от этого зависит, что он скажет.
+  const hasAnySeed = useGameStore((s) => CROPS.some((c) => s.seeds[c] > 0))
 
   const [hover, setHover] = useState(false)
   const [splash, setSplash] = useState(false) // капля живёт отдельно от watered
+  /** Где курсор в последний раз стоял над слотом: подсказку рисуем там же. */
+  const pointer = useRef({ x: 0, y: 0 })
   const growRef = useRef<THREE.Group>(null)
 
   const target = slot.crop ? STAGE_SCALE[slot.stage] : 0
@@ -246,6 +259,12 @@ export function Slot({
     const g = growRef.current
     if (g) g.scale.setScalar(THREE.MathUtils.damp(g.scale.x, target, 10, dt))
   })
+
+  // Полили, посадили, собрали — подсказка под курсором должна сказать это сразу,
+  // не дожидаясь, пока игрок шевельнёт мышью.
+  useEffect(() => {
+    if (hover) setHoverLabel({ key: slotId, ...slotLabel(slot), ...pointer.current })
+  }, [hover, slot, slotId])
 
   // Капля всплывает в момент полива (false → true) и уходит через секунду.
   useEffect(() => {
@@ -271,7 +290,7 @@ export function Slot({
     if (!actionable) {
       // День 7 герой проводит за прилавком: оттуда до грядок ему и не докричаться.
       if (phase !== 'farm') return
-      const excuse = refusal(slot, tool, hasSeed)
+      const excuse = refusal(slot, tool, hasSeed, hasAnySeed)
       if (excuse) say(excuse)
       return
     }
@@ -287,7 +306,8 @@ export function Slot({
   // перекрывала бы соседей.
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    setHoverLabel({ key: slotId, ...slotLabel(slot), x: e.clientX, y: e.clientY })
+    pointer.current = { x: e.clientX, y: e.clientY }
+    setHoverLabel({ key: slotId, ...slotLabel(slot), ...pointer.current })
   }
   const onOut = () => {
     setHover(false)
