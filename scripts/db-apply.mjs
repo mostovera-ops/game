@@ -35,15 +35,39 @@ function getToken() {
 
 const TOKEN = getToken()
 
-async function query(sql) {
-  const res = await fetch(API, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: sql }),
-  })
-  const text = await res.text()
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 500)}`)
-  try { return JSON.parse(text) } catch { return text }
+import { spawnSync } from 'node:child_process'
+import { writeFileSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+
+// node fetch виснет на IPv6 к api.supabase.com на этой машине — ходим через curl -4
+async function query(sql, { timeoutSec = 90, retries = 2 } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'dbq-'))
+  const bodyFile = join(dir, 'body.json')
+  writeFileSync(bodyFile, JSON.stringify({ query: sql }))
+  let lastErr
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const r = spawnSync('curl', [
+      '-4', '-s', '--max-time', String(timeoutSec),
+      '-w', '\n%{http_code}',
+      '-X', 'POST', API,
+      '-H', `Authorization: Bearer ${TOKEN}`,
+      '-H', 'Content-Type: application/json',
+      '--data-binary', `@${bodyFile}`,
+    ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    const out = (r.stdout || '').trimEnd()
+    const nl = out.lastIndexOf('\n')
+    const code = nl >= 0 ? out.slice(nl + 1) : ''
+    const body = nl >= 0 ? out.slice(0, nl) : out
+    if (r.status === 0 && code.startsWith('2')) {
+      try { return JSON.parse(body) } catch { return body }
+    }
+    lastErr = new Error(`curl exit=${r.status} http=${code}: ${body.slice(0, 500)}`)
+    const transient = r.status !== 0 || /^(5\d\d|429|408)$/.test(code)
+    if (!transient || attempt === retries) throw lastErr
+    console.error(`  (ретрай ${attempt + 1}/${retries})`)
+    await new Promise((res) => setTimeout(res, 3000 * (attempt + 1)))
+  }
+  throw lastErr
 }
 
 async function main() {
