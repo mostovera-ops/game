@@ -46,8 +46,11 @@ const SPECIES: readonly Species[] = [
 /** Крылья бабочки на отдыхе: сложены домиком над спиной. */
 const FOLDED = 1.35
 
-/** Сколько особей держим в пуле. Больше — рябит, меньше — сцена пустая. */
-const POOL = 6
+/**
+ * Сколько особей держим в пуле. Трое — и в кадре редко бывает больше одного:
+ * половину времени каждый жук отсиживается «вне сцены». Шестеро рябили.
+ */
+const POOL = 3
 
 /** Куст, при котором живёт жук: центр, радиус кружения и высота посадки. */
 export interface Patch {
@@ -185,11 +188,19 @@ function BugFigure({ species, patches, palette }: { species: Species; patches: P
 }
 
 export function Bugs({ patches, palette }: { patches: Patch[]; palette: Palette }) {
+  // Видов четыре, а особей три: берём подряд со случайного места, иначе один и
+  // тот же вид (при жёстком i % 4 — пчела) не появился бы в игре ни разу.
+  const first = useMemo(() => Math.floor(Math.random() * SPECIES.length), [])
   if (!patches.length) return null
   return (
     <>
       {Array.from({ length: POOL }, (_, i) => (
-        <BugFigure key={i} species={SPECIES[i % SPECIES.length]} patches={patches} palette={palette} />
+        <BugFigure
+          key={i}
+          species={SPECIES[(first + i) % SPECIES.length]}
+          patches={patches}
+          palette={palette}
+        />
       ))}
     </>
   )

@@ -108,7 +108,7 @@ function RabbitFigure({ trees, palette }: { trees: Point[]; palette: Palette }) 
   )
 }
 
-export function Rabbits({ trees, palette, count = 3 }: { trees: Point[]; palette: Palette; count?: number }) {
+export function Rabbits({ trees, palette, count = 2 }: { trees: Point[]; palette: Palette; count?: number }) {
   return (
     <>
       {Array.from({ length: count }, (_, i) => (

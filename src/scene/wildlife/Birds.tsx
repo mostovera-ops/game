@@ -17,7 +17,8 @@ import { FARM, rand, yawTo } from './roam'
 
 const URL = critterUrl('bird')
 
-const FLOCK = 3
+/** Пара птиц вместо клина: небо не должно быть оживлённее земли. */
+const FLOCK = 2
 
 /** Половина длины пролёта: стая заводится и гаснет далеко за краем кадра. */
 const HALF_PATH = 24

@@ -22,18 +22,18 @@ describe('forestFinds', () => {
     expect(forestFinds(ring(20, 15))).toEqual([])
   })
 
-  it('четыре гриба, два гнезда и три мухомора, id уникальны', () => {
+  it('три гриба, ровно одно гнездо и три мухомора, id уникальны', () => {
     const spots = forestFinds(ring(20, 7))
-    expect(countOf(spots, 'mushroom')).toBe(4)
-    expect(countOf(spots, 'egg')).toBe(2)
+    expect(countOf(spots, 'mushroom')).toBe(3)
+    expect(countOf(spots, 'egg')).toBe(1) // яйцо — самая редкая находка
     expect(countOf(spots, 'toadstool')).toBe(3)
-    expect(new Set(spots.map((s) => s.id)).size).toBe(9)
+    expect(new Set(spots.map((s) => s.id)).size).toBe(7)
   })
 
   it('мухомор — не находка, остальное собирается', () => {
     const spots = forestFinds(ring(20, 7))
     const forage = spots.filter(isForage)
-    expect(forage).toHaveLength(6)
+    expect(forage).toHaveLength(4)
     expect(forage.every((s) => s.kind !== ('toadstool' as never))).toBe(true)
   })
 

@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BASE_RECIPE_IDS,
   BEDS,
+  EGG_REGROW,
+  MUSHROOM_REGROW,
+  regrowChance,
+  regrowForage,
   craftableCount,
   CROPS,
   RECIPES,
@@ -697,8 +701,9 @@ describe('лесные находки и рецепты', () => {
     expect(S().takenForage).toEqual(['mushroom:0'])
   })
 
-  it('за ночь находки возвращаются, а знание рецепта — нет', () => {
+  it('гриб отрастает за ночь, если бросок удался', () => {
     S().collectForage('mushroom:0', 'mushroom')
+    vi.spyOn(Math, 'random').mockReturnValue(0) // бросок меньше любого шанса
     S().endDay()
     expect(S().takenForage).toEqual([])
     expect(S().knownRecipes).toContain('mushroom_soup')
@@ -706,7 +711,28 @@ describe('лесные находки и рецепты', () => {
     expect(S().inventory.mushroom).toBe(2)
   })
 
-  it('новая неделя обнуляет точки, но не забывает рецепты', () => {
+  it('не отрастает, если бросок не удался: точка остаётся пустой', () => {
+    S().collectForage('mushroom:0', 'mushroom')
+    vi.spyOn(Math, 'random').mockReturnValue(0.99)
+    S().endDay()
+    expect(S().takenForage).toEqual(['mushroom:0'])
+    S().collectForage('mushroom:0', 'mushroom')
+    expect(S().inventory.mushroom).toBe(1) // собрать нечего
+  })
+
+  it('яйцо возвращается вдвое охотнее гриба', () => {
+    expect(regrowChance('egg:0')).toBe(EGG_REGROW)
+    expect(regrowChance('mushroom:2')).toBe(MUSHROOM_REGROW)
+    expect(EGG_REGROW).toBeGreaterThan(MUSHROOM_REGROW)
+    // Бросок 0.3 проходит для яйца (0.5) и не проходит для гриба (0.2).
+    expect(regrowForage(['egg:0', 'mushroom:0'], () => 0.3)).toEqual(['mushroom:0'])
+  })
+
+  it('regrowForage не трогает то, что не собирали', () => {
+    expect(regrowForage([], () => 0)).toEqual([])
+  })
+
+  it('новая неделя поднимает лес целиком, но рецепты не забывает', () => {
     S().collectForage('egg:0', 'egg')
     S().nextWeek()
     expect(S().takenForage).toEqual([])
