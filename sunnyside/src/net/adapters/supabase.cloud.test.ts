@@ -342,6 +342,7 @@ describe.runIf(RUN)('supabase cloud — bootstrap нового игрока + ge
       ['getProgression', () => adapter.getProgression()],
       ['getCollections', () => adapter.getCollections()],
       ['getMailForaging', () => adapter.getMailForaging()],
+      ['getExpeditions', () => adapter.getExpeditions()],
     ]
     for (const [name, fn] of reads) {
       const r = await fn()
@@ -355,6 +356,22 @@ describe.runIf(RUN)('supabase cloud — bootstrap нового игрока + ge
     const inv = unwrap(await adapter.getInventory()) as unknown as { items: Record<string, number> }
     expect(inv.items.seed_tomato).toBe(6)
     expect(inv.items.seed_lettuce).toBe(4)
+  })
+
+  it('B5) get_expeditions: снапшот роуд-трипа ok после бутстрапа (0020_get_expeditions)', async () => {
+    // read-RPC `get_expeditions` (0020) закрывает последний серверный хвост:
+    // адаптер больше не получает not_found, снапшот целостный 1:1 к ExpeditionsSnapshot.
+    const res = await adapter.getExpeditions()
+    expect(res.ok, res.ok ? '' : `${res.error.code}: ${res.error.message}`).toBe(true)
+    const snap = unwrap(res) as unknown as {
+      expeditions: unknown[]; speedLevel: number; routeSlots: number; hasStaffGus: boolean
+    }
+    // Свежий игрок — рейсов нет, база слотов/апгрейдов (паритет local getExpeditions).
+    expect(Array.isArray(snap.expeditions)).toBe(true)
+    expect(snap.expeditions.length).toBe(0)
+    expect(snap.speedLevel).toBe(0)
+    expect(snap.routeSlots).toBe(1)     // база 1 + staff_buck(нет на Yard) = 1
+    expect(snap.hasStaffGus).toBe(false)
   })
 })
 

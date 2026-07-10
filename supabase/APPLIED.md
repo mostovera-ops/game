@@ -233,3 +233,39 @@ curl -4 -s -X POST \
 src/app/integration.test.ts` зелёный (см. отчёт задачи fishing-qte); полный `pnpm test`/
 `pnpm build` не гоняются здесь повторно — гейт общий для параллельной волны BL-1..BL-4
 (см. индивидуальный отчёт агента).
+
+## Обновление get_expeditions (последний серверный хвост read-RPC) — 2026-07-10
+
+Миграция `0020_get_expeditions.sql` применена (`scripts/db-apply.mjs`, `curl -4`, токен из
+`"Supabase Sunnyside PAT"`). Edge-функции НЕ трогались (чистое чтение, прямой `.rpc()`).
+
+| # | Файл | Статус | applied_at (UTC) |
+|---|------|--------|------------------|
+| 20 | `0020_get_expeditions.sql` | OK | см. `_sunnyside_migrations` |
+
+**Что сделано:**
+1. **`get_expeditions()` — SECURITY DEFINER read-снапшот** роуд-трипа (`ui_expeditions`,
+   07-expeditions §5) по образцу соседних `get_*` (0011 §3). Закрывает последний хвост:
+   `SupabaseBackendAdapter` (`READ_RPC.expeditions`) мапил RPC, но функции не было —
+   cloud-режим отдавал ok:false. Таблица `expeditions` (0001 §7) и мутации
+   `expedition_start`/`expedition_collect` (0012 §10) уже были развёрнуты; здесь ЧТЕНИЕ.
+2. **Форма — 1:1 к `ExpeditionsSnapshot`** (`sunnyside/src/types/expeditions.ts`), паритет
+   с образцовым `local.ts::getExpeditions`: `{ expeditions, speedLevel, routeSlots,
+   hasStaffGus }`, ключи camelCase, времена EpochMs (`to_ms`). Отдаются только НЕсобранные
+   рейсы (`collected=false`); `state` = `returned` при `now ≥ return_at`, иначе `en_route`;
+   `loot` в снапшоте не раскрывается (секрет payload до collect). `speedLevel=0` (ветка
+   апгрейдов не персистится сервером/LocalWorld). `routeSlots = 1 + staff_buck@yard`
+   (зеркалит `totalRouteSlots(1, hasStaffBuck)`); `hasStaffGus = staff_gus@yard`.
+3. **Case-нюанс постов:** `staff_assignments.post` хранится lower-case (`staff_assign`,
+   0012: `["kitchen","field","counter","yard"]`), а клиентский `StaffPost` — Capitalized.
+   Здесь сравнение по серверной истине (`lower(post)='yard'`), `assignedPost` наружу не
+   отдаётся (в отличие от `get_progression`) — расхождение регистра функции не касается.
+4. **Клиент:** снят `TODO(server)` в `sunnyside/src/net/adapters/supabase.ts`
+   (READ_RPC.expeditions).
+
+**Живая проверка:** `pg_proc`-интроспекция — `get_expeditions` есть, `prosecdef=true`,
+execute-грант у `anon/authenticated/service_role`. Cloud-сьют (Node 24, `SUPABASE_TEST=1`,
+ключи из Management API) — **23/23 зелёный** (был 22/22): B3 (полная T1-гидрация) расширен
+на `getExpeditions`, добавлен B5 (снапшот ok, пустой список, `speedLevel=0`/`routeSlots=1`/
+`hasStaffGus=false` после бутстрапа). Локальный гейт: `tsc -b --noEmit` — 0; `vitest run
+src/net` — 56 passed, 23 skipped (gated cloud-сьют).

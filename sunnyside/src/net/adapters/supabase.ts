@@ -170,9 +170,7 @@ const READ_RPC = {
   collections: 'get_collections',
   mailForaging: 'get_mail_foraging',
   /** Роуд-трип (`ui_expeditions`, 07-expeditions §5) — активные рейсы + слоты/апгрейды.
-   *  TODO(server): серверная read-функция `get_expeditions` ещё не развёрнута
-   *  (см. supabase/APPLIED.md — есть таблица `expeditions` и мутации, нет read-RPC);
-   *  до её деплоя cloud-режим вернёт ok:false, панель покажет тёплый экран ошибки. */
+   *  Серверная read-функция `get_expeditions` развёрнута (0020_get_expeditions.sql). */
   expeditions: 'get_expeditions',
   /** Town Browser (12-migration §3.1.3) — не часть `get_town` (та — только МОЙ город). */
   townListings: 'list_towns',
@@ -680,7 +678,20 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     getFairStall: () => read<Stall>(READ_RPC.fairStall),
     getContests: () => read<Contest[]>(READ_RPC.contests),
     getEvent: () => read<EventSnapshot>(READ_RPC.event),
-    getProgression: () => read<ProgressionSnapshot>(READ_RPC.progression),
+    getProgression: async () => {
+      const res = await read<ProgressionSnapshot>(READ_RPC.progression)
+      // Сервер (0011 get_progression) отдаёт assignedPost в lower-case ('yard'),
+      // клиентский enum StaffPost — капитализированный ('Yard'): нормализуем на границе.
+      if (res.ok && res.data.staff) {
+        for (const st of Object.values(res.data.staff)) {
+          if (st && typeof st.assignedPost === 'string' && st.assignedPost.length > 0) {
+            st.assignedPost = ((st.assignedPost[0]?.toUpperCase() ?? '') +
+              st.assignedPost.slice(1)) as typeof st.assignedPost
+          }
+        }
+      }
+      return res
+    },
     getCollections: () => read<CollectionsSnapshot>(READ_RPC.collections),
     getMailForaging: () => read<MailForagingSnapshot>(READ_RPC.mailForaging),
     getExpeditions: () => read<ExpeditionsSnapshot>(READ_RPC.expeditions),
