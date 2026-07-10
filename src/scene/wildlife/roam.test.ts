@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { clearOf, dampAngle, forestPoint, hopArc, shortestAngle, yawTo, FARM, WORLD_HALF } from './roam'
+import {
+  clearOf,
+  dampAngle,
+  forestPoint,
+  hopArc,
+  seededRandom,
+  shortestAngle,
+  shuffled,
+  yawTo,
+  FARM,
+  WORLD_HALF,
+} from './roam'
 
 describe('shortestAngle', () => {
   it('идёт короткой дугой через ±π, а не через полный круг', () => {
@@ -77,5 +88,46 @@ describe('forestPoint', () => {
       const p = forestPoint(6, 12, trees, 1.5)
       expect(clearOf(p.x, p.z, trees, 1.5)).toBe(true)
     }
+  })
+})
+
+describe('seededRandom', () => {
+  it('одно зерно — одна последовательность', () => {
+    const a = seededRandom(42)
+    const b = seededRandom(42)
+    expect([a(), a(), a()]).toEqual([b(), b(), b()])
+  })
+
+  it('разные зёрна расходятся', () => {
+    expect(seededRandom(1)()).not.toBe(seededRandom(2)())
+  })
+
+  it('значения лежат в [0, 1)', () => {
+    const r = seededRandom(7)
+    for (let i = 0; i < 200; i++) {
+      const v = r()
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThan(1)
+    }
+  })
+})
+
+describe('shuffled', () => {
+  it('не трогает исходный массив и сохраняет состав', () => {
+    const src = [1, 2, 3, 4, 5]
+    const out = shuffled(src, seededRandom(3))
+    expect(src).toEqual([1, 2, 3, 4, 5])
+    expect([...out].sort()).toEqual(src)
+  })
+
+  it('на одном зерне даёт один и тот же порядок', () => {
+    const src = [1, 2, 3, 4, 5, 6, 7, 8]
+    expect(shuffled(src, seededRandom(9))).toEqual(shuffled(src, seededRandom(9)))
+  })
+
+  it('перемешивает: хоть какое-то зерно меняет порядок', () => {
+    const src = [1, 2, 3, 4, 5, 6, 7, 8]
+    const orders = new Set([1, 2, 3, 4].map((s) => shuffled(src, seededRandom(s)).join()))
+    expect(orders.size).toBeGreaterThan(1)
   })
 })

@@ -20,6 +20,33 @@ export const rand = (min: number, max: number): number => min + Math.random() * 
 
 export const pick = <T,>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)]
 
+/**
+ * Генератор псевдослучайных чисел с явным зерном (mulberry32).
+ *
+ * Нужен там, где случайность обязана пережить перерисовку React: грибы,
+ * выросшие за ночь, не должны прыгать по лесу на каждом кадре. Одно и то же
+ * зерно — одна и та же раскладка.
+ */
+export function seededRandom(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Перемешивание Фишера—Йетса на заданном источнике случайности. Копию, не на месте. */
+export function shuffled<T>(items: readonly T[], random: () => number): T[] {
+  const out = items.slice()
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 /** Кратчайший поворот из from в to, в пределах ±π. */
 export function shortestAngle(from: number, to: number): number {
   return (((to - from + Math.PI) % TAU) + TAU) % TAU - Math.PI

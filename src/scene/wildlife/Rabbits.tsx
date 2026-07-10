@@ -5,11 +5,17 @@
  * летит по дуге и приземляется, и так до самой цели. Дойдя, замирает и водит
  * ушами. Отсюда и весь риг: тело поднимается по hopArc, уши откидываются назад
  * тем сильнее, чем выше прыжок.
+ *
+ * Прыгает кролик по прямой к цели и потому упирался бы в дом, теплицу и грядки:
+ * обходить стволы при выборе цели мало, между целью и кроликом тоже что-то
+ * стоит. Поэтому после каждого прыжка его выталкивают из препятствий тем же
+ * resolveCollisions, что и героя, — коллайдеры у них общие.
  */
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import type { Palette } from '../../assets/scene'
+import { resolveCollisions, type Collider } from '../collision'
 import { critterUrl, node, useCreature } from './model'
 import { dampAngle, forestPoint, hopArc, rand, yawTo, type Point } from './roam'
 
@@ -33,7 +39,29 @@ const TURN_LAMBDA = 7
 /** Уши на прыжке: чем выше, тем сильнее откинуты назад. */
 const EAR_BACK = 0.5
 
-function RabbitFigure({ trees, palette }: { trees: Point[]; palette: Palette }) {
+/** Радиус тела кролика для столкновений. У героя 0.22, кролик мельче. */
+const RABBIT_RADIUS = 0.16
+
+/**
+ * Какую долю шага кролик обязан пройти, чтобы считаться идущим. Скольжение
+ * вдоль стены съедает часть шага честно, поэтому порог низкий: он ловит
+ * упёршегося в ствол, а не бегущего вдоль дома.
+ */
+const STUCK_FRACTION = 0.25
+
+interface RabbitProps {
+  trees: Point[]
+  colliders: readonly Collider[]
+  palette: Palette
+}
+
+/** Доступ из DevTools и автопроверок. В прод-сборку не попадает. */
+const debug: { x: number; z: number }[] = []
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __rabbits?: unknown }).__rabbits = debug
+}
+
+function RabbitFigure({ index, trees, colliders, palette }: RabbitProps & { index: number }) {
   const model = useCreature(URL, palette, { cast: true })
   const ears = useMemo(() => [node(model, 'RabbitEarL'), node(model, 'RabbitEarR')] as const, [model])
 
@@ -53,9 +81,14 @@ function RabbitFigure({ trees, palette }: { trees: Point[]; palette: Palette }) 
 
     if (!started.current) {
       const p = forestPoint(R_MIN, R_MAX, trees, TREE_CLEARANCE)
-      g.position.set(p.x, 0, p.z)
+      const free = resolveCollisions(p.x, p.z, RABBIT_RADIUS, colliders)
+      g.position.set(free.x, 0, free.z)
       started.current = true
     }
+
+    // Пишем в самом начале кадра: кролик может весь кадр просидеть на месте,
+    // и в конце функции мы бы до записи не дошли.
+    if (import.meta.env.DEV) debug[index] = { x: g.position.x, z: g.position.z }
 
     const dx = goal.current.x - g.position.x
     const dz = goal.current.z - g.position.z
@@ -87,9 +120,22 @@ function RabbitFigure({ trees, palette }: { trees: Point[]; palette: Palette }) 
 
     if (dist > 1e-4) {
       const step = Math.min((HOP_LEN / HOP_SEC) * dt, dist)
-      g.position.x += (dx / dist) * step
-      g.position.z += (dz / dist) * step
+      // Выталкиваем из стен и грядок: прыжок сквозь дом читается как баг.
+      const free = resolveCollisions(
+        g.position.x + (dx / dist) * step,
+        g.position.z + (dz / dist) * step,
+        RABBIT_RADIUS,
+        colliders,
+      )
+      const moved = Math.hypot(free.x - g.position.x, free.z - g.position.z)
+      g.position.x = free.x
+      g.position.z = free.z
       g.rotation.y = dampAngle(g.rotation.y, yawTo(dx, dz), TURN_LAMBDA, dt)
+
+      // Цель за стволом, а обходить кролик не умеет: упёршись, он тыкался бы в
+      // дерево до скончания века. Продвинулся заметно меньше шага — значит
+      // упёрся, и пора выбрать другую поляну.
+      if (moved < step * STUCK_FRACTION) goal.current = forestPoint(R_MIN, R_MAX, trees, TREE_CLEARANCE)
     }
 
     g.position.y = arc * HOP_HEIGHT
@@ -108,11 +154,11 @@ function RabbitFigure({ trees, palette }: { trees: Point[]; palette: Palette }) 
   )
 }
 
-export function Rabbits({ trees, palette, count = 2 }: { trees: Point[]; palette: Palette; count?: number }) {
+export function Rabbits({ count = 2, ...props }: RabbitProps & { count?: number }) {
   return (
     <>
       {Array.from({ length: count }, (_, i) => (
-        <RabbitFigure key={i} trees={trees} palette={palette} />
+        <RabbitFigure key={i} index={i} {...props} />
       ))}
     </>
   )

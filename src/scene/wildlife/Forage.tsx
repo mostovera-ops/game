@@ -10,8 +10,11 @@
  * игры его не существует.
  *
  * Собранный гриб исчезает целиком, а гнездо остаётся — гаснет только узел Egg:
- * гнездо птица не уносит. За ночь и то, и другое возвращается (endDay чистит
- * takenForage).
+ * гнездо птица не уносит. По клику опустевшее гнездо тоже отвечает репликой,
+ * а не отказом: пустой дом — это событие, а не сломанная кнопка.
+ *
+ * За ночь находки возвращаются не все и не наверняка (см. regrowForage), а
+ * грибы к тому же вырастают на других деревьях (см. forestFinds).
  */
 import { useCallback, useEffect, useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
@@ -21,9 +24,9 @@ import { useGameStore } from '../../game/store'
 import { REACH } from '../heroState'
 import { heroTarget } from '../heroTarget'
 import { setIntent } from '../intent'
-import { TOADSTOOL } from '../phrases'
+import { NEST_EMPTY, TOADSTOOL } from '../phrases'
 import { critterUrl, node, useCreature } from './model'
-import type { FindKind, FindSpot } from './forageSpots'
+import { isForage, type FindKind, type FindSpot } from './forageSpots'
 
 const URLS: Record<FindKind, string> = {
   mushroom: critterUrl('mushroom'),
@@ -51,10 +54,14 @@ function Find({ spot, palette }: { spot: FindSpot; palette: Palette }) {
       const st = useGameStore.getState()
       if (st.phase !== 'farm') return // день 7 — герой за прилавком
 
-      if (spot.kind === 'toadstool') {
+      // Мухомор и опустевшее гнездо не дают ничего, кроме реплики. Гриба,
+      // который уже сорвали, в сцене нет вовсе — сюда он не доходит.
+      const empty = st.takenForage.includes(spot.id)
+      if (!isForage(spot)) {
         setIntent({ kind: 'speak', text: TOADSTOOL, x: spot.x, z: spot.z, reach: REACH })
+      } else if (empty) {
+        setIntent({ kind: 'speak', text: NEST_EMPTY, x: spot.x, z: spot.z, reach: REACH })
       } else {
-        if (st.takenForage.includes(spot.id)) return
         setIntent({ kind: 'forage', id: spot.id, item: spot.kind, x: spot.x, z: spot.z, reach: REACH })
       }
       heroTarget.set(spot.x, 0, spot.z)
@@ -63,13 +70,12 @@ function Find({ spot, palette }: { spot: FindSpot; palette: Palette }) {
   )
 
   /**
-   * Курсор ведёт себя как над грядкой. Мухомор — не «нельзя», а «можно
-   * посмотреть»: клик по нему всегда что-то даёт, пусть и одну реплику.
+   * Курсор ведёт себя как над грядкой. Мухомор и опустевшее гнездо — не
+   * «нельзя», а «можно посмотреть»: клик по ним даёт реплику, а не отказ.
    */
   const onOver = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    if (spot.kind === 'toadstool') document.body.style.cursor = 'help'
-    else document.body.style.cursor = taken ? 'not-allowed' : 'pointer'
+    document.body.style.cursor = spot.kind === 'toadstool' || taken ? 'help' : 'pointer'
   }
   const onOut = () => {
     document.body.style.cursor = ''

@@ -643,7 +643,7 @@ export function Farm({
       <Beds plots={layout.plots} palette={palette} />
       <Hero palette={palette} start={HERO_START} colliders={colliders} />
       <Customers palette={palette} />
-      <Wildlife layout={layout} palette={palette} />
+      <Wildlife layout={layout} palette={palette} colliders={colliders} />
       {slotPositions.map((s) => (
         <Slot key={s.id} slotId={s.id} position={s.position} palette={palette} />
       ))}
