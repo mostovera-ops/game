@@ -102,9 +102,9 @@ const num3 = (v: string | null, fallback: [number, number, number]): [number, nu
 
 // Две сцены — два ракурса. ?cam/tgt/zoom переопределяют текущий кадрируемый.
 const FARM_CAM = {
-  pos: num3(params.get('cam'), [10.7, 6.7, 12.8]),
-  target: num3(params.get('tgt'), [2.2, 0.3, 0]),
-  zoom: params.get('zoom') ? Number(params.get('zoom')) : 78,
+  pos: num3(params.get('cam'), [10.67, 6.67, 12.41]),
+  target: num3(params.get('tgt'), [2.17, 0.27, -0.39]),
+  zoom: params.get('zoom') ? Number(params.get('zoom')) : 148,
 }
 const TRUCK_CAM = {
   pos: num3(FRAME_SCENE === 'truck' ? params.get('cam') : null, [6.84, 4.5, 0.61]),

@@ -55,8 +55,9 @@ const CASTERS = new Set(['house', 'greenhouse', 'food_truck', 'tree', 'raised_be
 
 const PLANT_ASSETS = ['raised_bed', 'carrot', 'greens', 'tomato_bush'] as const
 
-// Стартовая точка героя: на дорожке перед домом, вне его 3×3 основания.
-const HERO_START: Vec3 = [1.0, 0, 2.2]
+// Стартовая точка героя: перед дверью дома (та смотрит в +X), в 0.67 м от стены.
+// Камера фермы (FARM_CAM в App.tsx) нацелена сюда же — герой стоит в центре кадра.
+const HERO_START: Vec3 = [2.17, 0, -0.39]
 
 // Через что герой не проходит. Дорожка и божья коровка — не препятствия.
 const SOLID_SINGLETONS = [
