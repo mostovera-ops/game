@@ -50,8 +50,12 @@ function CustomerFigure({
     clone.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (!mesh.isMesh) return
-      const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material).clone()
-      ;(mat as THREE.MeshLambertMaterial).color.copy(coat)
+      const cur = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
+      // Красим только плащ: у модели есть ещё белки и зрачки, и залить их
+      // цветом плаща — значит стереть человечку глаза.
+      if (cur.name !== 'Hero') return
+      const mat = cur.clone() as THREE.MeshLambertMaterial
+      mat.color.copy(coat)
       mesh.material = mat
     })
     return clone
