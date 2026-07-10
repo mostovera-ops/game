@@ -13,6 +13,7 @@
  * руку: собирать урожай приходится чаще, чем разглядывать портрет.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { dayProgress, getClock, isNight, subscribeClock } from '../game/dayClock'
 import {
   craftableCount,
   RECIPES,
@@ -148,34 +149,59 @@ function Toasts() {
   )
 }
 
+/**
+ * Часы суток. Они тикают каждый кадр и живут вне стора, поэтому подписываемся
+ * напрямую: перерисовывается один кружок, а не весь HUD.
+ */
+function useClock(): number {
+  return useSyncExternalStore(subscribeClock, getClock, getClock)
+}
+
+/**
+ * Кружок дня. У текущего он же и таймер: жёлтый сектор идёт по кругу за сутки.
+ * Прошедшие дни зелёные, будущие пустые — там показывать нечего.
+ */
+function DayDot({ day, current, done, fill }: { day: number; current: boolean; done: boolean; fill: number }) {
+  const base = current
+    ? 'scale-110 bg-white/10'
+    : done
+      ? 'bg-[#6b8f3f]'
+      : 'bg-white/10 text-white/40'
+  return (
+    // shrink-0: тулбар — флекс, и кружок без этого сплющивается в овал.
+    <div
+      className={`relative grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs transition ${base}`}
+    >
+      {current && (
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: `conic-gradient(#f4b942 ${fill * 360}deg, rgba(255,255,255,0.10) 0deg)`,
+          }}
+        />
+      )}
+      <span className="relative">{day === 7 ? '🚚' : '🌱'}</span>
+    </div>
+  )
+}
+
 function WeekBar() {
   const day = useGameStore((s) => s.day)
   const phase = useGameStore((s) => s.phase)
   const money = useGameStore((s) => s.money)
+  const clock = useClock()
+  // День ярмарки часами не меряется — у него свой таймер. Его кружок полон.
+  const fill = phase === 'farm' ? dayProgress(clock) : 1
+  const night = phase === 'farm' && isNight(clock)
   return (
     <div className="flex items-start justify-between">
       <div className={`${panel} flex items-center gap-1.5 px-3 py-2`}>
         {Array.from({ length: 7 }).map((_, i) => {
           const d = i + 1
-          const cur = d === day
-          const done = d < day
-          return (
-            <div
-              key={i}
-              className={`grid h-6 w-6 place-items-center rounded-full text-xs transition ${
-                cur
-                  ? 'scale-110 bg-[#f4b942] text-[#241a20]'
-                  : done
-                    ? 'bg-[#6b8f3f]'
-                    : 'bg-white/10 text-white/40'
-              }`}
-            >
-              {d === 7 ? '🚚' : '🌱'}
-            </div>
-          )
+          return <DayDot key={i} day={d} current={d === day} done={d < day} fill={fill} />
         })}
         <span className="ml-2 text-xs opacity-80">
-          {phase === 'farm' ? `День ${day} из 6` : 'День 7 — Фудтрак'}
+          {phase !== 'farm' ? 'День 7 — Фудтрак' : night ? `🌙 Ночь ${day}` : `День ${day} из 6`}
         </span>
       </div>
       <div className="flex items-center gap-2">

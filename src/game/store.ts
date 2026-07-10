@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { resetClock } from './dayClock'
 import { emptyToolbar, moveItem, reconcileToolbar, type ToolbarLayout } from './toolbar'
 import type { CropId, ForageId, Inventory, ItemId, Seeds } from './items'
 
@@ -537,7 +538,10 @@ export const useGameStore = create<GameState>()(
           }
         }),
 
-      endDay: () =>
+      // Часы суток тикают снаружи стора (см. dayClock): сутки кончились сами или
+      // игрок нажал «Закончить день» — в обоих случаях наступает утро.
+      endDay: () => {
+        resetClock()
         set((s) => {
           let withered = 0
           const slots = s.slots.map((slot): Slot => {
@@ -571,7 +575,8 @@ export const useGameStore = create<GameState>()(
             takenForage: regrowForage(s.takenForage),
             ...(withered ? withNotice(s, { kind: 'withered', amount: withered }) : {}),
           }
-        }),
+        })
+      },
 
       serve: (recipeId) => {
         const s = get()
@@ -704,7 +709,8 @@ export const useGameStore = create<GameState>()(
       // Знание рецептов тоже переезжает: гриб, найденный однажды, не
       // забывается. Лес, наоборот, поднимается целиком: за ярмарку и дорогу
       // обратно успевает вырасти всё, что игрок унёс.
-      nextWeek: () =>
+      nextWeek: () => {
+        resetClock()
         set(() => ({
           day: 1,
           phase: 'farm',
@@ -712,10 +718,14 @@ export const useGameStore = create<GameState>()(
           truck: null,
           shopOpen: false,
           notices: [],
-        })),
+        }))
+      },
 
       // Музыка переживает сброс: это настройка звука, а не игровой прогресс.
-      resetGame: () => set((s) => ({ ...initialData(), musicOn: s.musicOn })),
+      resetGame: () => {
+        resetClock()
+        set((s) => ({ ...initialData(), musicOn: s.musicOn }))
+      },
     }),
     {
       name: 'farm-truck',

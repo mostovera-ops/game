@@ -20,6 +20,7 @@ import { playSfx } from '../audio/engine'
 import { SFX } from '../audio/ambience'
 import { swayUniforms } from './sway'
 import { Beds } from './Beds'
+import { DayNight } from './DayNight'
 import { Slot } from './Slot'
 import { Hero } from './Hero'
 import { Customers } from './Customers'
@@ -604,29 +605,10 @@ export function Farm({
     return out
   }, [layout])
 
-  // sun.direction — куда светит; позиция источника в противоположной стороне.
-  const sunPos = useMemo(() => {
-    const d = layout.sun.direction
-    return new THREE.Vector3(-d[0], -d[1], -d[2]).normalize().multiplyScalar(30)
-  }, [layout])
-
   return (
     <>
-      <ambientLight intensity={0.5} />
-      <directionalLight
-        position={sunPos.toArray()}
-        intensity={layout.sun.energy * 0.4}
-        color={layout.sun.color}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-22}
-        shadow-camera-right={22}
-        shadow-camera-top={22}
-        shadow-camera-bottom={-22}
-        shadow-camera-near={0.5}
-        shadow-camera-far={90}
-      />
+      {/* Направление солнца из layout.sun больше не в ходу: солнце ходит по дуге. */}
+      <DayNight sun={layout.sun} />
 
       <Ground size={layout.ground.size} color={palette[layout.ground.material] ?? '#5a8f33'} />
 

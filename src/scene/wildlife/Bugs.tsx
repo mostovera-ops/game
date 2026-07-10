@@ -16,6 +16,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import type { Palette, PropInstance } from '../../assets/scene'
+import { darkness, getClock } from '../../game/dayClock'
 import { critterUrl, node, useCreature } from './model'
 import { dampAngle, pick, rand, yawTo } from './roam'
 
@@ -34,14 +35,25 @@ interface Species {
   foldsWings: boolean
   /** Насколько сильно болтает по вертикали в полёте. */
   bob: number
+  /**
+   * Цвет ночного свечения, если жук светится. Днём свечения нет — оно набирает
+   * силу вместе с темнотой. Бабочка и пчела ночью просто тёмные силуэты.
+   */
+  glow?: string
 }
 
 const SPECIES: readonly Species[] = [
   { asset: 'critter_butterfly', speed: 0.75, flap: 11, amp: 1.0, foldsWings: true, bob: 0.09 },
-  { asset: 'critter_ladybug', speed: 0.9, flap: 34, amp: 0.5, foldsWings: false, bob: 0.03 },
-  { asset: 'critter_beetle', speed: 0.8, flap: 30, amp: 0.5, foldsWings: false, bob: 0.04 },
+  { asset: 'critter_ladybug', speed: 0.9, flap: 34, amp: 0.5, foldsWings: false, bob: 0.03, glow: '#ff8b5e' },
+  { asset: 'critter_beetle', speed: 0.8, flap: 30, amp: 0.5, foldsWings: false, bob: 0.04, glow: '#b9ff72' },
   { asset: 'critter_bee', speed: 1.5, flap: 46, amp: 0.45, foldsWings: false, bob: 0.02 },
 ]
+
+/** Радиус ореола вокруг светящегося жука. */
+const HALO_RADIUS = 0.14
+
+/** Частота пульсации свечения, рад/с. */
+const GLOW_PULSE = 2.4
 
 /** Крылья бабочки на отдыхе: сложены домиком над спиной. */
 const FOLDED = 1.35
@@ -75,6 +87,29 @@ function BugFigure({ species, patches, palette }: { species: Species; patches: P
     [model],
   )
 
+  /**
+   * Материалы светящегося жука. Палитра раздаёт один материал на имя всей
+   * сцене — светись мы им, вместе с жуком загорелись бы все, кто его носит.
+   * Поэтому на каждую особь своя копия: и разгораются они каждая в свою фазу.
+   */
+  const glowMats = useMemo(() => {
+    if (!species.glow) return null
+    const emissive = new THREE.Color(species.glow)
+    const mats: THREE.MeshLambertMaterial[] = []
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return
+      const mat = (mesh.material as THREE.MeshLambertMaterial).clone()
+      mat.emissive = emissive
+      mat.emissiveIntensity = 0
+      mesh.material = mat
+      mats.push(mat)
+    })
+    return mats
+  }, [model, species.glow])
+
+  const halo = useRef<THREE.Mesh>(null)
+
   const group = useRef<THREE.Group>(null)
   const mode = useRef<Mode>('away')
   // Стартовая пауза своя у каждого: иначе первый вылет случится хором.
@@ -97,6 +132,16 @@ function BugFigure({ species, patches, palette }: { species: Species; patches: P
     if (!g) return
     const dt = Math.min(rawDt, MAX_DT)
     if (dt <= 0) return
+
+    // Свечение разгорается с темнотой и медленно дышит.
+    if (glowMats) {
+      const k = darkness(getClock()) * (0.6 + 0.4 * Math.sin(phase.current * GLOW_PULSE))
+      for (const m of glowMats) m.emissiveIntensity = k
+      if (halo.current) {
+        halo.current.visible = k > 0.01
+        ;(halo.current.material as THREE.MeshBasicMaterial).opacity = k * 0.4
+      }
+    }
 
     if (mode.current === 'away') {
       g.visible = false
@@ -183,6 +228,20 @@ function BugFigure({ species, patches, palette }: { species: Species; patches: P
   return (
     <group ref={group} visible={false}>
       <primitive object={model} />
+      {species.glow && (
+        // Ореол: аддитивный шарик вокруг жука. Луч сквозь него проходит — по
+        // живности не кликают, а сам жук лучи уже не ловит (см. useCreature).
+        <mesh ref={halo} visible={false} raycast={() => {}}>
+          <sphereGeometry args={[HALO_RADIUS, 8, 6]} />
+          <meshBasicMaterial
+            color={species.glow}
+            transparent
+            opacity={0}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      )}
     </group>
   )
 }
