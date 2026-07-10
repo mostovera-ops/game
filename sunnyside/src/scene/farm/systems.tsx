@@ -9,6 +9,10 @@
  *
  * Важно: дефолт кладёт в кэш ТОЛЬКО презентационные состояния грядки (empty→growing→ready),
  * без экономических чисел — награда/качество/цена считаются сервером (AGENTS.md §0.3).
+ *
+ * ИНЪЕКЦИЯ (farm-ui-seams): `src/App.tsx` строит `AppSystems` (`createSystems`) один раз и
+ * прокидывает `{ farm, animals }` в `<FarmActionsProvider systems={...}>` — клики по сцене
+ * реально уходят на `BackendAdapter` (не только в локальный кэш).
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
@@ -19,24 +23,38 @@ import { DEMO_GROW_MS } from './demo'
 
 /** Набор действий, которые умеет сцена фермы. Диспатчер намерений игрока. */
 export interface FarmActions {
-  /** Посев на пустой слот (реальный выбор культуры — Seed Picker F1, ui-агент). */
+  /** Посев на пустой слот (прямой посев — используется Seed Picker'ом, ui/farm). */
   sow: (slot: number, seedKey: ProductKey) => void
+  /**
+   * Клик по ПУСТОЙ грядке (farm-ui-seams, F1 19-ui-ux §3.2): открывает Seed Picker для
+   * этого слота вместо хардкода культуры — сам посев делает оверлей (`ui/farm/SeedPicker`)
+   * через `FarmSystem.sow` (адаптер), не эта функция.
+   */
+  pickSeed: (slot: number) => void
   /** Полив грядок (бонус качества/ускорение — считает сервер). */
   water: (plotIds: UUID[]) => void
   /** Сбор урожая грядок. */
   harvest: (plotIds: UUID[]) => void
   /** Покормить животных (03-animals §3.4). */
   feed: (animalIds: UUID[]) => void
-  /** Открыть кухонный оверлей (Recipe Box / очереди станков, 19-ui-ux §3.3). */
+  /**
+   * Открыть кухонный оверлей (Recipe Box / Machine Queues, 19-ui-ux §3.3). `machineId` —
+   * станок, по которому кликнули в сцене (`Machines.tsx`) — Kitchen-панель откроется с
+   * фокусом на его очереди (K1); без аргумента (клик по постройке кухни) — обзор без фокуса.
+   */
   openKitchen: (machineId?: UUID) => void
+  /** Открыть Storage (F4, клик по Silo/Icehouse в сцене). */
+  openStorage: () => void
 }
 
 const NOOP_ACTIONS: FarmActions = {
   sow: () => {},
+  pickSeed: () => {},
   water: () => {},
   harvest: () => {},
   feed: () => {},
   openKitchen: () => {},
+  openStorage: () => {},
 }
 
 const FarmActionsContext = createContext<FarmActions>(NOOP_ACTIONS)
@@ -140,9 +158,22 @@ export function FarmActionsProvider({
         void systems?.animals.feed(animalIds)
       },
 
-      openKitchen() {
-        // Кухонный контекст = Recipe Box / очереди станков (19-ui-ux §3.3). Панель — ui-агент.
+      pickSeed(slot) {
+        // Ничего не патчим оптимистично — сеет сам Seed Picker через FarmSystem/adapter
+        // (истина сервера), эта функция только открывает оверлей на нужном слоте.
+        s().setSeedPickerSlot(slot)
+      },
+
+      openKitchen(machineId) {
+        // Кухонный контекст = Machine Queues (K1) + Recipe Box (K2), 19-ui-ux §3.3 — одна
+        // Kitchen-панель (`ui_recipe_box`, единственный canon-ключ на весь контекст кухни),
+        // K1 показывает фокус станка, если пришли кликом по нему (Machines.tsx).
+        s().setKitchenMachine(machineId ?? null)
         s().openPanel('ui_recipe_box')
+      },
+
+      openStorage() {
+        s().setStorageOpen(true)
       },
     }
   }, [systems])

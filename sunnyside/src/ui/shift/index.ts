@@ -9,5 +9,6 @@
 export { ShiftHost } from './ShiftHost'
 export { ShiftScreen, type ShiftResult, type ShiftScreenProps } from './ShiftScreen'
 export { Receipt, type ReceiptProps } from './Receipt'
+export { NOOP_SHIFT_SYSTEM } from './shiftSystemFallback'
 export * from './session'
 export * from './pool'

@@ -2,11 +2,12 @@
  * registry.ts — МАСТЕР-РЕЕСТР заглушек всей игры (22-audio-visual.md §7 «Политика заглушек»).
  *
  * Это источник данных для таблицы ассетов Фазы D (см. docs/specs/22-audio-visual.md §7.1,
- * "Мастер-список ассетов … `21-client.md §3.7` (`assetRegistry`, `scene/assets/registry.ts`)").
- * Этот файл — ШИРЕ и ГЛУБЖЕ, чем `src/scene/assets/registry.ts`: тот — тонкий рантайм-реестр,
- * который `<Prop assetKey/>` использует для рендера в сценах (модели/пропсы фермы); ЭТОТ —
- * полный каталог ВСЕХ будущих ассетов игры (модели, текстуры, UI, VFX, анимации, музыка, sfx)
- * с требованиями к финалу — покрывает спеки 02–04, 07, 09–11, 17, 19, 22 целиком.
+ * "Мастер-список ассетов … `21-client.md §3.7` (`assetRegistry`)").
+ * ЕДИНСТВЕННЫЙ реестр ассетов проекта (registry-converge): все 4 сцены (`farm`/`town`/`fair`/
+ * `shift`) рисуют через `<PlaceholderMesh id/>` (`./PlaceholderMesh.tsx`) по ключам отсюда —
+ * прежний тонкий рантайм-реестр `src/scene/assets/registry.ts` + `<Prop assetKey/>` удалён.
+ * Полный каталог ВСЕХ ассетов игры (модели, текстуры, UI, VFX, анимации, музыка, sfx) с
+ * требованиями к финалу — покрывает спеки 02–04, 07, 09–11, 17, 19, 22 целиком.
  *
  * Конвенции примитивов-заглушек — 22-audio-visual.md §7.1/§7.2/§7.2а:
  *   Культура → box (приплюснутый) · Постройка → box+крыша-призма · Станок → box+cylinder ·
@@ -151,6 +152,8 @@ export const CANON_PALETTE = {
   animal_bee_stripe: '#2B2B2E',
   animal_goat: '#EDE6D6',
   animal_turkey: '#8A5A3B',
+  animal_sheep: '#F0EEE4',
+  animal_sheep_face: '#4A4A52',
 
   // Культуры (canon-referenced §5-ingredients примеры, для box-заглушек грядки)
   crop_tomato: '#E75950',
@@ -533,6 +536,27 @@ entries.push(
       { shape: 'sphere', size: [0.12, 0.12, 0.12], color: 'crop_peach', offset: [0.5, 1.6, 0.2] },
     ]),
   ),
+  // Форажинг-заглушки обочины (08-mail-foraging §3.2, 11-town §3.1 Roadside) — реюз
+  // формы crop-конусов под herb/flower (нейминг-кандидат вне канон-тиров культур §4.5,
+  // canon-ключа для форажинг-предметов пока нет; см. town/layout.ts FORAGE_ASSET_BY_KIND).
+  def(
+    'crop_greens',
+    'Wild Greens/Herb (forage, icon+prop)',
+    'model',
+    ['TownScene roadside forage points'],
+    ['08-mail-foraging.md §3.2', '11-town.md §3.1'],
+    PLOT_BUDGET,
+    coneShape(0.18, 0.28, 'env_grass'),
+  ),
+  def(
+    'crop_carrot',
+    'Wild Flower (forage, icon+prop)',
+    'model',
+    ['TownScene roadside forage points'],
+    ['08-mail-foraging.md §3.2', '11-town.md §3.1'],
+    PLOT_BUDGET,
+    coneShape(0.16, 0.26, 'crop_strawberry'),
+  ),
   def('item_feed_grain', 'Grain Feed (icon)', 'texture', ['ui_recipe_box', 'inventory'], ['03-animals.md §3.2.1'], TEXTURE_2D),
   def('item_feed_hay', 'Hay Feed (icon)', 'texture', ['ui_recipe_box', 'inventory'], ['03-animals.md §3.2.1'], TEXTURE_2D),
   def('item_feed_pollen_mix', 'Pollen Mix (icon)', 'texture', ['ui_recipe_box', 'inventory'], ['03-animals.md §3.2.1'], TEXTURE_2D),
@@ -565,6 +589,11 @@ const ANIMALS: AnimalDef[] = [
   { id: 'an_bee', label: 'Bee Hive', color: 'animal_bee_base', accent: 'animal_bee_stripe', r: 0.2, h: 0.3 },
   { id: 'an_goat', label: 'Dairy Goat', color: 'animal_goat', r: 0.28, h: 0.5 },
   { id: 'an_turkey', label: 'Turkey', color: 'animal_turkey', r: 0.22, h: 0.4 },
+  // an_sheep: `AnimalKind` (@/types/animals.ts) содержит `sheep` в закрытом enum, но
+  // 03-animals.md §3.1 описывает 6-й вид как `an_turkey` — расхождение канона задокументировано
+  // в data/catalogs/animals.ts (TODO(architecture)). Заглушка здесь заводится независимо от
+  // разрешения того спора — `assetMap.ts` (farm) мапит `sheep` сюда напрямую (без стенд-ина).
+  { id: 'an_sheep', label: 'Sheep', color: 'animal_sheep', accent: 'animal_sheep_face', r: 0.3, h: 0.45 },
 ]
 for (const a of ANIMALS) {
   entries.push(

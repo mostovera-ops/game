@@ -3,10 +3,13 @@
  * 11-town §3.1 Roadside). Клик → `onCollect(pointId)`; TownScene решает, что это значит
  * (см. TODO(mail-foraging) там — реальный `MailForagingSystem.forageClaim/forageCollect`
  * ещё не реализован, сцена не имеет доступа к `@/net` напрямую — AGENTS.md §3).
+ *
+ * ВСЯ ГРАФИКА — через заглушки мастер-реестра (`PlaceholderMesh`, 22-audio-visual §7,
+ * registry-converge: свой мини-реестр `scene/assets/registry.ts` удалён).
  */
 
 import { Billboard, Text } from '@react-three/drei'
-import { Prop } from '../assets/Prop'
+import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
 import { FORAGE_ASSET_BY_KIND, type ForageLayoutPoint } from './layout'
 
 export interface ForagePointsProps {
@@ -32,7 +35,7 @@ export function ForagePoints({ points, collectedIds, onCollect }: ForagePointsPr
               onCollect(point.id)
             }}
           >
-            <Prop assetKey={FORAGE_ASSET_BY_KIND[point.kind]} position={[0, 0.3, 0]} scale={collected ? 0.4 : 0.8} />
+            <PlaceholderMesh id={FORAGE_ASSET_BY_KIND[point.kind]} position={[0, 0.3, 0]} scale={collected ? 0.4 : 0.8} />
             {!collected && (
               <Billboard position={[0, 0.9, 0]}>
                 <Text fontSize={0.22} color="#2b2b2e" outlineWidth={0.015} outlineColor="#f5ecd6" anchorX="center" anchorY="bottom">

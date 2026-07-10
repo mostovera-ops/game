@@ -16,7 +16,7 @@
  */
 
 import { Canvas } from '@react-three/fiber'
-import { Component, Suspense, useEffect, type ReactNode } from 'react'
+import { Component, Suspense, useEffect, useMemo, type ReactNode } from 'react'
 import { useStore } from '@/state'
 import { ActiveScene } from '@/scene'
 import { Hud } from '@/ui/Hud'
@@ -25,7 +25,7 @@ import { color } from '@/scene/assets/palette'
 import { isDebugEnabled } from '@/bootstrap/debug'
 import { SystemsProvider } from './app/SystemsProvider'
 import { PanelHost } from './app/PanelHost'
-import { bootstrap, getAdapter } from './app/backend'
+import { bootstrap, getAdapter, createSystemContext, createSystems, type AppSystems } from './app/backend'
 import { subscribeNotifications } from './app/notifications'
 
 // СБРОС ТРАНЗИЕНТНОГО ОВЕРЛЕЯ НА СТАРТЕ (до первого рендера): `ui.activePanel` попадает в
@@ -103,6 +103,29 @@ export function App() {
 
   useBootstrap()
 
+  // Один набор систем на всё приложение (farm-ui-seams, расширено adapter-seams): строим
+  // здесь, а не только внутри <SystemsProvider>, потому что сцена (внутри Canvas, ДО
+  // DOM-оверлеев) тоже нуждается в системах — иначе клики фермы/города/ярмарки остаются
+  // локальным оптимистичным кэшем и никогда не доходят до BackendAdapter (AGENTS.md §0.3).
+  // Прокидываем `farmSystems`/`townSystems`/`shiftSystem` в <ActiveScene> (см. scene/index.tsx)
+  // и тот же объект в <SystemsProvider systems={...}> (её штатный параметр инъекции систем
+  // для тестов), так что DOM-оверлеи и сцена делят ОДИН экземпляр — не дублируем сборку.
+  const systems: AppSystems = useMemo(() => createSystems(createSystemContext(getAdapter())), [])
+
+  // Dev/e2e-мост (полный игровой цикл, e2e/game-loop.spec): выкладываем построенные системы
+  // и адаптер на тот же `window.sunnyside`, что и сторы (см. выше). ЗАЧЕМ: часть шагов цикла —
+  // это POI-клики по 3D-сцене (сбор урожая по грядке) или действия, которые UI-панель гейтит
+  // до готовых блюд (выкладка на прилавок / донат в котёл принимают только `dish_*`), тогда как
+  // сток раннего цикла — полуфабрикат `ingr_flour`. Playwright не кликает по WebGL-объектам
+  // надёжно, поэтому эти конкретные швы e2e дёргает через реальные системы движка (тот же путь,
+  // что покрыт зелёным `app/integration.test.ts`), а UI-поддержанные шаги (seed picker → посадка,
+  // кухня → крафт, смена) — через настоящий DOM. Только dev (гейт как у стор-моста, не в проде).
+  useEffect(() => {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return
+    const w = window as unknown as { sunnyside?: Record<string, unknown> }
+    w.sunnyside = { ...(w.sunnyside ?? {}), systems, getAdapter }
+  }, [systems])
+
   return (
     <div className="relative h-full w-full">
       <Canvas
@@ -115,13 +138,18 @@ export function App() {
       >
         <Suspense fallback={null}>
           <SceneBoundary sceneKey={active}>
-            <ActiveScene active={active} />
+            <ActiveScene
+              active={active}
+              farmSystems={{ farm: systems.farm, animals: systems.animals }}
+              townSystems={{ social: systems.social, mailForaging: systems.mailForaging }}
+              shiftSystem={systems.shift}
+            />
           </SceneBoundary>
         </Suspense>
       </Canvas>
 
       {/* DOM-оверлеи поверх канваса, с DI-провайдерами систем движка. */}
-      <SystemsProvider>
+      <SystemsProvider systems={systems}>
         <Hud />
         <PanelHost />
         <OnboardingHost

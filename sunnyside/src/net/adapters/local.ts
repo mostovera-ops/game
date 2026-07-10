@@ -96,11 +96,14 @@ import type {
   IapVerifyReq, IapVerifyRes,
   MigrateFarmReq,
   PhotoUploadReq, PhotoUploadRes,
+  RealtimeChannelKind,
+  WeekPhase,
 } from '@/types'
 import {
   weekNumberOf,
   weekStartOfIndex,
   buildCalendar,
+  phaseAt,
   EVENT_FINALE_OFFSET,
   DAY_MS,
   HOUR_MS,
@@ -161,6 +164,8 @@ const DEFAULT_TOWN_ID = 'local-town'
 const FAIR_SALE_UNITS_PER_HOUR = 4
 /** Окно эффективности полива и продление wateredUntil. */
 const WATER_WINDOW_MS = 30 * 60 * 1000
+/** Минимальный игровой интервал между визитами «сосед полил грядки» (S4, 11-town §пуш). */
+const NEIGHBOR_VISIT_COOLDOWN_MS = 2 * HOUR_MS
 
 // ── Каталожные мини-индексы ──────────────────────────────────────────────────────────
 const ANIMAL_CYCLE_MIN: Record<string, number> = {}
@@ -206,6 +211,85 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
 
   let world: LocalWorld | null = null
 
+  // ── Событийный канал (S4 нотификации, 19-ui-ux §3.1/§4.3) ──
+  // local ЭМИТИТ по своим тикам (внутри `sync`, на каждое чтение снапшота) — ровно тот
+  // же контракт `subscribe(channel, handler)`, каким supabase будет рассылать Realtime
+  // CDC-события (20-backend §3.5). Дедуп-состояние ниже — сессионное (не персистится
+  // в `LocalWorld`): переоткрытие вкладки не разряжает бэклог прошедших событий залпом,
+  // ровно как первичная гидрация — не «событие» (app/notifications.ts `noteHydration`).
+  const channelHandlers: Partial<Record<RealtimeChannelKind, Set<RealtimeHandler>>> = {}
+  function emit(channel: RealtimeChannelKind, message: string): void {
+    const set = channelHandlers[channel]
+    if (!set || set.size === 0) return
+    for (const h of set) h({ message })
+  }
+  let lastWeekPhase: WeekPhase | null = null
+  const notifiedMailOrders = new Set<UUID>()
+  const notifiedExpeditions = new Set<UUID>()
+  const notifiedCoopOrders = new Set<UUID>()
+  let lastNeighborVisitAt: EpochMs | null = null
+
+  /**
+   * «Сосед полил твои грядки» (лучший пуш жанра, 11-town §1/canon P3): раз в
+   * `NEIGHBOR_VISIT_COOLDOWN_MS` игрового времени сосед поливает одну неполитую
+   * растущую грядку — реальный игровой эффект (не только текст тоста), детерминирован
+   * от id грядки (стабильный «визитёр» на грядку).
+   */
+  function simulateNeighborWatering(w: LocalWorld, t: EpochMs): void {
+    if (lastNeighborVisitAt === null) {
+      lastNeighborVisitAt = t // первая гидрация — не событие, только точка отсчёта
+      return
+    }
+    if (t - lastNeighborVisitAt < NEIGHBOR_VISIT_COOLDOWN_MS) return
+    const thirsty = w.plots.find((p) => p.state === 'growing' && (!p.wateredUntil || p.wateredUntil < t))
+    if (!thirsty) return
+    thirsty.wateredUntil = t + WATER_WINDOW_MS
+    thirsty.version += 1
+    lastNeighborVisitAt = t
+    const neighbor = w.npcs.length > 0 ? w.npcs[hashString(thirsty.id) % w.npcs.length] : undefined
+    emit('street_board', `${neighbor?.displayName ?? 'Сосед'} полил твои грядки`)
+  }
+
+  /**
+   * Диф-детект доменных событий адаптера → событийный канал: почта доставлена, грузовик
+   * вернулся, началась ярмарка, кооп-заказ выполнен (+ визит соседа выше). Вызывается из
+   * `sync` на каждое чтение снапшота — идемпотентно (дедуп по id/фазе).
+   */
+  function emitDomainEvents(w: LocalWorld, t: EpochMs): void {
+    const phase = phaseAt(t)
+    if (lastWeekPhase !== null && lastWeekPhase !== phase && phase === 'sat_fair') {
+      emit('fair', 'Ярмарка открылась — витрина ждёт сток!')
+    }
+    lastWeekPhase = phase
+
+    for (const order of w.mailOrders) {
+      if (order.state === 'in_transit' && t >= order.deliverAt && !notifiedMailOrders.has(order.id)) {
+        notifiedMailOrders.add(order.id)
+        emit('inbox', 'Пришла посылка из каталога — загляни в почту')
+      }
+    }
+
+    for (const exp of w.expeditions) {
+      if (exp.state === 'en_route' && t >= exp.returnAt && !notifiedExpeditions.has(exp.id)) {
+        notifiedExpeditions.add(exp.id)
+        const state = getStateContent(exp.stateKey)
+        emit('inbox', `Грузовик вернулся из ${state?.name.ru ?? exp.stateKey}!`)
+      }
+    }
+
+    for (const order of w.coopOrders) {
+      if (notifiedCoopOrders.has(order.id)) continue
+      const totalQty = order.requirements.reduce((s, r) => s + r.qty, 0)
+      const totalFilled = order.requirements.reduce((s, r) => s + r.filled, 0)
+      if (totalQty > 0 && totalFilled >= totalQty) {
+        notifiedCoopOrders.add(order.id)
+        emit('street_board', 'Кооп-заказ стрита выполнен — награда начислена!')
+      }
+    }
+
+    simulateNeighborWatering(w, t)
+  }
+
   // ── Жизненный цикл мира ──
   async function ensureWorld(): Promise<LocalWorld> {
     if (world) return world
@@ -233,6 +317,7 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
     processBuildingTimers(w, t)
     processFairSales(w, t)
     simulateTown(w, t)
+    emitDomainEvents(w, t)
   }
 
   // ── Валютный леджер ──
@@ -532,9 +617,11 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
       return ok<MailForagingSnapshot>({ orders: w.mailOrders, foragePoints: w.foragePoints })
     },
 
-    // ── realtime (локально — рассылки нет; боты симулируются в sync) ──
-    subscribe(_channel, _handler: RealtimeHandler): Unsubscribe {
-      return () => {}
+    // ── realtime (локально — эмитит по своим тикам, см. `emitDomainEvents`/`sync` выше) ──
+    subscribe(channel, handler: RealtimeHandler): Unsubscribe {
+      const set = channelHandlers[channel] ?? (channelHandlers[channel] = new Set())
+      set.add(handler)
+      return () => set.delete(handler)
     },
 
     // ── ферма/производство ──

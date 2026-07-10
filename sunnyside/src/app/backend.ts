@@ -33,6 +33,7 @@ import type {
   MonetizationSystem,
   ExpeditionSystem,
   InventorySystem,
+  MailForagingSystem,
 } from '@/engine/contracts'
 import type { MutationKind, RpcResult, EpochMs, UUID, ProductKey } from '@/types'
 
@@ -46,7 +47,7 @@ import { createCollectionSystem } from '@/engine/collections'
 import { createMonetizationSystem } from '@/engine/monetization'
 import { createExpeditionSystem } from '@/engine/expedition'
 import { createInventorySystem } from '@/engine/inventory'
-import { noteHydration } from './notifications'
+import { noteHydration, subscribeNotifications } from './notifications'
 
 // ════════════════════════════════════════════════════════════════════════════
 // Адаптер-синглтон
@@ -213,6 +214,7 @@ export interface AppSystems {
   inventory: InventorySystem
   coop: CoopSystem
   social: SocialSystem
+  mailForaging: MailForagingSystem
 }
 
 /**
@@ -241,6 +243,18 @@ export function createSystems(ctx: SystemContext): AppSystems {
     chat: (channel, body, stickerKey) => ctx.applyMutation('chat_post', { channel, body, stickerKey }),
   }
 
+  // `MailForagingSystem` тоже без доменной логики сверх RPC (order/speedup/claim — почта
+  // каталогом; forageClaim/forageCollect — обочина, mech_foraging; fish — рыбалка) — тонкая
+  // обёртка здесь же (adapter-seams: реальный RPC для `scene/town` вместо локального тоста).
+  const mailForaging: MailForagingSystem = {
+    order: (itemKey) => ctx.applyMutation('mail_order', { itemKey }),
+    speedup: (orderId) => ctx.applyMutation('mail_speedup', { orderId }),
+    claim: (orderIds) => ctx.applyMutation('mail_claim', { orderIds }),
+    forageClaim: (pointId) => ctx.applyMutation('forage_claim', { pointId }),
+    forageCollect: (pointId) => ctx.applyMutation('forage_collect', { pointId }),
+    fish: () => ctx.applyMutation('fish_cast', {}),
+  }
+
   return {
     farm: createFarmSystem(ctx),
     animals: createAnimalSystem(ctx),
@@ -256,6 +270,7 @@ export function createSystems(ctx: SystemContext): AppSystems {
     inventory: createInventorySystem(),
     coop,
     social,
+    mailForaging,
   }
 }
 
@@ -322,6 +337,27 @@ async function syncClock(adapter: BackendAdapter): Promise<void> {
 }
 
 let bootstrapped = false
+let notifUnsubscribe: (() => void) | null = null
+let clockUnsubscribe: (() => void) | null = null
+
+/**
+ * Подписка на изменение `clock.serverOffset` → перегидрация слайсов истиной адаптера.
+ *
+ * ЗАЧЕМ: DevTimeskip двигает `serverOffset`, а локальный бэкенд читает тот же оффсет как
+ * свои часы (net/index.ts) — грядки/крафт/котёл дозревают. Чтобы стор увидел это сразу
+ * (а не только при следующей мутации), слушаем оффсет и перечитываем снапшоты. Подписка
+ * ставится ПОСЛЕ первичного `syncClock` (см. bootstrap), поэтому первичный замер её не
+ * триггерит — фаер только на последующих сдвигах (dev-таймскип/ресинк на реконнекте).
+ */
+function subscribeClockResync(adapter: BackendAdapter): void {
+  if (clockUnsubscribe) return
+  clockUnsubscribe = useStore.subscribe(
+    (s) => s.clock.serverOffset,
+    () => {
+      if (useStore.getState().net.online) void hydrateAll(adapter)
+    },
+  )
+}
 
 /**
  * Полный бутстрап приложения: init → ensureSession → serverOffset → гидрация → online.
@@ -331,6 +367,10 @@ export async function bootstrap(): Promise<BackendAdapter> {
   const adapter = getAdapter()
   if (bootstrapped) return adapter
   bootstrapped = true
+
+  // Событийный канал → лента уведомлений/тосты (S4, 19-ui-ux §3.1): local эмитит по
+  // своим тикам, supabase — по Realtime CDC. Один раз на бутстрапе, живёт всё приложение.
+  notifUnsubscribe = subscribeNotifications(adapter)
 
   await adapter.init()
 
@@ -352,6 +392,8 @@ export async function bootstrap(): Promise<BackendAdapter> {
   }
 
   await syncClock(adapter)
+  // Оффсет уже выставлен — теперь слушаем ПОСЛЕДУЮЩИЕ сдвиги (DevTimeskip) для ресинка.
+  subscribeClockResync(adapter)
   await hydrateAll(adapter)
   useStore.getState().markSynced(Date.now())
 
@@ -360,6 +402,10 @@ export async function bootstrap(): Promise<BackendAdapter> {
 
 /** Сброс синглтона/флага (тесты). */
 export function __resetBackendForTests(): void {
+  notifUnsubscribe?.()
+  notifUnsubscribe = null
+  clockUnsubscribe?.()
+  clockUnsubscribe = null
   adapterSingleton = null
   bootstrapped = false
 }

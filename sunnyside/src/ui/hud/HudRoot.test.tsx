@@ -81,11 +81,14 @@ describe('HudRoot', () => {
     expect(useStore.getState().ui.toasts).toHaveLength(0)
   })
 
-  it('dev-таймскип сдвигает clock.serverOffset и логирует уведомление/тост', () => {
+  it('dev-таймскип сдвигает clock.serverOffset и кладёт dev-тост (лента уведомлений — не отсюда)', () => {
     render(<HudRoot />)
     const before = useStore.getState().clock.serverOffset
     fireEvent.click(screen.getByTestId('dev-timeskip'))
     expect(useStore.getState().clock.serverOffset).toBe(before + 60 * 60 * 1000)
-    expect(useStore.getState().ui.notifications.length).toBeGreaterThan(0)
+    expect(useStore.getState().ui.toasts.length).toBeGreaterThan(0)
+    // Реальные нотификации идут через событийный канал адаптера/диф снапшотов
+    // (app/notifications.ts), не через демо-заполнение кнопки — здесь лента пуста.
+    expect(useStore.getState().ui.notifications.length).toBe(0)
   })
 })

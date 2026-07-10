@@ -30,13 +30,15 @@ interface MachineRowProps {
   onCollect: (jobIds: UUID[]) => void
   onOpenRecipeBox: (machineId: UUID) => void
   collecting: boolean
+  /** Станок, по которому кликнули в сцене (farm-ui-seams) — подсвечиваем его строку. */
+  focused: boolean
 }
 
 function jobIsReady(job: MachineJob, now: number): boolean {
   return job.state === 'ready' || (job.state === 'cooking' && now >= job.readyAt)
 }
 
-function MachineRow({ machine, now, locale, onCollect, onOpenRecipeBox, collecting }: MachineRowProps) {
+function MachineRow({ machine, now, locale, onCollect, onOpenRecipeBox, collecting, focused }: MachineRowProps) {
   const capacity = queueCapacity(machine.level)
   const cap = maxBatch(machine.key, machine.level)
   const activeJobs = machine.jobs.filter((j) => j.state !== 'collected')
@@ -46,8 +48,14 @@ function MachineRow({ machine, now, locale, onCollect, onOpenRecipeBox, collecti
   return (
     <div
       data-testid={`machine-row-${machine.id}`}
+      data-focused={focused}
       className="flex flex-col gap-2 rounded-xl p-3"
-      style={{ background: DINER.board, color: DINER.boardInk, boxShadow: PRINT_SHADOW }}
+      style={{
+        background: DINER.board,
+        color: DINER.boardInk,
+        boxShadow: PRINT_SHADOW,
+        outline: focused ? `2px solid ${DINER.teal}` : undefined,
+      }}
     >
       <div className="flex items-center justify-between">
         <h3 className="font-black uppercase tracking-wide" style={{ color: DINER.mustard }}>
@@ -115,6 +123,8 @@ function MachineRow({ machine, now, locale, onCollect, onOpenRecipeBox, collecti
 export interface MachineQueuesProps {
   /** Открывает Recipe Box (K2) для постановки блюда — композиция решает, как показать оверлей. */
   onQueueDish: (machineId: UUID) => void
+  /** Станок-фокус (клик по нему в сцене, `ui.kitchenMachineId`) — подсвечивает его строку. */
+  focusMachineId?: UUID | null
 }
 
 /** Тик перерисовки таймеров (не источник истины — только частота ре-рендера, §3.6). */
@@ -124,7 +134,7 @@ const TICK_MS = 1000
 // useSyncExternalStore «infinite loop» при null-farm.
 const EMPTY_MACHINES: MachineInstance[] = []
 
-export function MachineQueues({ onQueueDish }: MachineQueuesProps) {
+export function MachineQueues({ onQueueDish, focusMachineId }: MachineQueuesProps) {
   const locale = useStore((s) => s.ui.locale)
   const machines = useStore((s) => s.farm?.machines ?? EMPTY_MACHINES)
   const serverNow = useStore((s) => s.serverNow)
@@ -179,6 +189,7 @@ export function MachineQueues({ onQueueDish }: MachineQueuesProps) {
               onOpenRecipeBox={onQueueDish}
               onCollect={(jobIds) => void collect(m.id, jobIds)}
               collecting={collectingId === m.id}
+              focused={focusMachineId != null && m.id === focusMachineId}
             />
           ))}
         </div>

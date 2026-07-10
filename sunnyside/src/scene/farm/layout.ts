@@ -54,6 +54,9 @@ export const BUILDING_LAYOUT: Partial<Record<BuildingKey, [number, number, numbe
 /** Постройки, клик по которым ведёт в кухонный оверлей (04-machines / 19-ui-ux §3.3). */
 export const KITCHEN_BUILDINGS: readonly BuildingKey[] = ['bld_kitchen', 'bld_diner']
 
+/** Постройки, клик по которым открывает Storage (F4, 19-ui-ux §3.2 — Silo & Icehouse). */
+export const STORAGE_BUILDINGS: readonly BuildingKey[] = ['bld_silo', 'bld_icehouse']
+
 /** Якорь ряда станков (перед кухней). Станки выстраиваются вправо по X. */
 export const MACHINE_ANCHOR: readonly [number, number, number] = [3.4, 0.5, -3.6]
 export const MACHINE_SPACING = 1.7

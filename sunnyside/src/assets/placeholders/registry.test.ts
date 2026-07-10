@@ -55,6 +55,7 @@ describe('assetRegistry — покрытие и целостность', () => {
       'mch_steam_kettle',
       'an_hen',
       'an_turkey',
+      'an_sheep',
       'tp_ferris_wheel_stage3',
       'st_california',
       'toy_diner_mascots_chase',

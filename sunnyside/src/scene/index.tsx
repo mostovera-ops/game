@@ -6,19 +6,40 @@
  */
 
 import type { SceneKey } from '@/types'
+import type { ShiftSystem } from '@/engine/contracts'
 import { FarmScene } from './farm/FarmScene'
+import type { InjectedSystems } from './farm/systems'
 import { TownScene } from './town/TownScene'
+import type { TownSystems } from './town/townSystemsFallback'
 import { FairScene } from './fair/FairScene'
 import { ShiftScene } from './shift/ShiftScene'
 
-export function ActiveScene({ active }: { active: SceneKey }) {
+export function ActiveScene({
+  active,
+  farmSystems,
+  townSystems,
+  shiftSystem,
+}: {
+  active: SceneKey
+  /**
+   * Реальные `FarmSystem`/`AnimalSystem` (farm-ui-seams) — композиция (`App.tsx`) строит их
+   * один раз и прокидывает сюда, чтобы клики фермы уходили на `BackendAdapter`, а не только
+   * в локальный оптимистичный кэш (`scene/farm/systems.tsx`).
+   */
+  farmSystems?: InjectedSystems
+  /** Реальные `SocialSystem`/`MailForagingSystem` (adapter-seams) — визит/помощь/подарок,
+   *  форажинг обочины в `TownScene` (см. `scene/town/townSystemsFallback.ts`). */
+  townSystems?: TownSystems
+  /** Реальная `ShiftSystem` (adapter-seams) — `shift_submit` из смены прилавка (ярмарка). */
+  shiftSystem?: ShiftSystem
+}) {
   switch (active) {
     case 'farm':
-      return <FarmScene />
+      return <FarmScene systems={farmSystems} />
     case 'town':
-      return <TownScene />
+      return <TownScene systems={townSystems} />
     case 'fair':
-      return <FairScene />
+      return <FairScene shiftSystem={shiftSystem} />
     case 'shift':
       return <ShiftScene />
   }

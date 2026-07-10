@@ -68,7 +68,7 @@
  *
  * `demandCategory` и `assetKey` здесь не заполняются: 05-ingredients.md не фиксирует
  * ни одного, ни другого по позициям (деманд-категории — открытый вопрос `09-fair.md`;
- * `assetKey` — зона владения арт/сцен-агента, `scene/assets/registry.ts`, AGENTS.md §5).
+ * `assetKey` — зона владения арт/сцен-агента, `src/assets/placeholders/registry.ts`, AGENTS.md §5).
  * Оба поля optional в схеме — их отсутствие валидно.
  */
 

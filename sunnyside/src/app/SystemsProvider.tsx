@@ -7,6 +7,12 @@
  * на всё время жизни приложения (мемоизирован), так что подписки/эффекты панелей не
  * пересоздаются.
  *
+ * Системы, нужные СЦЕНЕ (внутри `<Canvas>`, вне этого дерева) — `FarmSystem`/`AnimalSystem`
+ * (farm-ui-seams), `SocialSystem`/`MailForagingSystem`/`ShiftSystem` (adapter-seams) — идут
+ * НЕ через этот провайдер, а пропами через `scene/index.tsx` (`ActiveScene`), см. `App.tsx`:
+ * там же строится ОДИН `AppSystems`, который передаётся и сюда (`systems={...}`), и в сцену —
+ * не дублируем сборку.
+ *
  * ГРАНИЦА: это композиция (`src/app/**`, вне правил `lint:boundary`) — единственное
  * место, где `ui/`-провайдеры встречаются со сборкой систем из `@/engine` + `@/net`.
  */
@@ -14,6 +20,7 @@
 import { useMemo, type ReactNode } from 'react'
 import { CraftSystemProvider } from '@/ui/kitchen'
 import { InventorySystemProvider } from '@/ui/inventory'
+import { FarmSystemProvider } from '@/ui/farm'
 import { FairSystemProvider } from '@/ui/market'
 import { CoopSystemProvider } from '@/ui/orders'
 import { EventSystemProvider } from '@/ui/event'
@@ -47,13 +54,15 @@ export function SystemsProvider({
               <SocialSystemProvider value={sys.social}>
                 <ProgressionSystemProvider value={sys.progression}>
                   <BuildingsSystemProvider value={sys.farm}>
-                    <CollectionSystemProvider value={sys.collection}>
-                      <ShopSystemProvider
-                        value={{ collection: sys.collection, monetization: sys.monetization }}
-                      >
-                        {children}
-                      </ShopSystemProvider>
-                    </CollectionSystemProvider>
+                    <FarmSystemProvider value={sys.farm}>
+                      <CollectionSystemProvider value={sys.collection}>
+                        <ShopSystemProvider
+                          value={{ collection: sys.collection, monetization: sys.monetization }}
+                        >
+                          {children}
+                        </ShopSystemProvider>
+                      </CollectionSystemProvider>
+                    </FarmSystemProvider>
                   </BuildingsSystemProvider>
                 </ProgressionSystemProvider>
               </SocialSystemProvider>

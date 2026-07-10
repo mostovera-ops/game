@@ -28,10 +28,15 @@ function collectConsoleErrors(page: Page): string[] {
 const SCENES = ['farm', 'town', 'fair', 'shift'] as const
 
 /**
- * Канон-панели `ui_*`, реально смонтированные в модальном каркасе (PanelHost +
- * OverlayHost для ui_notif_log). Пять ключей (ui_shift/ui_daily_specials/
- * ui_moving_truck/ui_regulars_club/ui_expeditions) — задокументированный TODO
- * профильных ui-агентов, ещё не монтируются, поэтому в смоук не включены.
+ * Канон-панели `ui_*`, реально смонтированные в модальном каркасе (PanelHost + OverlayHost
+ * для ui_notif_log). Четыре ключа (ui_daily_specials/ui_moving_truck/ui_regulars_club/
+ * ui_expeditions) — задокументированный TODO профильных ui-агентов, ещё не монтируются,
+ * поэтому в смоук не включены.
+ *
+ * `ui_shift` — унифицирован на общем `Modal`/`ui.activePanel` (modal-unify), но своя Modal
+ * смонтирована не в `PanelHost`, а в `ui/shift/ShiftHost` (вариант `fullscreen`), которую
+ * монтирует ТОЛЬКО сцена ярмарки (`scene/fair/FairScene.tsx`) — проверяется отдельно, с
+ * `?screen=fair`, см. `панели через ?panel= на сцене fair` ниже.
  */
 const PANELS = [
   'ui_notif_log',
@@ -120,4 +125,20 @@ test.describe('панели через ?panel=', () => {
       expect(errors, `console errors on ?panel=${panel}:\n${errors.join('\n')}`).toHaveLength(0)
     })
   }
+})
+
+test.describe('панель ui_shift через ?panel= на сцене fair', () => {
+  test('панель «ui_shift» открывается через ?screen=fair&panel=ui_shift', async ({ page }) => {
+    const errors = collectConsoleErrors(page)
+    await page.goto('/?screen=fair&panel=ui_shift')
+
+    // Модалка панели смонтирована и видима (общий каркас Modal → data-testid=modal-<key>),
+    // хотя сама она собрана в ui/shift/ShiftHost, а не в PanelHost.
+    await expect(page.getByTestId('modal-ui_shift')).toBeVisible()
+    await expect(page.getByTestId('modal-close-ui_shift')).toBeAttached()
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('modal-ui_shift')).toHaveCount(0)
+
+    expect(errors, `console errors on ?screen=fair&panel=ui_shift:\n${errors.join('\n')}`).toHaveLength(0)
+  })
 })

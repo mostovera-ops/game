@@ -8,7 +8,6 @@ import {
   constructionScale,
   farmPosition,
   FORAGE_ASSET_BY_KIND,
-  groupRosterByStreet,
   layoutForagePoints,
   orderedStreets,
   PROJECT_RING_ORDER,
@@ -17,7 +16,6 @@ import {
   ringPosition,
   streetAngle,
   streetSignPosition,
-  type RosterEntry,
 } from './layout'
 import type { Street, TownProject } from '@/types'
 
@@ -117,23 +115,7 @@ describe('farmPosition', () => {
   })
 })
 
-describe('groupRosterByStreet / orderedStreets', () => {
-  const roster: RosterEntry[] = [
-    { userId: 'u2', farmId: 'f2', displayName: 'Betty', streetId: 's1' },
-    { userId: 'u1', farmId: 'f1', displayName: 'Frank', streetId: 's1' },
-    { userId: 'u3', farmId: 'f3', displayName: 'Marge', streetId: 's2' },
-  ]
-
-  it('группирует по streetId и сортирует по farmId детерминированно', () => {
-    const grouped = groupRosterByStreet(roster)
-    expect(grouped.get('s1')?.map((r) => r.farmId)).toEqual(['f1', 'f2'])
-    expect(grouped.get('s2')?.map((r) => r.farmId)).toEqual(['f3'])
-  })
-
-  it('пустой ростер → пустая карта', () => {
-    expect(groupRosterByStreet([]).size).toBe(0)
-  })
-
+describe('orderedStreets', () => {
   it('orderedStreets стабилен по id (не зависит от порядка снапшота)', () => {
     const streets: Street[] = [
       { id: 'street-b', name: 'Cherry Lane', memberCount: 1, farmIds: [] },

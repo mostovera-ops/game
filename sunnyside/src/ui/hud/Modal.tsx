@@ -20,8 +20,13 @@ export interface ModalProps {
   /** Заголовок в стиле letterboard-kicker. */
   title: string
   children: ReactNode
-  /** SHEET (снизу, мобиле-стиль) vs OVERLAY (центр) — 19-ui-ux §3.0. По умолчанию overlay. */
-  variant?: 'overlay' | 'sheet'
+  /**
+   * SHEET (снизу, мобиле-стиль) vs OVERLAY (центр) — 19-ui-ux §3.0. По умолчанию overlay.
+   * FULLSCREEN — полноэкранный оверлей без диммера/карточки-рамки (мини-геймплей вроде
+   * `ui_shift`: контент сам рисует фон/раскладку) — крестик-закрытие и общий z-порядок
+   * сохраняются, только чуть иначе расположен крестик (верхний правый угол поверх контента).
+   */
+  variant?: 'overlay' | 'sheet' | 'fullscreen'
 }
 
 export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalProps) {
@@ -58,6 +63,35 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
   }, [active, openPanel])
 
   if (!active) return null
+
+  if (variant === 'fullscreen') {
+    // `absolute` (не `fixed`): fullscreen-панели могут монтироваться внутри drei <Html> поверх
+    // канваса (напр. `ui_shift` в scene/fair) — контейнер <Html> имеет инлайновый CSS `transform`,
+    // который создаёт containing block для `position: fixed`-потомков (спека CSS), из-за чего
+    // `fixed inset-0` считал бы отступы от чужого маленького бокса, а не от вьюпорта, и элемент
+    // становился «hidden» для Playwright. `absolute inset-0` внутри полноэкранного `<Html
+    // fullscreen>` покрывает весь вьюпорт корректно (тот же приём, что раньше был у ShiftScreen).
+    return (
+      <div
+        data-testid={`modal-${panelKey}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="absolute inset-0 z-50 pointer-events-auto"
+      >
+        <button
+          type="button"
+          data-testid={`modal-close-${panelKey}`}
+          aria-label="Close"
+          onClick={() => openPanel(null)}
+          className="absolute right-3 top-3 z-10 rounded-full bg-black/40 px-2 py-1 text-base leading-none text-white opacity-80 hover:opacity-100"
+        >
+          ✕
+        </button>
+        {children}
+      </div>
+    )
+  }
 
   const sheet = variant === 'sheet'
 

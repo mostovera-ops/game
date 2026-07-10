@@ -10,9 +10,22 @@
  * Каждая Modal рендерит `null`, пока `activePanel !== panelKey` (см. `Modal`), поэтому
  * держать их все смонтированными дёшево — открыта максимум одна (правило навигации #2).
  *
- * Панели без готового компонента в текущем скоупе (`ui_shift` — оверлей смены живёт в
- * `scene/fair`; `ui_daily_specials`/`ui_moving_truck`/`ui_regulars_club`/`ui_expeditions`)
- * пока не монтируются — их заведут профильные ui-агенты (TODO(c3) в их зонах).
+ * `ui_shift` — ОСОБЫЙ СЛУЧАЙ: тоже унифицирован на `Modal`/`ui.activePanel` (modal-unify), но
+ * своя Modal смонтирована не здесь, а в `ui/shift/ShiftHost` (варинт `fullscreen`), которую
+ * сцена ярмарки монтирует через `<Html>` (`scene/fair/FairScene.tsx`) — панель-мини-геймплей
+ * требует полноэкранного DOM-дерева поверх канваса, а не карточки в этом хосте. Источник
+ * истины по-прежнему один (`ui.activePanel === 'ui_shift'`), крестик/Escape/«Назад»/z-порядок
+ * — из общего `Modal`, дип-линк `?panel=ui_shift` работает как у остальных панелей.
+ *
+ * Панели без готового компонента в текущем скоупе (`ui_daily_specials`/`ui_moving_truck`/
+ * `ui_regulars_club`/`ui_expeditions`) пока не монтируются — их заведут профильные ui-агенты
+ * (TODO(c3) в их зонах).
+ *
+ * FARM-UI-SEAMS: `ui_recipe_box` теперь хостит K1 Machine Queues + K2 Recipe Box
+ * (`KitchenPanel` ниже) — раньше был смонтирован только K2, а K1 не был достижим из
+ * running app. F1 Seed Picker (`SeedPicker`) и F4 Storage (`StorageHost`) — контекстные
+ * `SHEET` без canon-ключа (см. их докстринги) — не через `Modal`/`activePanel`, но
+ * смонтированы здесь же (композиция — единственное место, где панели встречают системы).
  *
  * УСТОЙЧИВОСТЬ (интегратор C3):
  *  - ВСЕ Modal смонтированы С НАЧАЛА (неактивные = `null` внутри), поэтому дип-линк/клик
@@ -25,11 +38,14 @@
  *    панели показывает тёплый фолбэк, а не гасит весь HUD/сцену.
  */
 
-import { Component, type ReactNode } from 'react'
+import { Component, useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '@/state'
 import { Modal } from '@/ui/hud/Modal'
-import type { Bilingual, Locale, UiScreenKey } from '@/types'
-import { RecipeBox } from '@/ui/kitchen'
+import type { Bilingual, Locale, UUID, UiScreenKey } from '@/types'
+import { MachineQueues, RecipeBox } from '@/ui/kitchen'
+import { StorageOverlay } from '@/ui/inventory'
+import { SeedPicker } from '@/ui/farm'
+import { useBuildingsSystem } from '@/ui/progression'
 import { DemandBoardScreen, FairStall } from '@/ui/market'
 import { CoopOrders, Potluck } from '@/ui/orders'
 import { ContributionLedger } from '@/ui/event'
@@ -93,6 +109,78 @@ class PanelBoundary extends Component<
   }
 }
 
+/**
+ * KitchenPanel — единая Kitchen-панель (canon `ui_recipe_box`, farm-ui-seams): хостит
+ * K1 Machine Queues И K2 Recipe Box в одном модальном каркасе — Kitchen/K1 не имеет
+ * ОТДЕЛЬНОГО canon-ключа (AGENTS.md §0.7, не выдумываем ключ сущности без PR в
+ * `00-canon.md`), поэтому обе панели кухни живут под единственным существующим
+ * `ui_recipe_box`, переключаясь локальным видом.
+ *
+ * Клик по станку в сцене (`Machines.tsx` → `useFarmActions().openKitchen(machineId)` →
+ * `ui.kitchenMachineId`) открывает панель на K1 с подсветкой его строки (§MachineQueues
+ * `focusMachineId`). «Queue dish» в K1 — переключает на K2, отфильтрованную под этот
+ * станок (`RecipeBox.machineId`, уже поддерживалось); «Закрыть» в К2 возвращает к K1
+ * (крестик самой Modal — единственный, кто закрывает панель целиком).
+ */
+function KitchenPanel() {
+  const activePanel = useStore((s) => s.ui.activePanel)
+  const kitchenMachineId = useStore((s) => s.ui.kitchenMachineId)
+  const [view, setView] = useState<'queues' | 'recipes'>('queues')
+  const [recipeMachineId, setRecipeMachineId] = useState<UUID | undefined>(undefined)
+
+  // Каждое (пере)открытие панели — заново с обзора очередей (K1), не залипаем на прошлом K2.
+  useEffect(() => {
+    if (activePanel === 'ui_recipe_box') {
+      setView('queues')
+      setRecipeMachineId(undefined)
+    }
+  }, [activePanel])
+
+  if (view === 'recipes') {
+    return <RecipeBox machineId={recipeMachineId} onClose={() => setView('queues')} />
+  }
+  return (
+    <MachineQueues
+      focusMachineId={kitchenMachineId}
+      onQueueDish={(machineId) => {
+        setRecipeMachineId(machineId)
+        setView('recipes')
+      }}
+    />
+  )
+}
+
+/**
+ * StorageHost — F4 Storage (farm-ui-seams): клик по Silo/Icehouse в сцене
+ * (`Buildings.tsx` → `useFarmActions().openStorage()` → `ui.storageOpen`) открывает эту
+ * карточку. F4 — контекстный `POI → SHEET` без canon `ui_*` ключа (как F1 Seed Picker,
+ * см. `ui/farm/SeedPicker.tsx`) — самостоятельный backdrop, не через общий `Modal`/
+ * `ui.activePanel`. Upgrade — через `BuildingsSystem` (тот же узкий срез `FarmSystem`,
+ * что и F3 Building Upgrade); Gift/Potluck compose — отдельный шов (не в этом скоупе).
+ */
+function StorageHost() {
+  const open = useStore((s) => s.ui.storageOpen)
+  const buildingsSystem = useBuildingsSystem()
+  const close = () => useStore.getState().setStorageOpen(false)
+
+  if (!open) return null
+
+  return (
+    <div
+      data-testid="modal-ui_storage"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center"
+      onClick={close}
+    >
+      <div onClick={(e) => e.stopPropagation()}>
+        <StorageOverlay
+          onClose={close}
+          onUpgrade={(kind) => void buildingsSystem.upgradeBuilding(kind === 'silo' ? 'bld_silo' : 'bld_icehouse')}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function PanelHost() {
   const locale = useStore((s) => s.ui.locale)
   const activePanel = useStore((s) => s.ui.activePanel)
@@ -112,7 +200,7 @@ export function PanelHost() {
       {panel('ui_demand_board', <DemandBoardScreen />)}
       {panel('ui_coop_orders', <CoopOrders />)}
       {panel('ui_potluck', <Potluck />)}
-      {panel('ui_recipe_box', <RecipeBox onClose={close} />)}
+      {panel('ui_recipe_box', <KitchenPanel />)}
       {panel('ui_fair_stall', <FairStall />)}
       {panel('ui_appetite_meter', <ContributionLedger />)}
       {panel('ui_prize_machine', <PrizeMachine />)}
@@ -132,6 +220,11 @@ export function PanelHost() {
           onClose={close}
         />,
       )}
+
+      {/* F1 Seed Picker / F4 Storage — контекстные SHEET без canon-ключа (см. докстринги
+          `SeedPicker`/`StorageHost` выше): свои backdrop'ы, не через `Modal`/`activePanel`. */}
+      <SeedPicker />
+      <StorageHost />
     </>
   )
 }

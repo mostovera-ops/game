@@ -3,8 +3,10 @@
  *
  * Рендерит заглушку земли (`plot_field_*`) + культуру (`crop_*`) по реестру. Клик разрешает
  * контекст-действие (посев/полив/сбор) из состояния грядки (чистая `interactions.ts`) и
- * диспатчит его через `useFarmActions`. Сбор проигрывает «pop» (масштаб-твин), растущая
- * культура покачивается, готовая — «дышит». Курсор-подсказка на ховере.
+ * диспатчит его через `useFarmActions`. Пустая грядка → `pickSeed` открывает Seed Picker
+ * (`ui/farm/SeedPicker`, F1 19-ui-ux §3.2) вместо хардкода культуры — сам посев уходит через
+ * `FarmSystem`/adapter. Сбор проигрывает «pop» (масштаб-твин), растущая культура покачивается,
+ * готовая — «дышит». Курсор-подсказка на ховере.
  *
  * Позицию слота задаёт родитель (`PlotField`); здесь всё локально к грядке.
  */
@@ -19,9 +21,6 @@ import { cropAssetId, plotAssetId } from './assetMap'
 import { growthProgress, plotVisualState, resolvePlotAction } from './interactions'
 import { growScale, popTick, readyPulse, swayRotation } from './anim'
 import { useFarmActions } from './systems'
-
-/** Демо-семя для пустой грядки (реальный Seed Picker — оверлей F1, ui-агент). */
-const DEFAULT_SEED = 'crop_tomato'
 
 /** База высоты культуры над грядкой (чтобы не тонула в земле). */
 const CROP_BASE_Y = 0.28
@@ -86,7 +85,9 @@ export function Plot({ plot }: { plot: PlotData }) {
       // Запускаем pop; harvest диспатчится по завершении анимации (см. useFrame).
       if (popStart.current == null) popStart.current = performance.now()
     } else if (action === 'sow') {
-      actions.sow(plot.slot, DEFAULT_SEED)
+      // F1 Seed Picker (farm-ui-seams): открываем выбор культуры вместо хардкода —
+      // сам посев (через FarmSystem/adapter) делает `ui/farm/SeedPicker`.
+      actions.pickSeed(plot.slot)
     } else if (action === 'water') {
       actions.water([plot.id])
     }

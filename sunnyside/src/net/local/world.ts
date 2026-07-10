@@ -179,6 +179,14 @@ export const LOCAL_NPC_COUNT = 25
 /** Имена стритов берём из канонного пула §3.3 (первые — референс-город). */
 const STREET_NAMES = ['Maple Street', 'Cherry Lane', 'Honey Road', 'Chrome Avenue']
 
+/** Кол-во стритов города: 25 соседей + игрок → 2 стрита (canon §2.4: 10–20 ферм/стрит). */
+const STREET_COUNT = 2
+
+/** Детерминированные id стритов (`${townId}-street-N`) — стабильны между запусками. */
+function streetIdsFor(townId: UUID): UUID[] {
+  return Array.from({ length: STREET_COUNT }, (_, s) => `${townId}-street-${s}`)
+}
+
 /** Детеминированный id: `${prefix}-${townSeed}-${n}` (стабилен между запусками). */
 export function makeId(world: Pick<LocalWorld, 'townSeed'>, prefix: string, n: number): UUID {
   return `${prefix}-${world.townSeed.toString(16)}-${n}`
@@ -204,23 +212,23 @@ function genNpcs(townId: UUID, townSeed: number, streetIds: UUID[]): LocalNpc[] 
   return out
 }
 
-function genStreets(townId: UUID, npcCount: number): { streets: Street[]; streetIds: UUID[] } {
-  // 25 соседей + игрок → 2 стрита (canon §2.4: 10–20 ферм на стрит).
-  const streetCount = 2
-  const streets: Street[] = []
-  const streetIds: UUID[] = []
-  const per = Math.ceil((npcCount + 1) / streetCount)
-  for (let s = 0; s < streetCount; s++) {
-    const id = `${townId}-street-${s}`
-    streetIds.push(id)
-    streets.push({
+/**
+ * Собрать стриты, НАСЕЛЁННЫЕ фермами соседей: `Street.farmIds` = фермы npc, чей `streetId`
+ * указывает на этот стрит (стабильный порядок — по индексу npc). `memberCount` = число
+ * этих ферм. Town-сцена рендерит фермы прямо из `farmIds` (без обходного группирования
+ * ростера — canon §2.4: улица знает свои фермы). Игрок в ростер/`farmIds` не входит
+ * (его ферма — отдельный маркер сцены), поэтому счётчик считает только соседей.
+ */
+function genStreets(streetIds: UUID[], npcs: readonly LocalNpc[]): Street[] {
+  return streetIds.map((id, s) => {
+    const farmIds = npcs.filter((n) => n.streetId === id).map((n) => n.farmId)
+    return {
       id,
       name: STREET_NAMES[s] ?? `Street ${s + 1}`,
-      memberCount: per,
-      farmIds: [],
-    })
-  }
-  return { streets, streetIds }
+      memberCount: farmIds.length,
+      farmIds,
+    }
+  })
 }
 
 /** Начальные грядки (House Ур.1 = 6 грядок, buildings.ts эффект-текст). */
@@ -252,11 +260,25 @@ function starterAnimals(prefix: string): Animal[] {
   ]
 }
 
-function starterForage(prefix: string): ForagePoint[] {
-  return [
-    { id: `${prefix}-forage-0`, kind: 'mushroom', itemKey: 'crop_mushroom', remaining: 5 },
-    { id: `${prefix}-forage-1`, kind: 'berry', itemKey: 'crop_wild_berry', remaining: 5 },
+/**
+ * Точки фуражинга обочины (mech_foraging, 08-mail-foraging §3.2). ID-схема `forage-<townId>-
+ * <i>` НАМЕРЕННО зеркалит `scene/town/layout.ts` `layoutForagePoints(townId)` (adapter-seams):
+ * сцена не гидрирует реальный `MailForagingSnapshot.foragePoints` (нет ещё net-bootstrap
+ * подписки на снапшот в этой зоне), а рисует детерминированный клиентский плейсхолдер той же
+ * формы — но с ЭТИМ ЖЕ id, чтобы клик реально резолвил ту же точку на сервере вместо честного
+ * always-404. Число точек (`count`) должно совпадать с дефолтом `layoutForagePoints` (6).
+ */
+function starterForage(townId: UUID, count = 6): ForagePoint[] {
+  const kinds: { kind: ForagePoint['kind']; itemKey: string }[] = [
+    { kind: 'mushroom', itemKey: 'crop_mushroom' },
+    { kind: 'berry', itemKey: 'crop_wild_berry' },
+    { kind: 'herb', itemKey: 'crop_wild_herb' },
+    { kind: 'flower', itemKey: 'crop_wildflower' },
   ]
+  return Array.from({ length: count }, (_, i) => {
+    const k = kinds[i % kinds.length]!
+    return { id: `forage-${townId}-${i}`, kind: k.kind, itemKey: k.itemKey, remaining: 5 }
+  })
 }
 
 const ZERO_FARM_VALUE: FarmValueAxes = { production: 0, buildings: 0, collections: 0, cosmetics: 0, total: 0 }
@@ -270,8 +292,9 @@ export function createInitialWorld(userId: UUID, townId: UUID, now: EpochMs): Lo
   const townSeed = hashSeed(0, townId)
   const prefix = `w-${townSeed.toString(16)}`
 
-  const { streets, streetIds } = genStreets(townId, LOCAL_NPC_COUNT)
+  const streetIds = streetIdsFor(townId)
   const npcs = genNpcs(townId, townSeed, streetIds)
+  const streets = genStreets(streetIds, npcs)
 
   const plots: Plot[] = []
   for (let i = 0; i < STARTER_PLOTS; i++) {
@@ -327,7 +350,7 @@ export function createInitialWorld(userId: UUID, townId: UUID, now: EpochMs): Lo
 
     expeditions: [],
     mailOrders: [],
-    foragePoints: starterForage(prefix),
+    foragePoints: starterForage(townId),
 
     knowHow: { points: 0, activeSlots: 1, nodes: {} },
     staff: {},

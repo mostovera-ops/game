@@ -94,23 +94,6 @@ export interface RosterEntry {
   streetId: string
 }
 
-/**
- * Сгруппировать ростер по стриту (canon §2.4: улицы наполняются жителями напрямую из
- * ростера — `Street.farmIds` в net/local/world.ts на сегодня не наполняется отдельно,
- * см. TODO(net-local) в TownScene.tsx). Стабильный порядок — по `farmId` (детерминизм
- * раскладки между рендерами).
- */
-export function groupRosterByStreet(roster: readonly RosterEntry[]): Map<string, RosterEntry[]> {
-  const out = new Map<string, RosterEntry[]>()
-  for (const entry of roster) {
-    const list = out.get(entry.streetId)
-    if (list) list.push(entry)
-    else out.set(entry.streetId, [entry])
-  }
-  for (const list of out.values()) list.sort((a, b) => (a.farmId < b.farmId ? -1 : a.farmId > b.farmId ? 1 : 0))
-  return out
-}
-
 /** Стриты в стабильном порядке рендера (по `id`, не зависит от порядка снапшота). */
 export function orderedStreets(streets: readonly Street[]): Street[] {
   return [...streets].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))

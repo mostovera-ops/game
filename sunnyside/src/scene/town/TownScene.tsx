@@ -6,17 +6,20 @@
  * ГРАНИЦА (AGENTS.md §3): читает `state` селекторами, вызывает системы (`engine`).
  * Ноль `@/net` — раскладка/логика вынесены в `layout.ts` (чистые функции) и подкомпоненты.
  *
- * TODO(mail-foraging-owner, social-owner, net-bootstrap): «клик → собрать через adapter»
- * и «помощь/подарок через adapter» упираются в отсутствующую инфраструктуру ВНЕ этой зоны:
- *  - `MailForagingSystem`/`SocialSystem` (engine/contracts.ts) пока не имеют фабрик
- *    (`engine/mail-foraging/system.ts`, `engine/social/system.ts` не существуют);
- *  - `main.tsx` ещё не создаёт `BackendAdapter`/`SystemContext` и не прокидывает их сцене
- *    (см. TODO в main.tsx — «шаги 2–6» бутстрапа сети).
- * Сцена не имеет права дёрнуть `@/net` напрямую (лит-страж `pnpm lint:boundary`), поэтому
- * оба обработчика ниже — честный, задокументированный шов: локальный оптимистичный отклик
- * (тост + локальное состояние), без начисления наград (истина — только с сервера,
- * AGENTS.md §0.3). Когда системы/бутстрап появятся — правки только в `handleHelp`/
- * `handleGift`/`handleForageCollect`, вся раскладка и клики уже готовы.
+ * СИСТЕМЫ (adapter-seams, зеркалит `scene/farm/systems.tsx` farm-ui-seams — прокидка
+ * ЧЕРЕЗ ПРОПЫ, а не ambient-контекст поверх `<Canvas>`): композиция строит `AppSystems`
+ * один раз в `App.tsx` и прокидывает `{ social, mailForaging }` сюда через `scene/index.tsx`
+ * (`ActiveScene`). Без пропа (юниты/сторибук сцены) — тёплый no-op фолбэк ниже: клики
+ * дают тост-отклик, но НЕ уходят на сервер (истинный путь — только с реальными системами).
+ *
+ * `handleHelp`/`handleGift`/`handleForageCollect` — реальные RPC (`help_neighbor`/
+ * `gift_send`/`forage_collect`), не локальная тост-симуляция: истина (кошелёк/сток/
+ * дневной лимит) — с сервера, клиент не начисляет награду сам (AGENTS.md §0.3). Провала
+ * нет (P3) — отказ адаптера (оффлайн/лимит/нет стока) гасится тёплым тостом, не красным.
+ *
+ * Точки фуражинга — детерминированный клиентский плейсхолдер (`layoutForagePoints`,
+ * см. `layout.ts`), но с ID-схемой, зеркалящей `starterForage` local-мира (`forage-
+ * <townId>-<i>`) — клик реально резолвит ту же точку на сервере (а не «честный» 404).
  */
 
 import { useMemo, useState } from 'react'
@@ -29,16 +32,19 @@ import { Streets, type VisitTarget } from './Streets'
 import { ForagePoints } from './ForagePoints'
 import { FarmVisitPanel } from './FarmVisitPanel'
 import { layoutForagePoints } from './layout'
+import { NOOP_TOWN_SYSTEMS, type TownSystems } from './townSystemsFallback'
 
 /** Дневной лимит помощи — гипотеза 11-town §3.3.2/§4.1 (20/день). Локальная UX-подсказка,
  *  истина лимита — серверная (не считаем награду сами, AGENTS.md §0.3). */
 const HELP_DAILY_LIMIT_HYPOTHESIS = 20
 
-export function TownScene() {
+export function TownScene({ systems }: { systems?: TownSystems } = {}) {
   const town = useStore((s) => s.town)
   const ownFarmId = useStore((s) => s.session.identity?.farmId)
+  const inventory = useStore((s) => s.inventory)
   const pushToast = useStore((s) => s.pushToast)
   const serverNow = useStore((s) => s.serverNow)
+  const { social, mailForaging } = systems ?? NOOP_TOWN_SYSTEMS
 
   const [selectedFarm, setSelectedFarm] = useState<VisitTarget | null>(null)
   const [collectedForageIds, setCollectedForageIds] = useState<ReadonlySet<string>>(new Set())
@@ -54,7 +60,7 @@ export function TownScene() {
     setSelectedFarm(null)
   }
 
-  function handleHelp(type: HelpActionType) {
+  async function handleHelp(type: HelpActionType) {
     if (!selectedFarm) return
     if (helpsUsedToday >= HELP_DAILY_LIMIT_HYPOTHESIS) {
       pushToast({
@@ -66,39 +72,64 @@ export function TownScene() {
       })
       return
     }
-    // TODO(social-owner): заменить на SocialSystem.help(selectedFarm.farmId, type) —
-    // см. шапку файла.
-    setHelpsUsedToday((n) => n + 1)
+    const res = await social.help(selectedFarm.userId, type)
+    if (res.ok) setHelpsUsedToday((n) => n + 1)
     pushToast({
       id: `visit-help-${type}-${serverNow()}`,
-      kind: 'success',
-      message: `Помог(ла) соседу «${selectedFarm.displayName}»`,
+      kind: res.ok ? 'success' : 'info',
+      message: res.ok
+        ? `Помог(ла) соседу «${selectedFarm.displayName}»`
+        : 'Не получилось помочь — попробуй ещё раз',
       createdAt: serverNow(),
       ttlMs: 4000,
     })
   }
 
-  function handleGift() {
+  async function handleGift() {
     if (!selectedFarm) return
-    // TODO(social-owner): заменить на SocialSystem.gift(selectedFarm.farmId, itemKey, qty) —
-    // см. шапку файла (требует ещё Gift compose — выбор стака из склада, F4/11-town §3.4).
+    // Быстрый подарок: первый непустой стек склада, 1 шт. Выбор конкретного стака игроком
+    // (Gift compose, F4/11-town §3.4) — отдельная UI-задача вне этого шва (adapter-seams
+    // отвечает только за проводку мутации в adapter, не за экран выбора подарка).
+    const stack = inventory?.stacks.find((s) => s.qty > 0)
+    if (!stack) {
+      pushToast({
+        id: `visit-gift-empty-${serverNow()}`,
+        kind: 'info',
+        message: 'Нечего дарить — сначала наготовь',
+        createdAt: serverNow(),
+        ttlMs: 4000,
+      })
+      return
+    }
+    const res = await social.gift(selectedFarm.userId, stack.key, 1)
     pushToast({
       id: `visit-gift-${serverNow()}`,
-      kind: 'success',
-      message: `Подарок отправлен соседу «${selectedFarm.displayName}»`,
+      kind: res.ok ? 'success' : 'info',
+      message: res.ok
+        ? `Подарок отправлен соседу «${selectedFarm.displayName}»`
+        : 'Не получилось отправить подарок — попробуй ещё раз',
       createdAt: serverNow(),
       ttlMs: 4000,
     })
   }
 
-  function handleForageCollect(pointId: string) {
-    // TODO(mail-foraging-owner): заменить на MailForagingSystem.forageClaim/forageCollect —
-    // см. шапку файла.
-    setCollectedForageIds((prev) => new Set(prev).add(pointId))
+  async function handleForageCollect(pointId: string) {
+    const res = await mailForaging.forageCollect(pointId)
+    if (res.ok) {
+      setCollectedForageIds((prev) => new Set(prev).add(pointId))
+      pushToast({
+        id: `forage-${pointId}-${serverNow()}`,
+        kind: 'success',
+        message: 'Собрано на обочине!',
+        createdAt: serverNow(),
+        ttlMs: 3000,
+      })
+      return
+    }
     pushToast({
-      id: `forage-${pointId}-${serverNow()}`,
-      kind: 'success',
-      message: 'Собрано на обочине!',
+      id: `forage-${pointId}-fail-${serverNow()}`,
+      kind: 'info',
+      message: 'Не получилось собрать — попробуй ещё раз',
       createdAt: serverNow(),
       ttlMs: 3000,
     })
@@ -135,6 +166,7 @@ export function TownScene() {
             onHelp={handleHelp}
             onGift={handleGift}
             helpsLeftToday={Math.max(0, HELP_DAILY_LIMIT_HYPOTHESIS - helpsUsedToday)}
+            giftDisabled={!inventory?.stacks.some((s) => s.qty > 0)}
           />
         </Html>
       )}

@@ -16,6 +16,7 @@
  */
 
 import type { Tier } from '@/types/common'
+import type { ProductKey } from '@/types/ingredients'
 import {
   generateQueue,
   patienceRemaining,
@@ -56,6 +57,13 @@ export interface RunState {
   peggy: boolean
   /** §3.9 Bookkeeper Ada — ×1.05 Bucks (в скоринг движка). */
   bucksMult: number
+  /**
+   * Фактически списанный сток за смену (ключ блюда → кол-во подано), собирается по мере
+   * успешных подач (`resolveGuest`). Идёт в `ShiftLog.soldStock` на `shift_submit` —
+   * сервер реконструирует итог именно из него (анти-чит §3.6, AGENTS.md §0.3): клиент
+   * не начисляет награду сам, только сообщает, что фактически ушло с подноса.
+   */
+  soldStock: Partial<Record<ProductKey, number>>
 }
 
 export interface InitRunOpts {
@@ -85,6 +93,7 @@ export function initRun(opts: InitRunOpts): RunState {
     resolutions: [],
     peggy: opts.peggy ?? false,
     bucksMult: opts.bucksMult ?? 1,
+    soldStock: {},
   }
 }
 
@@ -96,11 +105,39 @@ function resolvedIds(run: RunState): Set<string> {
   return new Set(run.resolutions.map((r) => r.guestId))
 }
 
-/** Разрешить гостя (идемпотентно: повторное разрешение того же id игнорится). */
-export function resolveGuest(run: RunState, guestId: string, kind: OrderKind): RunState {
+/**
+ * Разрешить гостя (идемпотентно: повторное разрешение того же id игнорится).
+ * `servedItems` — ключи блюд, реально снятых с подноса при успешной подаче (normal/
+ * blue_plate); на таймауте (`house_special`) поднос не расходуется — не передаём.
+ * Аккумулируется в `run.soldStock` для будущего `shift_submit` (см. `soldStockList`).
+ */
+export function resolveGuest(
+  run: RunState,
+  guestId: string,
+  kind: OrderKind,
+  servedItems?: ProductKey[],
+): RunState {
   if (resolvedIds(run).has(guestId)) return run
   if (!run.guests.some((g) => g.id === guestId)) return run
-  return { ...run, resolutions: [...run.resolutions, { guestId, kind }] }
+  const soldStock =
+    servedItems && servedItems.length > 0 ? addSoldStock(run.soldStock, servedItems) : run.soldStock
+  return { ...run, resolutions: [...run.resolutions, { guestId, kind }], soldStock }
+}
+
+function addSoldStock(
+  current: Partial<Record<ProductKey, number>>,
+  items: ProductKey[],
+): Partial<Record<ProductKey, number>> {
+  const next = { ...current }
+  for (const key of items) next[key] = (next[key] ?? 0) + 1
+  return next
+}
+
+/** Разворачивает `run.soldStock` в форму `ShiftLog.soldStock` (стабильный порядок ключей). */
+export function soldStockList(run: RunState): { itemKey: ProductKey; qty: number }[] {
+  return Object.entries(run.soldStock)
+    .filter((entry): entry is [string, number] => (entry[1] ?? 0) > 0)
+    .map(([itemKey, qty]) => ({ itemKey: itemKey as ProductKey, qty }))
 }
 
 /**

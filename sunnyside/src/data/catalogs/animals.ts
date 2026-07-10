@@ -17,7 +17,7 @@
  * Bee Hive — Apiary Ур.1 ≈ 6, Dairy Goat — Barn Ур.3 ≈ 10.
  *
  * assetKey — канон-кандидат ключа вида из §3.1 спеки (`an_hen`/`an_cow`/...),
- * для `scene/assets/registry.ts` (арт/сцен-агент, вне моей зоны — только ключ-подсказка).
+ * для `src/assets/placeholders/registry.ts` (арт/сцен-агент, вне моей зоны — только ключ-подсказка).
  *
  * ── ВАЖНО: расхождение контракт vs. спека (не в моей зоне, только TODO) ─────────
  * `AnimalKindSchema` (../schema.ts) и `AnimalKind` (@/types/animals.ts) — закрытый

@@ -1,18 +1,24 @@
 /**
- * DevTimeskip.tsx — демо-таймскип кнопка dev-режима (задача зоны `hud-nav`).
+ * DevTimeskip.tsx — таймскип-кнопка dev-режима (задача зоны `hud-nav`).
  *
  * Сдвигает клиентский `clock.serverOffset` (единственный источник `serverNow()`,
  * 21-client §3.6) вперёд на 1 час за клик — все таймеры, читающие `serverNow()`
- * (плашка дня, `isReady`/`remainingMs` будущих панелей), воспринимают время как
- * прошедшее. Полезно для ручного QA без ожидания.
+ * (плашка дня, `isReady`/`remainingMs` панелей), воспринимают время как прошедшее.
+ * Полезно для ручного QA без ожидания.
  *
- * TODO(net-local): это НЕ ускоряет внутренние часы `LocalBackendAdapter`
- * (`net/adapters/local.ts` использует свой `now()`, инжектируемый только в
- * конструкторе — `createLocalAdapter({ clock })`, не в рантайме). Настоящее
- * ускорение локального адаптера для смоук-тестов требует прокинуть общий
- * управляемый `clock` из `net/index.ts` в адаптер при бутстрапе — зона `net local`,
- * не `hud-nav`. До тех пор эта кнопка двигает только клиентское ВОСПРИЯТИЕ времени
- * (баннер/countdown), RPC-мутации по-прежнему валидируются реальным Date.now().
+ * РЕАЛЬНОЕ ускорение бэкенда: `LocalBackendAdapter` получает часы из `net/index.ts`,
+ * чей `now()` = `Date.now() + clock.serverOffset` — тот же оффсет, что двигает эта
+ * кнопка. Значит сдвиг здесь дозревает грядки/крафт/котёл на локальном сервере, а не
+ * только клиентское восприятие. Композиция (app/backend `bootstrap`) слушает изменение
+ * `serverOffset` и перегидрирует слайсы истиной адаптера — поле обновляется сразу.
+ *
+ * Лента уведомлений (bell-лог) больше НЕ заполняется отсюда демо-записью — реальные
+ * нотификации идут через событийный канал адаптера (`net/adapters/local.ts`
+ * `emitDomainEvents`/`sync` → `app/notifications.ts` `subscribeNotifications`) и диф
+ * снапшотов (`noteHydration`). Раз местный сервер реально дозревает от сдвига offset —
+ * следующая гидрация сама поднимет события, которые «созрели» за пропущенный час
+ * (почта, грузовик, ярмарка, кооп-заказ, сосед полил грядки). Тост ниже — про само
+ * dev-действие (не игровое событие).
  *
  * Гейт `isDebugEnabled()` (bootstrap/debug, чистая функция) — не в проде.
  */
@@ -26,7 +32,6 @@ export function DevTimeskip() {
   const setServerOffset = useStore((s) => s.setServerOffset)
   const serverOffset = useStore((s) => s.clock.serverOffset)
   const pushToast = useStore((s) => s.pushToast)
-  const pushNotification = useStore((s) => s.pushNotification)
   const serverNow = useStore((s) => s.serverNow)
 
   if (!isDebugEnabled()) return null
@@ -40,12 +45,6 @@ export function DevTimeskip() {
       message: '⏩ +1ч (dev) — clock.serverOffset сдвинут',
       createdAt: Date.now(),
       ttlMs: 6000,
-    })
-    pushNotification({
-      id: `dev-timeskip-notif-${now}`,
-      kind: 'system',
-      message: 'Время ускорено на 1 час (dev-режим)',
-      createdAt: now,
     })
   }
 

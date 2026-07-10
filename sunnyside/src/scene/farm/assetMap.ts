@@ -59,15 +59,15 @@ export function cropAssetId(key: ProductKey | undefined): string | null {
   return KNOWN_CROP_ASSETS.has(id) ? id : CROP_ASSET_FALLBACK
 }
 
-/** Вид животного → id заглушки (`an_*`). Овца пока без своей заглушки → индюк-стенд-ин. */
+/** Вид животного → id заглушки (`an_*`). registry-converge: `an_sheep` заведён в мастер-реестре
+ * (`src/assets/placeholders/registry.ts`), стенд-ин индюком больше не нужен. */
 export const ANIMAL_ASSET_BY_KIND: Record<AnimalKind, string> = {
   chicken: 'an_hen',
   cow: 'an_cow',
   pig: 'an_pig',
   goat: 'an_goat',
   bee: 'an_bee',
-  // TODO(assets): нет `an_sheep` в реестре заглушек — временно индюк как стенд-ин (22-av §7).
-  sheep: 'an_turkey',
+  sheep: 'an_sheep',
 }
 
 export function animalAssetId(kind: AnimalKind): string {

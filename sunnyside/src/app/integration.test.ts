@@ -15,6 +15,7 @@ import { useStore } from '@/state'
 import { createLocalAdapter } from '@/net/adapters/local'
 import { weekStartOfIndex, HOUR_MS, WEEK_MS } from '@/engine/clock'
 import type { BackendAdapter } from '@/engine/contracts'
+import { layoutForagePoints } from '@/scene/town/layout'
 import {
   __resetBackendForTests,
   setAdapter,
@@ -164,6 +165,85 @@ describe('composition — SystemContext + createSystems + гидрация', () 
     if (!res.ok) expect(res.error.code).toBe('offline')
     // Грядка на сервере не изменилась (стор не перегидрирован при оффлайне).
     useStore.getState().setOnline(true)
+  })
+})
+
+describe('adapter-seams — shift_submit / forage_collect / соц-визит реальными RPC', () => {
+  beforeEach(() => {
+    useStore.getState().setOnline(true)
+  })
+
+  it('shift_submit: ShiftSystem.submit реально списывает сток и кредитует кошелёк', async () => {
+    const clock = makeClock(MONDAY_0100)
+    const { systems } = await boot(clock)
+
+    // Быстрый сток муки: посадка→сбор→крафт (сжато, как в сценарии выше).
+    for (let slot = 0; slot < 2; slot++) await systems.farm.sow(slot, 'seed_wheat')
+    const ids = useStore.getState().farm!.plots.filter((p) => p.state === 'growing').map((p) => p.id)
+    clock.advance(13 * 60 * 1000)
+    await systems.farm.harvest(ids)
+    const oven = useStore.getState().farm!.machines.find((m) => m.key === 'mch_oven')!
+    await systems.craft.start(oven.id, 'rcp_ingr_flour', 1)
+    clock.advance(301 * 1000)
+    const job = useStore.getState().farm!.machines.find((m) => m.id === oven.id)!.jobs[0]!
+    await systems.craft.collect([job.id])
+    const flourBefore = useStore.getState().inventory!.items.ingr_flour ?? 0
+    expect(flourBefore).toBeGreaterThanOrEqual(1)
+
+    const bucksBefore = useStore.getState().econ.wallet.bucks
+    // ShiftScreen.finish() шлёт ИМЕННО такую форму (session.ts `soldStockList`) — сервер
+    // реконструирует итог из фактически списанного стока, не из клиентских чисел.
+    const res = await systems.shift.submit({
+      shiftLog: {
+        seed: 1,
+        startedAt: clock.now(),
+        served: 1,
+        tips: 0,
+        soldStock: [{ itemKey: 'ingr_flour', qty: 1 }],
+      },
+    })
+    expect(res.ok).toBe(true)
+
+    expect(useStore.getState().inventory!.items.ingr_flour ?? 0).toBe(flourBefore - 1)
+    expect(useStore.getState().econ.wallet.bucks).toBeGreaterThan(bucksBefore)
+  })
+
+  it('forage_collect: id из клиентской раскладки (scene/town/layout) резолвит реальную точку сервера', async () => {
+    const clock = makeClock(MONDAY_0100)
+    const { adapter, systems } = await boot(clock)
+
+    const townId = useStore.getState().session.identity!.townId
+    const clientPoints = layoutForagePoints(townId)
+    const server = await adapter.getMailForaging()
+    expect(server.ok).toBe(true)
+    if (!server.ok) return
+    // ID-схема `starterForage` (net/local/world.ts) зеркалит `layoutForagePoints` (adapter-seams
+    // fix) — клик по клиентской точке резолвит РЕАЛЬНУЮ точку, не «честный» 404.
+    expect(server.data.foragePoints.map((p) => p.id).sort()).toEqual(clientPoints.map((p) => p.id).sort())
+
+    const point = clientPoints[0]!
+    const before = useStore.getState().inventory?.items[server.data.foragePoints[0]!.itemKey] ?? 0
+    const res = await systems.mailForaging.forageCollect(point.id)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(useStore.getState().inventory?.items[res.data.item.key] ?? 0).toBe(before + res.data.item.qty)
+  })
+
+  it('соц-визит: SocialSystem.help/gift резолвят соседа по userId ростера, не по farmId', async () => {
+    const clock = makeClock(MONDAY_0100)
+    const { systems } = await boot(clock)
+
+    const town = useStore.getState().town!
+    const neighbor = town.roster[0]!
+    // farmId соседа НЕ совпадает с его userId (net/local/world.ts genNpcs) — TownScene теперь
+    // шлёт `neighbor.userId` (Streets.tsx VisitTarget), не `farmId` (adapter-seams fix).
+    expect(neighbor.userId).not.toBe(neighbor.farmId)
+
+    const byFarmId = await systems.social.help(neighbor.farmId, 'water')
+    expect(byFarmId.ok).toBe(false)
+
+    const byUserId = await systems.social.help(neighbor.userId, 'water')
+    expect(byUserId.ok).toBe(true)
   })
 })
 

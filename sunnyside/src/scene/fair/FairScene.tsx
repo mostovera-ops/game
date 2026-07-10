@@ -10,11 +10,17 @@
  * меши/текстуры не заводим. Замена на финальный GLB — одной строкой в реестре, ноль правок тут.
  *
  * ГРАНИЦА (AGENTS.md §3): scene/ читает стор/системы, ноль @/net. Оверлей смены — @/ui/shift.
+ *
+ * `shiftSystem` (adapter-seams, зеркалит farm-ui-seams) — реальная `ShiftSystem`, которую
+ * строит и прокидывает композиция (`App.tsx` → `scene/index.tsx`); дальше проходит через
+ * `ShiftHost` в `ShiftScreen.submit` (`shift_submit`) — без неё чек печатается, но на сервер
+ * не уходит (тёплый no-op фолбэк, см. `ui/shift/shiftSystemFallback.ts`).
  */
 
 import { Html } from '@react-three/drei'
 import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
 import { ShiftHost } from '@/ui/shift'
+import type { ShiftSystem } from '@/engine/contracts'
 import { Lights, Ground, CameraRig } from '../common/Rig'
 
 /** Позиции ряда палаток вдоль площади (соседские прилавки за спиной игрока). */
@@ -34,7 +40,7 @@ const GUEST_CARS: { pos: [number, number, number]; vip?: boolean }[] = [
   { pos: [6.5, 0.4, 6] },
 ]
 
-export function FairScene() {
+export function FairScene({ shiftSystem }: { shiftSystem?: ShiftSystem } = {}) {
   return (
     <>
       <Lights />
@@ -64,7 +70,7 @@ export function FairScene() {
 
       {/* DOM-оверлей активной смены поверх площади (ui/shift — чистый DOM) */}
       <Html fullscreen style={{ pointerEvents: 'none' }} zIndexRange={[20, 0]}>
-        <ShiftHost />
+        <ShiftHost shiftSystem={shiftSystem} />
       </Html>
     </>
   )

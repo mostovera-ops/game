@@ -9,14 +9,24 @@
  * через `react-dom/server` + `createElement` (JSX в .ts недоступен), эффекты (rAF) не запускаются.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ShiftSystem } from '@/engine/contracts'
 import { ShiftScreen } from './ShiftScreen'
 import { Receipt } from './Receipt'
 import { ShiftHost } from './ShiftHost'
 import { DEMO_DISH_POOL } from './pool'
 import { initRun } from './session'
+
+/** Мок `ShiftSystem` — компонент не ходит в сеть сам (AGENTS.md §0.3), DI пропом. */
+function makeShiftSystem(): ShiftSystem {
+  return {
+    start: vi.fn(async () => ({ ok: true, data: { seed: 0, startedAt: 0, durationSec: 0 } }) as never),
+    tick: vi.fn(),
+    submit: vi.fn(async () => ({ ok: true, data: { tips: 0, fairScore: 0, tickets: 0, fp: 0 } }) as never),
+  }
+}
 
 describe('render smoke', () => {
   it('ShiftScreen рендерится (начальный кадр) и печатает счётчики', () => {
@@ -27,6 +37,7 @@ describe('render smoke', () => {
         startedAt: 0,
         now: () => 0,
         onEnd: () => {},
+        shiftSystem: makeShiftSystem(),
       }),
     )
     expect(html).toContain('СМЕНА')

@@ -13,6 +13,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import type { ShiftLog } from '@/types'
+import type { ShiftSystem } from '@/engine/contracts'
 import { dishByKey, dishByTier, type DishDef } from './pool'
 import {
   currentCombo,
@@ -22,12 +24,14 @@ import {
   guestPatience,
   maxCombo,
   resolveGuest,
+  soldStockList,
   sweepTimeouts,
   totals,
   trayMatches,
   visibleQueue,
   type RunState,
 } from './session'
+import { NOOP_SHIFT_SYSTEM } from './shiftSystemFallback'
 import { T, patienceColor, phaseColor } from './theme'
 
 export interface ShiftResult {
@@ -46,6 +50,13 @@ export interface ShiftScreenProps {
   /** serverNow() — единственный источник игрового времени (21-client §3.6). */
   now: () => number
   onEnd: (result: ShiftResult) => void
+  /**
+   * Реальная `ShiftSystem` (adapter-seams, зеркалит farm-ui-seams `scene/farm/systems.tsx`) —
+   * композиция (`App.tsx`) строит её один раз и прокидывает через `ShiftHost`. Без пропа —
+   * тёплый no-op фолбэк (`NOOP_SHIFT_SYSTEM`): чек всё равно печатается клиентскими числами
+   * («чек из движка»), но `shift_submit` не уходит на сервер.
+   */
+  shiftSystem?: ShiftSystem
 }
 
 const GUEST_FACES = ['🧑', '🧓', '👩', '🧔', '👵', '🧑‍🌾'] as const
@@ -55,7 +66,8 @@ const PHASE_LABEL: Record<'warmup' | 'rush' | 'last_call', string> = {
   last_call: 'Последний заказ',
 }
 
-export function ShiftScreen({ initial, startedAt, now, onEnd }: ShiftScreenProps) {
+export function ShiftScreen({ initial, startedAt, now, onEnd, shiftSystem }: ShiftScreenProps) {
+  const shift = shiftSystem ?? NOOP_SHIFT_SYSTEM
   const [run, setRun] = useState<RunState>(initial)
   const [nowSec, setNowSec] = useState(0)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -71,7 +83,7 @@ export function ShiftScreen({ initial, startedAt, now, onEnd }: ShiftScreenProps
       setRun((prev) => sweepTimeouts(prev, sec))
       if (!endedRef.current && sec >= initial.durationSec) {
         endedRef.current = true
-        finish()
+        void finish()
         return
       }
       raf = requestAnimationFrame(loop)
@@ -100,14 +112,30 @@ export function ShiftScreen({ initial, startedAt, now, onEnd }: ShiftScreenProps
   const frac = elapsedFraction(run, nowSec)
   const remainingSec = Math.max(0, Math.ceil(run.durationSec - nowSec))
 
-  function finish() {
+  /**
+   * Итог смены: чек (served/combo/бакс — из движка, «чек из движка»), но НАСТОЯЩЕЕ
+   * начисление — через `shift_submit` (AGENTS.md §0.3, анти-чит §3.6): шлём фактически
+   * списанный сток (`soldStockList`), сервер реконструирует tips/fairScore/tickets из
+   * него и правда кредитует кошелёк. Провала нет (P3) — при отказе (оффлайн/конфликт)
+   * показываем клиентские числа как есть, чек всё равно печатается тёплым.
+   */
+  async function finish() {
     const t = totals(run)
+    const shiftLog: ShiftLog = {
+      seed: run.seed,
+      startedAt,
+      served: t.served,
+      tips: t.tips,
+      soldStock: soldStockList(run),
+    }
+    const res = await shift.submit({ shiftLog })
+    const server = res.ok ? res.data : null
     onEnd({
       served: t.served,
-      fairScore: t.fairScore,
+      fairScore: server?.fairScore ?? t.fairScore,
       bucks: t.bucks,
-      tips: t.tips,
-      ticketsRaw: t.ticketsRaw,
+      tips: server?.tips ?? t.tips,
+      ticketsRaw: server?.tickets ?? t.ticketsRaw,
       maxCombo: maxCombo(run),
     })
   }
@@ -115,7 +143,7 @@ export function ShiftScreen({ initial, startedAt, now, onEnd }: ShiftScreenProps
   function endEarly() {
     if (endedRef.current) return
     endedRef.current = true
-    finish()
+    void finish()
   }
 
   function addDish(d: DishDef) {
@@ -131,7 +159,8 @@ export function ShiftScreen({ initial, startedAt, now, onEnd }: ShiftScreenProps
   function serve() {
     if (!active) return
     if (!trayMatches(tray.map((d) => d.tier), active.dishTiers)) return
-    setRun((r) => resolveGuest(r, active.id, 'normal'))
+    const servedKeys = tray.map((d) => d.key)
+    setRun((r) => resolveGuest(r, active.id, 'normal', servedKeys))
     setTray([])
     setActiveId(null)
   }
