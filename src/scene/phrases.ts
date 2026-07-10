@@ -66,6 +66,7 @@ export const PHRASES: Record<string, string> = {
  */
 const HOUSE = 'Дом'
 const MUSHROOM = 'Гриб'
+const TOADSTOOL = 'Мухомор'
 const NEST = 'Птичье гнездо'
 const BIRD = 'Птица'
 const RABBIT = 'Заяц'
@@ -97,7 +98,9 @@ export const PROP_NAMES: Record<string, string> = {
   // Лесные находки и живность. Букашки мелкие, но подпись у них тоже своя.
   MushroomCap: MUSHROOM,
   MushroomStem: MUSHROOM,
-  MushroomSpot: MUSHROOM,
+  ToadstoolCap: TOADSTOOL,
+  ToadstoolStem: TOADSTOOL,
+  ToadstoolSpot: TOADSTOOL,
   NestTwig: NEST,
   NestEgg: NEST,
 
