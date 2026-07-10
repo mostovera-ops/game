@@ -35,6 +35,9 @@ import { setIntent } from './intent'
 // Ростки крупные: слот читается с дефолтного зума, без приближения камеры.
 const STAGE_SCALE = [0.32, 0.8, 1.35]
 
+/** Глушит рейкаст меша: в планировке хитбокс слота пропускает клик к грядке. */
+const nullRaycast = () => null
+
 /** Сколько капля висит над слотом после полива. */
 const DROP_MS = 1000
 
@@ -161,6 +164,10 @@ export function Slot({
   const slot = useGameStore((s) => s.slots.find((x) => x.id === slotId)!)
   const tool = useGameStore((s) => s.tool)
   const phase = useGameStore((s) => s.phase)
+  // В режиме планировки слот не ловит клики: они должны доходить до грядки под
+  // ним, чтобы её можно было взять. Растение при этом видно — прячем только
+  // хитбокс.
+  const buildMode = useGameStore((s) => s.buildMode)
   // Семена кончились — сажать нечего, и слот об этом говорит курсором,
   // а не заставляет героя сходить впустую.
   const hasSeed = useGameStore((s) => s.seeds[s.selectedSeed] > 0)
@@ -257,9 +264,11 @@ export function Slot({
       {ripe && slot.crop && <SpeechBubble crop={slot.crop} lucky={slot.lucky} />}
       {splash && <Droplet />}
 
-      {/* невидимый хитбокс над слотом — рейкаст по нему, не по геометрии растения */}
+      {/* невидимый хитбокс над слотом — рейкаст по нему, не по геометрии растения.
+          В планировке отключаем рейкаст, чтобы клик доставался грядке. */}
       <mesh
         position={[0, 0.3, 0]}
+        raycast={buildMode ? nullRaycast : undefined}
         onClick={onClick}
         onPointerOver={onOver}
         onPointerMove={onMove}

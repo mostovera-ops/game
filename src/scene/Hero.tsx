@@ -258,6 +258,16 @@ export function Hero({
     const dt = Math.min(rawDt, MAX_DT)
     if (dt <= 0) return
 
+    // Планировка двора — отдельный режим: герой прячется целиком и замирает.
+    // Двор в этот момент редактируют, а не живут в нём, и бродящий по грядкам
+    // человечек только мешал бы примерять расстановку.
+    if (useGameStore.getState().buildMode) {
+      g.visible = false
+      hero.moving = false
+      return
+    }
+    g.visible = true
+
     // Днём свечения нет вовсе: darkness на свету равен нулю.
     body.emissiveIntensity = HERO_GLOW_MAX * darkness(getClock())
 

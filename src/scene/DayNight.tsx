@@ -63,8 +63,9 @@ export function DayNight({ sun }: { sun: SceneLayout['sun'] }) {
 
   useFrame((_, rawDt) => {
     const st = useGameStore.getState()
-    // Часы идут только на ферме. Сутки вышли — новый день.
-    if (st.phase === 'farm' && advanceClock(Math.min(rawDt, 0.1))) st.endDay()
+    // Часы идут только на ферме и только в игре: планировка двора — отдельный
+    // режим, время в нём замирает, чтобы правки не гнали к концу дня.
+    if (st.phase === 'farm' && !st.buildMode && advanceClock(Math.min(rawDt, 0.1))) st.endDay()
 
     const clock = st.phase === 'farm' ? getClock() : NOON
     const light = daylight(clock)

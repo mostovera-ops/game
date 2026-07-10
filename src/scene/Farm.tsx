@@ -129,7 +129,8 @@ function Interactions() {
 
     // День 7 застал героя в пути — дело отменяется, он за прилавком фудтрака.
     // Это верно и для грядки, и для лавки: та в день ярмарки закрыта.
-    if (st.phase !== 'farm') {
+    // Вход в планировку двора тоже обрывает начатое: герой замер.
+    if (st.phase !== 'farm' || st.buildMode) {
       clearIntent()
       return
     }
@@ -540,7 +541,9 @@ function Ground({ size, color }: { size: number; color: string }) {
       onPointerMove={clearAllHoverLabels}
       onClick={(e: ThreeEvent<MouseEvent>) => {
         e.stopPropagation()
-        if (useGameStore.getState().phase !== 'farm') return // день 7 — герой за прилавком
+        const st = useGameStore.getState()
+        if (st.phase !== 'farm') return // день 7 — герой за прилавком
+        if (st.buildMode) return // в планировке герой спит, ходить некому
         clearIntent() // повёл героя в другое место — прежнее дело отменено
         heroTarget.set(e.point.x, 0, e.point.z)
       }}
