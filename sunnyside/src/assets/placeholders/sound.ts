@@ -29,6 +29,17 @@ export type SfxCategory =
   | 'notification_mail'
   | 'notification_neighbor'
   | 'notification_jukebox'
+  /**
+   * Веха Appetite Meter (22-av §4.4 «Аппетитометр-тик») — вспышка вдоль шкалы + разлёт
+   * искр, звук-компаньон «восходящий фанфарный мотив». Отдельная категория от
+   * `contest_win` (тот — победа в конкурсе, длиннее/аккорд), эта — короче/чаще.
+   */
+  | 'event_milestone'
+  /**
+   * Смена фазы недели (audio-wiring, канон §2.3 календарь) — мягкий двутон-переход,
+   * не «уведомление», а фоновая «страница перевернулась» подсказка (P3, тёплый тон).
+   */
+  | 'week_phase_change'
 
 export type AmbientCategory = 'ambient_night'
 
@@ -59,6 +70,8 @@ let ambientSource: AudioBufferSourceNode | null = null
 let ambientWanted: AmbientCategory | null = null
 let musicStop: (() => void) | null = null
 let noiseBuffer: AudioBuffer | null = null
+/** Слушатели «звук только что разблокирован» — см. `onAudioUnlocked`. */
+const unlockListeners = new Set<() => void>()
 
 function getWindow(): (Window & typeof globalThis) | undefined {
   return typeof window === 'undefined' ? undefined : window
@@ -107,6 +120,23 @@ export function unlockAudio(): void {
   }
   unlocked = true
   if (ambientWanted !== null) startAmbientLoop(ambientWanted)
+  for (const cb of unlockListeners) cb()
+}
+
+/**
+ * Подписка «звук только что разблокирован по жесту» — audio-wiring использует это, чтобы
+ * применить сохранённые настройки громкости (`ui.volume`) сразу к свежесозданным шинам
+ * (иначе они стартуют с дефолтом `ensureBuses`, а не с пользовательским значением). Если
+ * звук уже разблокирован на момент вызова — коллбек срабатывает немедленно (нет пропуска
+ * «уже опоздал»). Возвращает функцию отписки.
+ */
+export function onAudioUnlocked(cb: () => void): () => void {
+  if (isAudioUnlocked()) {
+    cb()
+    return () => {}
+  }
+  unlockListeners.add(cb)
+  return () => unlockListeners.delete(cb)
 }
 
 /**
@@ -277,6 +307,14 @@ export function playSfx(category: SfxCategory): void {
       break
     case 'notification_jukebox':
       chord(context, dest, 'sine', [659, 831], t0, 0.25, 0.5)
+      break
+    case 'event_milestone':
+      // восходящий фанфарный мотив, короче contest_win (22-av §4.4 «Meter Tick Glow»)
+      ;[523, 659, 880].forEach((f, i) => envelopeOsc(context, dest, 'triangle', f, f, t0 + i * 0.08, 0.16, 0.55))
+      break
+    case 'week_phase_change':
+      // мягкий двутон-переход «страница недели перевернулась», тёплый, не резкий (P3)
+      envelopeOsc(context, dest, 'sine', 349, 440, t0, 0.35, 0.35)
       break
   }
 }

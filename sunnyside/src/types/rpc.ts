@@ -14,7 +14,7 @@ import type { Stall, ShiftLog, ContestKey } from './fair'
 import type { Wallet } from './currency'
 import type { PrizePullOutcome } from './monetization'
 import type { ToySeriesKey } from './collections'
-import type { MigrationKind } from './town'
+import type { MigrationKind, TownListing } from './town'
 import type { FishCatch } from './mail-foraging'
 import type { StaffKey } from './progression'
 import type { StaffPost } from './machines'
@@ -143,15 +143,31 @@ export interface RecipeExperimentRes { result: RecipeKey | null }
 export interface PrizePullReq { seriesKey: ToySeriesKey; count: number }
 export type PrizePullRes = PrizePullOutcome
 
-export interface MigrationProposeReq { kind: MigrationKind; targetTown: string }
+/** `streetId` — только `kind:'street_caravan'` (12-migration §3.2.1), кворум считается от него. */
+export interface MigrationProposeReq { kind: MigrationKind; targetTown: string; streetId?: UUID }
 export interface MigrationProposeRes { proposalId: UUID }
 export interface MigrationVoteReq { proposalId: UUID; vote: 'yes' | 'no' }
 export interface MigrationVoteRes { yes: number; no: number }
+
+/** Список городов для Town Browser (12-migration §3.1.3). Read-снапшот, не мутация. */
+export type ListTownsRes = TownListing[]
 
 // ── Edge Functions (внешние эффекты) ──────────────────────────────────────────
 export interface IapVerifyReq { provider: string; receipt: string; sku: string }
 export interface IapVerifyRes { purchaseId: string; dimes: number }
 export interface MigrateFarmReq { targetTown: string }
+/**
+ * Итог исполнения переезда (12-migration §2.4/§3.4): квитанция конвертации личного
+ * вклада в Town Projects старого города → `🎟` Tickets (курс 50:1, кэп 500/переезд) +
+ * новый кулдаун Moving Van (§3.1.2).
+ */
+export interface MigrateFarmRes {
+  ticketsAwarded: number
+  convertedBucks: number
+  /** Остаток вклада свыше кэпа `🎟 500` — не сгорает, доконвертируется при следующем переезде (§3.4). */
+  carryoverBucks: number
+  cooldownUntil: EpochMs
+}
 export interface PhotoUploadReq { image: Blob }
 export interface PhotoUploadRes { url: string }
 

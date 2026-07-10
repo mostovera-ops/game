@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { weekStartOfIndex, weekNumberOf, WEEK_MS, HOUR_MS, FAIR_OPEN_OFFSET } from '@/engine/clock'
-import type { FarmSnapshot, InventorySnapshot, Plot } from '@/types'
+import { weekStartOfIndex, weekNumberOf, WEEK_MS, HOUR_MS, DAY_MS, FAIR_OPEN_OFFSET } from '@/engine/clock'
+import type { FarmSnapshot, InventorySnapshot, Plot, TownProject } from '@/types'
 import { createLocalAdapter } from './local'
 import { createWorldStore } from '../local/persist'
 
@@ -273,5 +273,166 @@ describe('LocalBackendAdapter — анти-чит валидация', () => {
     const res = await a.coopContribute({ orderId: order.id, itemKey: order.requirements[0]!.itemKey, qty: 1 })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.error.code).toBe('window_closed')
+  })
+})
+
+describe('LocalBackendAdapter — переезды (12-migration)', () => {
+  it('movingVan.cooldownUntil стартует как createdAt + 3 дня (мин. срок в городе, §3.1.2)', async () => {
+    const a = newAdapter(makeClock(MONDAY_0100))
+    const town = await unwrap(a.getTown())
+    expect(town.movingVan.cooldownUntil).toBe(MONDAY_0100 + 3 * DAY_MS)
+  })
+
+  it('migrateFarm до истечения кулдауна — not_ready', async () => {
+    const a = newAdapter(makeClock(MONDAY_0100))
+    const res = await a.migrateFarm({ targetTown: 'town-elsewhere' })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.code).toBe('not_ready')
+  })
+
+  it('migrateFarm в свой же город — invalid_payload', async () => {
+    const clock = makeClock(MONDAY_0100)
+    const a = newAdapter(clock)
+    await a.init() // мир создаётся сейчас (createdAt=MONDAY_0100) — до перемотки кулдауна
+    clock.advance(3 * DAY_MS + 1)
+    const res = await a.migrateFarm({ targetTown: 'test-town' })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.code).toBe('invalid_payload')
+  })
+
+  it('migrateFarm после кулдауна: конвертирует вклад в тикеты (курс 50:1, §4.4), сдвигает кулдаун на 14 дней', async () => {
+    const store = createWorldStore('memory')
+    const clock = makeClock(MONDAY_0100)
+    const a1 = createLocalAdapter({ clock, store, userId: 'p-move', townId: 't-move' })
+    await a1.init()
+    clock.advance(3 * DAY_MS + 1)
+
+    const world = await store.load('p-move')
+    expect(world).not.toBeNull()
+    world!.projects.tp_drive_in = {
+      version: 1, key: 'tp_drive_in', progress: 100, goal: 1000, built: false, myContribution: 4200,
+    } satisfies TownProject
+    await store.save(world!)
+
+    // Свежий инстанс поверх того же стора подхватывает изменённый мир (как в тесте персиста).
+    const a2 = createLocalAdapter({ clock, store, userId: 'p-move', townId: 't-move' })
+    const res = await unwrap(a2.migrateFarm({ targetTown: 'town-elsewhere' }))
+    expect(res.ticketsAwarded).toBe(84) // floor(4200/50)
+    expect(res.convertedBucks).toBe(4200)
+    expect(res.carryoverBucks).toBe(0)
+    expect(res.cooldownUntil).toBe(clock.now() + 14 * DAY_MS)
+
+    const wallet = await unwrap(a2.getWallet())
+    expect(wallet.tickets).toBe(84)
+    const town = await unwrap(a2.getTown())
+    expect(town.movingVan.cooldownUntil).toBe(clock.now() + 14 * DAY_MS)
+    expect(town.projects.tp_drive_in?.myContribution).toBe(0) // не «в натуре» — обнулён, конвертирован
+  })
+
+  it('migrateFarm: конверсия капается в 🎟500/переезд, остаток — carryover (не сгорает, §3.4)', async () => {
+    const store = createWorldStore('memory')
+    const clock = makeClock(MONDAY_0100)
+    const a1 = createLocalAdapter({ clock, store, userId: 'p-cap', townId: 't-cap' })
+    await a1.init()
+    clock.advance(3 * DAY_MS + 1)
+
+    const world = await store.load('p-cap')
+    world!.projects.tp_drive_in = {
+      version: 1, key: 'tp_drive_in', progress: 100, goal: 100_000, built: false, myContribution: 30_000,
+    } satisfies TownProject
+    await store.save(world!)
+
+    const a2 = createLocalAdapter({ clock, store, userId: 'p-cap', townId: 't-cap' })
+    const res = await unwrap(a2.migrateFarm({ targetTown: 'town-elsewhere' }))
+    expect(res.ticketsAwarded).toBe(500)
+    expect(res.convertedBucks).toBe(25_000)
+    expect(res.carryoverBucks).toBe(5_000)
+  })
+
+  it('listTowns: непустой и детерминированный список (стабилен между вызовами)', async () => {
+    const a = newAdapter(makeClock(MONDAY_0100))
+    const list1 = await unwrap(a.listTowns())
+    const list2 = await unwrap(a.listTowns())
+    expect(list1.length).toBeGreaterThan(0)
+    expect(list1).toEqual(list2)
+  })
+
+  it('migrationPropose(street_caravan): кворум = 60% состава Стрита-инициатора (§3.2.1), боты только из этого стрита', async () => {
+    const clock = makeClock(MONDAY_0100)
+    const a = newAdapter(clock)
+    const town = await unwrap(a.getTown())
+    const street = town.streets[0]!
+    const { proposalId } = await unwrap(
+      a.migrationPropose({ kind: 'street_caravan', targetTown: 'town-elsewhere', streetId: street.id }),
+    )
+    const after = await unwrap(a.getTown())
+    const prop = after.migrations.find((m) => m.id === proposalId)!
+    expect(prop.streetId).toBe(street.id)
+    expect(prop.tally.quorum).toBe(Math.max(1, Math.ceil((street.memberCount + 1) * 0.6)))
+    expect(prop.tally.yes + prop.tally.no).toBeLessThanOrEqual(street.memberCount)
+  })
+
+  it('migrationVote: голос игрока учитывается один раз — повторный голос conflict', async () => {
+    const clock = makeClock(MONDAY_0100)
+    const a = newAdapter(clock)
+    const town = await unwrap(a.getTown())
+    const street = town.streets[0]!
+    const { proposalId } = await unwrap(
+      a.migrationPropose({ kind: 'street_caravan', targetTown: 'town-elsewhere', streetId: street.id }),
+    )
+    const before = (await unwrap(a.getTown())).migrations.find((m) => m.id === proposalId)!
+    // Копируем число до мутации — `before` ссылается на ЖИВОЙ объект тэлли (townSnapshot не
+    // клонирует), иначе после `migrationVote` он «задним числом» отразит уже новый tally.
+    const beforeYes = before.tally.yes
+    const voted = await unwrap(a.migrationVote({ proposalId, vote: 'yes' }))
+    expect(voted.yes).toBe(beforeYes + 1)
+
+    const again = await a.migrationVote({ proposalId, vote: 'yes' })
+    expect(again.ok).toBe(false)
+    if (!again.ok) expect(again.error.code).toBe('conflict')
+  })
+
+  it('migrationVote(town_merge): кворум набран → включает Grand Reopening (§3.3.4, local-упрощение)', async () => {
+    const store = createWorldStore('memory')
+    const clock = makeClock(MONDAY_0100)
+    const a1 = createLocalAdapter({ clock, store, userId: 'p-merge', townId: 't-merge' })
+    await a1.init()
+    const { proposalId } = await unwrap(
+      a1.migrationPropose({ kind: 'town_merge', targetTown: 'town-elsewhere' }),
+    )
+
+    // Форсируем тэлли к порогу кворума детерминированно (не полагаемся на случайных ботов) —
+    // тот же приём, что и в тесте персиста: мутируем мир напрямую через общий стор.
+    const world = await store.load('p-merge')
+    const prop = world!.migrations.find((m) => m.id === proposalId)!
+    prop.tally = { yes: prop.tally.quorum - 1, no: 0, quorum: prop.tally.quorum }
+    await store.save(world!)
+
+    const a2 = createLocalAdapter({ clock, store, userId: 'p-merge', townId: 't-merge' })
+    expect((await unwrap(a2.getTown())).grandReopening?.active).toBe(false)
+    await unwrap(a2.migrationVote({ proposalId, vote: 'yes' }))
+
+    const after = await unwrap(a2.getTown())
+    expect(after.grandReopening?.active).toBe(true)
+    expect(after.grandReopening?.endsAt).toBe(clock.now() + 7 * DAY_MS)
+  })
+
+  it('Grand Reopening истекает автоматически по endsAt (§4.3 — 7 дней)', async () => {
+    const store = createWorldStore('memory')
+    const clock = makeClock(MONDAY_0100)
+    const a1 = createLocalAdapter({ clock, store, userId: 'p-gr', townId: 't-gr' })
+    await a1.init()
+    const { proposalId } = await unwrap(a1.migrationPropose({ kind: 'town_merge', targetTown: 'town-elsewhere' }))
+    const world = await store.load('p-gr')
+    const prop = world!.migrations.find((m) => m.id === proposalId)!
+    prop.tally = { yes: prop.tally.quorum, no: 0, quorum: prop.tally.quorum }
+    await store.save(world!)
+
+    const a2 = createLocalAdapter({ clock, store, userId: 'p-gr', townId: 't-gr' })
+    await unwrap(a2.migrationVote({ proposalId, vote: 'no' }))
+    expect((await unwrap(a2.getTown())).grandReopening?.active).toBe(true)
+
+    clock.advance(7 * DAY_MS + 1)
+    expect((await unwrap(a2.getTown())).grandReopening?.active).toBe(false)
   })
 })

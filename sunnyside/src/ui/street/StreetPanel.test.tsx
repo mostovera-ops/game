@@ -33,6 +33,7 @@ function seedTown() {
     ],
     coopOrders: [],
     migrations: [],
+    movingVan: { cooldownUntil: 0 },
   }
   useStore.getState().setTown(town)
   useStore.getState().setIdentity({

@@ -41,4 +41,26 @@ describe('useStore — базовые слайсы', () => {
     useStore.getState().dismissToast('t1')
     expect(useStore.getState().ui.toasts).toHaveLength(0)
   })
+
+  // audio-wiring (22-av §5): три независимых слайдера громкости.
+  it('setVolume меняет только указанную шину, остальные не трогает', () => {
+    useStore.getState().setVolume('sfx', 0.5)
+    expect(useStore.getState().ui.volume.sfx).toBe(0.5)
+    expect(useStore.getState().ui.volume.music).toBe(0.6)
+    expect(useStore.getState().ui.volume.ambient).toBe(0.35)
+  })
+
+  it('setVolume клампит вне [0,1]', () => {
+    useStore.getState().setVolume('music', 1.4)
+    expect(useStore.getState().ui.volume.music).toBe(1)
+    useStore.getState().setVolume('music', -0.2)
+    expect(useStore.getState().ui.volume.music).toBe(0)
+  })
+
+  it('setSoundSettingsOpen переключает панель настроек звука', () => {
+    useStore.getState().setSoundSettingsOpen(true)
+    expect(useStore.getState().ui.soundSettingsOpen).toBe(true)
+    useStore.getState().setSoundSettingsOpen(false)
+    expect(useStore.getState().ui.soundSettingsOpen).toBe(false)
+  })
 })

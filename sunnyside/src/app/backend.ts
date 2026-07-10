@@ -34,6 +34,7 @@ import type {
   ExpeditionSystem,
   InventorySystem,
   MailForagingSystem,
+  TownSystem,
 } from '@/engine/contracts'
 import type { MutationKind, RpcResult, EpochMs, UUID, ProductKey } from '@/types'
 
@@ -47,7 +48,9 @@ import { createCollectionSystem } from '@/engine/collections'
 import { createMonetizationSystem } from '@/engine/monetization'
 import { createExpeditionSystem } from '@/engine/expedition'
 import { createInventorySystem } from '@/engine/inventory'
+import { createRetentionSystem, type RetentionSystem } from '@/engine/retention'
 import { noteHydration, subscribeNotifications } from './notifications'
+import { subscribeChat } from './chatBridge'
 
 // ════════════════════════════════════════════════════════════════════════════
 // Адаптер-синглтон
@@ -123,6 +126,7 @@ async function dispatch(
     case 'prize_pull': return a.prizePull(p)
     case 'migration_propose': return a.migrationPropose(p)
     case 'migration_vote': return a.migrationVote(p)
+    case 'migrate_farm': return a.migrateFarm(p)
     default: {
       // Исчерпывающая проверка: новый MutationKind без ветки — ошибка компиляции.
       const _never: never = kind
@@ -140,6 +144,7 @@ function warmError(code: string): string {
     case 'insufficient_funds': return 'Не хватает средств'
     case 'window_closed': return 'Окно уже закрылось — до следующего раза'
     case 'cap_reached': return 'Пока занято — освободится позже'
+    case 'not_ready': return 'Ещё не готово — загляни чуть позже'
     case 'offline': return 'Оффлайн — применим, когда вернётся сеть'
     default: return 'Не получилось — попробуй ещё раз'
   }
@@ -215,6 +220,13 @@ export interface AppSystems {
   coop: CoopSystem
   social: SocialSystem
   mailForaging: MailForagingSystem
+  town: TownSystem
+  /** Gone Fishin'/Neighbor Sitter (16-retention §3.5/§4.4) — `vacationStart`/`vacationEnd`
+   *  с локальной валидацией (`engine/retention/vacation.ts`); `streakCheck`/`streakInsure`
+   *  дублируют `progression` (тот же RPC-контракт с двух системных «фасадов», см.
+   *  `engine/retention/system.ts` докстринг) — DI-точка для DOM-панели `ui_vacation_toggle`
+   *  (`ui-social-misc`, до этой задачи `RetentionSystem` не был подключён ни к одному оверлею). */
+  retention: RetentionSystem
 }
 
 /**
@@ -255,6 +267,16 @@ export function createSystems(ctx: SystemContext): AppSystems {
     fish: () => ctx.applyMutation('fish_cast', {}),
   }
 
+  // `TownSystem` (12-migration): propose/vote — оптимистичные мутации (`applyMutation`);
+  // `listTowns` — чистое чтение снапшота (Town Browser), без оптимистики/патча, как
+  // `getX()` в `hydrateAll`, но по требованию (не входит в общий бутстрап-снапшот).
+  const town: TownSystem = {
+    proposeMigration: (req) => ctx.applyMutation('migration_propose', req),
+    voteMigration: (proposalId, vote) => ctx.applyMutation('migration_vote', { proposalId, vote }),
+    listTowns: () => ctx.adapter.listTowns(),
+    moveFarm: (targetTown) => ctx.applyMutation('migrate_farm', { targetTown }),
+  }
+
   return {
     farm: createFarmSystem(ctx),
     animals: createAnimalSystem(ctx),
@@ -271,6 +293,8 @@ export function createSystems(ctx: SystemContext): AppSystems {
     coop,
     social,
     mailForaging,
+    town,
+    retention: createRetentionSystem(ctx),
   }
 }
 
@@ -338,6 +362,7 @@ async function syncClock(adapter: BackendAdapter): Promise<void> {
 
 let bootstrapped = false
 let notifUnsubscribe: (() => void) | null = null
+let chatUnsubscribe: (() => void) | null = null
 let clockUnsubscribe: (() => void) | null = null
 
 /**
@@ -371,6 +396,10 @@ export async function bootstrap(): Promise<BackendAdapter> {
   // Событийный канал → лента уведомлений/тосты (S4, 19-ui-ux §3.1): local эмитит по
   // своим тикам, supabase — по Realtime CDC. Один раз на бутстрапе, живёт всё приложение.
   notifUnsubscribe = subscribeNotifications(adapter)
+  // W3 Street Chat (11-town §3.9): та же схема, отдельный мост в свой кэш-слайс
+  // (`state/chat.ts`) — не смешиваем с лентой уведомлений (Feed-таб читает уведомления
+  // напрямую, см. `ui/chat/ChatPanel.tsx` докстринг).
+  chatUnsubscribe = subscribeChat(adapter)
 
   await adapter.init()
 
@@ -404,6 +433,8 @@ export async function bootstrap(): Promise<BackendAdapter> {
 export function __resetBackendForTests(): void {
   notifUnsubscribe?.()
   notifUnsubscribe = null
+  chatUnsubscribe?.()
+  chatUnsubscribe = null
   clockUnsubscribe?.()
   clockUnsubscribe = null
   adapterSingleton = null

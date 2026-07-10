@@ -90,7 +90,8 @@ import type {
   MigrationProposeReq, MigrationProposeRes,
   MigrationVoteReq, MigrationVoteRes,
   IapVerifyReq, IapVerifyRes,
-  MigrateFarmReq,
+  MigrateFarmReq, MigrateFarmRes,
+  TownListing,
   PhotoUploadReq, PhotoUploadRes,
 } from '@/types'
 import { NET_TIMINGS } from '@/types'
@@ -167,6 +168,8 @@ const READ_RPC = {
   progression: 'get_progression',
   collections: 'get_collections',
   mailForaging: 'get_mail_foraging',
+  /** Town Browser (12-migration §3.1.3) — не часть `get_town` (та — только МОЙ город). */
+  townListings: 'list_towns',
 } as const
 
 /** Edge Functions (внешние эффекты, 20-backend §3.4.2). */
@@ -634,6 +637,7 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     getProgression: () => read<ProgressionSnapshot>(READ_RPC.progression),
     getCollections: () => read<CollectionsSnapshot>(READ_RPC.collections),
     getMailForaging: () => read<MailForagingSnapshot>(READ_RPC.mailForaging),
+    listTowns: () => read<TownListing[]>(READ_RPC.townListings),
 
     // realtime
     subscribe,
@@ -684,7 +688,7 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     giftSend: (req: GiftSendReq) => mut<void>('gift_send', { p_to: req.toId, p_item_key: req.itemKey, p_qty: req.qty }),
     neighborSit: (req: NeighborSitReq) => mut<void>('neighbor_sit', { host_id: req.hostId }),
     chatPost: (req: ChatPostReq) =>
-      mut<ChatPostRes>('chat_post', { channel: req.channel, body: req.body, sticker_key: req.stickerKey ?? null }),
+      mut<ChatPostRes>('chat_post', { p_channel_kind: req.channel, p_body: req.body, p_sticker_key: req.stickerKey ?? null }),
 
     researchStart: (req: ResearchStartReq) => mut<ResearchStartRes>('research_start', { node_key: req.nodeKey }),
     staffAssign: (req: StaffAssignReq) => mut<void>('staff_assign', { staff_key: req.staffKey, post: req.post }),
@@ -716,12 +720,17 @@ export function createSupabaseAdapter(config: SupabaseAdapterConfig): BackendAda
     // migration_propose / migration_vote — RPC горячего пути (§3.4.1), но семантически
     // Edge-инициируемые переезды; трактуем как RPC (имя = MutationKind).
     migrationPropose: (req: MigrationProposeReq) =>
-      mut<MigrationProposeRes>('migration_propose', { kind: req.kind, target_town: req.targetTown }),
+      mut<MigrationProposeRes>('migration_propose', {
+        kind: req.kind,
+        target_town: req.targetTown,
+        street_id: req.streetId,
+      }),
     migrationVote: (req: MigrationVoteReq) =>
       mut<MigrationVoteRes>('migration_vote', { proposal_id: req.proposalId, vote: req.vote }),
 
     // ── Edge Functions (внешние эффекты, §3.4.2) — не буферизуются оффлайн ──
-    migrateFarm: (req: MigrateFarmReq) => callFn<void>(EDGE_FN.migrateFarm, { target_town: req.targetTown }),
+    migrateFarm: (req: MigrateFarmReq) =>
+      callFn<MigrateFarmRes>(EDGE_FN.migrateFarm, { target_town: req.targetTown }),
     iapVerify: (req: IapVerifyReq) =>
       callFn<IapVerifyRes>(EDGE_FN.iapVerify, { provider: req.provider, receipt: req.receipt, sku: req.sku }),
     photoUpload: (req: PhotoUploadReq) => callFn<PhotoUploadRes>(EDGE_FN.photoUpload, { image: req.image }),

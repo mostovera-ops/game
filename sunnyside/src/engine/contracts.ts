@@ -78,7 +78,8 @@ import type {
   MigrationProposeReq, MigrationProposeRes,
   MigrationVoteReq, MigrationVoteRes,
   IapVerifyReq, IapVerifyRes,
-  MigrateFarmReq,
+  MigrateFarmReq, MigrateFarmRes,
+  TownListing,
   PhotoUploadReq, PhotoUploadRes,
 } from '@/types'
 
@@ -131,6 +132,8 @@ export interface BackendAdapter {
   getProgression(): Promise<RpcResult<ProgressionSnapshot>>
   getCollections(): Promise<RpcResult<CollectionsSnapshot>>
   getMailForaging(): Promise<RpcResult<MailForagingSnapshot>>
+  /** Town Browser (12-migration §3.1.3) — города, открытые для переезда. Не часть `TownSnapshot`. */
+  listTowns(): Promise<RpcResult<TownListing[]>>
 
   // ── Realtime (только рассылка, 20-backend §3.5) ──
   subscribe(channel: RealtimeChannelKind, handler: RealtimeHandler): Unsubscribe
@@ -192,7 +195,7 @@ export interface BackendAdapter {
   // ── Edge Functions (внешние эффекты/оркестрация, 20-backend §3.4.2) ──
   migrationPropose(req: MigrationProposeReq): Promise<RpcResult<MigrationProposeRes>>
   migrationVote(req: MigrationVoteReq): Promise<RpcResult<MigrationVoteRes>>
-  migrateFarm(req: MigrateFarmReq): Promise<RpcResult<void>>
+  migrateFarm(req: MigrateFarmReq): Promise<RpcResult<MigrateFarmRes>>
   iapVerify(req: IapVerifyReq): Promise<RpcResult<IapVerifyRes>>
   photoUpload(req: PhotoUploadReq): Promise<RpcResult<PhotoUploadRes>>
 }
@@ -342,9 +345,19 @@ export interface EventSystem {
   contribute(itemKey: string, qty: number, channel: 'donate' | 'passive'): Promise<RpcResult<EventContributeRes>>
 }
 
+/**
+ * TownSystem — переезды (12-migration): Moving Van (Уровень 1), Street Caravan (Уровень 2,
+ * `kind:'street_caravan'`), Town Merge (Уровень 3, `kind:'town_merge'`) через один и тот же
+ * propose/vote (§3.2/§3.3). `listTowns`/`moveFarm` — чтение Town Browser и исполнение
+ * личного переезда (§3.1.3/§3.4).
+ */
 export interface TownSystem {
   proposeMigration(req: MigrationProposeReq): Promise<RpcResult<MigrationProposeRes>>
   voteMigration(proposalId: UUID, vote: 'yes' | 'no'): Promise<RpcResult<MigrationVoteRes>>
+  /** Города, открытые для переезда (Town Browser, §3.1.3) — чтение, без оптимистики. */
+  listTowns(): Promise<RpcResult<TownListing[]>>
+  /** Исполняет личный Moving Van в `targetTown` (§3.1/§3.4) — квитанция конвертации + кулдаун. */
+  moveFarm(targetTown: string): Promise<RpcResult<MigrateFarmRes>>
 }
 
 export interface ProgressionSystem {

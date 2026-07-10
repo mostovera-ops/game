@@ -21,6 +21,69 @@
 | 6 | `0006_functions.sql` | OK | 2026-07-10 06:48:36 |
 | 7 | `0007_seed.sql` | OK | 2026-07-10 06:48:37 |
 
+## Обновление C5 (deploy-verifier) — 2026-07-10, миграции 0008–0014 + шлюз + cloud-сьют
+
+**Все 14 миграций применены по порядку. SQL-ошибок при 0011–0014 — 0. Правок в файлах миграций — 0.**
+Канал/инструмент — те же (`scripts/db-apply.mjs`, `curl -4`, реестр `public._sunnyside_migrations`).
+Токен для 0011–0014 и деплоя брался из запасной keychain-записи
+`security find-generic-password -s "Supabase Sunnyside PAT" -w` (основная `"Supabase CLI"` виснет — не трогалась).
+
+| # | Файл | Статус | applied_at (UTC) |
+|---|------|--------|------------------|
+| 8 | `0008_cron.sql` | OK | 2026-07-10 07:15:13 |
+| 9 | `0009_test_helpers.sql` | OK | 2026-07-10 07:25:28 |
+| 10 | `0010_fixes.sql` | OK | 2026-07-10 07:25:30 |
+| 11 | `0011_server_core.sql` | OK | 2026-07-10 08:27:10 |
+| 12 | `0012_server_gameplay.sql` | OK | 2026-07-10 08:27:11 |
+| 13 | `0013_server_social.sql` | OK | 2026-07-10 08:27:12 |
+| 14 | `0014_hardening.sql` | OK | 2026-07-10 08:27:14 |
+
+- **Функции public:** 107 (из них **88 `SECURITY DEFINER`**). Все read-снапшоты
+  адаптера (`get_farm/get_inventory/get_server_time/get_calendar/get_town/get_demand_board/
+  get_fair_stall/get_contests/get_event/get_progression/get_collections/get_mail_foraging`,
+  `wallet_get`) задеплоены и исполнимы для `anon,authenticated`. Ленивый `ensure_bootstrap`
+  создаёт игрока+ферму+стартовый набор в seed-городе `Sunnyside` (`…5eed0001`).
+
+### Шлюз `game` (Edge Function) — редеплой
+
+`pnpm dlx supabase@latest functions deploy game --project-ref pvautnecztynbnzrrdra --use-api`
+→ `Deployed Functions.` (7 ассетов: `index.ts`, `handlers.ts`, `_shared/*`). Токен из запасной keychain-записи.
+
+### Cloud-сьют — расширен до **22/22** (был 12/12), Node 24, `SUPABASE_TEST=1`
+
+Файл `sunnyside/src/net/adapters/supabase.cloud.test.ts`. Запуск:
+`SUPABASE_TEST=1 <env из .env.sunnyside> pnpm exec vitest run src/net/adapters/supabase.cloud.test.ts` (Node 24.14).
+
+- **Блок 1 (12) — T1-петля + RLS** (без изменений, регресс зелёный после 0011–0014).
+- **Блок 2 (4) — бутстрап нового anon-игрока через адаптер:** `getFarm` лениво создаёт игрока
+  (6 грядок, ≥8 построек, seed-город); кошелёк `1000◈/40◉`; **полная T1-гидрация — ВСЕ 13 get_*-снапшотов `ok`
+  (адаптер не получает `not_found`)**; `get_inventory` = стартовые семена.
+- **Блок 3 (6) — мультиплеер, два anon в одном seed-городе:** общий ростер `get_town`;
+  **чат** A→town доходит до B (RLS town-канала); **помощь соседу** A↔B — обе стороны записаны;
+  **подарок** A→B (сток списан); **кооп-заказ** — вклад A(2)+B(3) агрегируется в `progress=5`;
+  **ивент** — вклады A и B агрегируются в общий `meter_fp` недели (+персональные вклады обоих).
+
+Проверено 2× подряд — стабильно 22/22 (данные в shared seed-городе чистятся в `afterAll`;
+ивент-метр измеряется дельтой, не абсолютом).
+
+### Найденные контракт-баги адаптера (клиент↔сервер, НЕ чинил — файл `net/` активно правит др. агент)
+
+1. `supabase.ts::chatPost` шлёт RPC-параметры `{ channel, body, sticker_key }`, а `chat_post`
+   ждёт `{ p_channel_kind, p_body, p_sticker_key }` → прямой вызов адаптера получит `not_found`.
+   (В cloud-сьюте чат протестирован на уровне RPC с корректными именами.)
+2. `EventContributeReq.channel` = `'donate' | 'passive'`, а CHECK `event_contributions.channel`
+   допускает только `'contrib_donate' | 'passive_sell'` → вклад через адаптер упрётся в `23514`.
+   (В сьюте использован `contrib_donate`.)
+
+### Локальный гейт `sunnyside/` (tsc/build/vitest/e2e) — КРАСНЫЙ по причине ПАРАЛЛЕЛЬНОЙ WIP (не C5)
+
+`pnpm lint:boundary` — ✅. `pnpm typecheck`/`build` — ❌, `pnpm vitest run` — **1182 passed / 15 failed / 22 skipped**
+(22 skipped = gated cloud-сьют). **Все 15 падений — чужая незавершённая работа:** слайс чата
+`src/state/chat.ts` не зарегистрирован в `src/state/index.ts` (`s.chat` = `undefined` → крэш
+`src/ui/chat/ChatLauncher.tsx`/`ChatPanel.tsx` и коллатерально `src/ui/hud/HudRoot.test.tsx`),
+плюс WIP sound-bridge (`src/scene/farm/systems.tsx`: unused `sound`). Мои правки — только
+`supabase.cloud.test.ts`; `net/`-адаптеры зелёные (`local.test.ts` 27/27, `supabase.test.ts` 22/22).
+
 ## Доступ / токен (важно для последующих запусков)
 
 - Keychain-сервис **`"Supabase CLI"` виснет** при чтении (`security find-generic-password -s "Supabase CLI" -w` не возвращается — вероятно ACL с GUI-подтверждением, которое некому нажать). Прямой вызов `security ... "Supabase CLI"` заблокировал даже команду с `curl --max-time`.

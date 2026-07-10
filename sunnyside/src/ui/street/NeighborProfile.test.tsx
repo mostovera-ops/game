@@ -30,6 +30,7 @@ function seedTown() {
     roster: [{ userId: 'user_a', farmId: 'farm_a', displayName: 'Big Joe', streetId: 'street_1' }],
     coopOrders: [],
     migrations: [],
+    movingVan: { cooldownUntil: 0 },
   }
   useStore.getState().setTown(town)
 }
@@ -70,6 +71,20 @@ describe('NeighborProfile (F8)', () => {
       fireEvent.click(screen.getByTestId('neighbor-profile-help-btn'))
     })
     expect(social.help).toHaveBeenCalledWith('user_a', 'water')
+  })
+
+  it('клик по Присмотреть вызывает SocialSystem.sit(userId) — neighbor_sit', async () => {
+    seedTown()
+    const social = makeSocialSystem()
+    render(
+      <SocialSystemProvider value={social}>
+        <NeighborProfile userId="user_a" />
+      </SocialSystemProvider>,
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('neighbor-profile-sit-btn'))
+    })
+    expect(social.sit).toHaveBeenCalledWith('user_a')
   })
 
   it('клик по крестику вызывает onBack', () => {

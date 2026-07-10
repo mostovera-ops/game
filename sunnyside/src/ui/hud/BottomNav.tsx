@@ -11,6 +11,7 @@
 
 import { useStore } from '@/state'
 import { isWindowOpen } from '@/engine/clock'
+import { useSound } from '@/ui/useSound'
 import { NAV_SCENES, NAV_SCENE_LABEL, pick } from './labels'
 
 export function BottomNav() {
@@ -19,6 +20,7 @@ export function BottomNav() {
   const calendar = useStore((s) => s.clock.calendar)
   const serverNow = useStore((s) => s.serverNow)
   const locale = useStore((s) => s.ui.locale)
+  const sound = useSound()
 
   const fairOpen = calendar ? isWindowOpen(calendar.fairWindow, serverNow()) : true
 
@@ -34,7 +36,10 @@ export function BottomNav() {
           <button
             key={key}
             data-testid={`scene-btn-${key}`}
-            onClick={() => goto(key)}
+            onClick={() => {
+              sound.play('ui_click')
+              goto(key)
+            }}
             className={
               'rounded-full px-4 py-1.5 text-sm font-semibold transition ' +
               (isActive

@@ -15,6 +15,9 @@ export const SCENE_KEYS: readonly SceneKey[] = ['farm', 'town', 'fair', 'shift']
  * «☰», НЕ отдельная таб-иконка» → {Cosmetics · Boosters · Bundles · Dimes}). Тоже `(нов.)`
  * без явного canon-ключа (`ui_prize_machine`/`ui_route_pass` уже канон-ключи — отдельные
  * панели, открываются из Shop, но не вложены в него).
+ * `ui_chat` — W3 Street Chat (19-ui-ux §3.6, 11-town §3.9/§5) — нейминг-кандидат
+ * (11-town §8 п.1, ждёт PR в 00-canon.md §3.12), заведён по тому же прецеденту, что
+ * `ui_notif_log`/`ui_shop` выше.
  */
 export type UiScreenKey =
   | 'ui_notif_log'
@@ -37,6 +40,17 @@ export type UiScreenKey =
   | 'ui_regulars_club'
   | 'ui_potluck'
   | 'ui_expeditions'
+  | 'ui_chat'
+  // ── ui-social-misc (11-town §3.7, 16-retention §4.1, 03-animals §5, 09-fair §4.5) ──
+  // Все четыре — нейминг-кандидаты уже перечисленные в спеках (не выдуманы заново,
+  // AGENTS.md §0.7): `ui_mentor` (11-town §9 п.1), `ui_vacation_toggle` (16-retention
+  // §4.1 таблица «Меню фермы → Уехать»), `ui_pet_card` (03-animals §5 таблица «Карточка
+  // животного»), `ui_contest_gallery` (09-fair §4.5 «Contest Gallery», слаг по прецеденту
+  // `PlaceholderMesh id="ui_contest_gallery_board"`, scene/fair/FairScene.tsx).
+  | 'ui_mentor'
+  | 'ui_vacation_toggle'
+  | 'ui_pet_card'
+  | 'ui_contest_gallery'
 
 export const UI_SCREEN_KEYS: readonly UiScreenKey[] = [
   'ui_notif_log',
@@ -59,6 +73,11 @@ export const UI_SCREEN_KEYS: readonly UiScreenKey[] = [
   'ui_regulars_club',
   'ui_potluck',
   'ui_expeditions',
+  'ui_chat',
+  'ui_mentor',
+  'ui_vacation_toggle',
+  'ui_pet_card',
+  'ui_contest_gallery',
 ] as const
 
 /** Локаль (canon §5 — двуязычие RU/EN). */

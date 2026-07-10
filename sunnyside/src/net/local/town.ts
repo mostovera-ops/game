@@ -10,7 +10,7 @@
  * ГРАНИЦА: `net/` может импортировать `@/engine`, `@/types`, локальные модули.
  */
 
-import type { EpochMs, CoopOrder, Contest, ProductKey } from '@/types'
+import type { EpochMs, CoopOrder, Contest, ProductKey, TownListing, MigrationKind, UUID } from '@/types'
 import {
   weekStartOfIndex,
   EVENT_FINALE_OFFSET,
@@ -20,7 +20,7 @@ import {
   HOUR_MS,
 } from '@/engine/clock'
 import { goal100, hitMilestones } from '@/engine/event/milestones'
-import { seededRng } from '@/engine/econ/rng'
+import { seededRng, hashString } from '@/engine/econ/rng'
 import { EVENT_KEYS } from '@/types'
 import type { LocalWorld } from './world'
 import { makeDemandBoard, LOCAL_NPC_COUNT } from './world'
@@ -174,4 +174,87 @@ export function catchUpRollover(world: LocalWorld, targetWeek: number): number {
     count += 1
   }
   return count
+}
+
+// ── Town Browser (12-migration §3.1.3) ────────────────────────────────────────────────
+
+/** Пул имён-кандидатов городов-приёмников (Americana 50-х, placeholder — не canon-ключи). */
+const TOWN_NAME_POOL = [
+  'Maple Grove', 'Cedar Falls', 'Pinehurst', 'Elm Corners', 'Sunnyvale Junction',
+  'Clover Bend', 'Birchwood', 'Hollyhock', 'Amber Fields', 'Sparrow Crossing',
+]
+
+/**
+ * Список городов, открытых для переезда (`BackendAdapter.listTowns`, §3.1.3). Детерминирован
+ * от `townSeed` текущего игрока — стабильный список между вызовами/тестами. Локальная
+ * симуляция не держит настоящие соседние миры: карточки — правдоподобные плейсхолдер-данные,
+ * ДОСТАТОЧНЫЕ для UI Town Browser (фильтры/превью/подтверждение), не полноценные шарды.
+ */
+export function generateTownListings(world: LocalWorld): TownListing[] {
+  const rng = seededRng((world.townSeed ^ 0x7157b40) >>> 0)
+  return TOWN_NAME_POOL.map((name, i) => {
+    const capacity = 200
+    const residents = Math.round(rng.uniform(40, 190))
+    const totalStreets = Math.max(2, Math.round(residents / 15))
+    const freeStreets = residents < capacity * 0.85 ? Math.round(rng.uniform(0, 3)) : 0
+    const dauAvg = Math.round(rng.uniform(15, 90))
+    const hasFriends = rng.next() < 0.3
+    const recommended = freeStreets >= 3 && dauAvg >= 40
+    return {
+      townId: `town-${world.townSeed.toString(16)}-${i}`,
+      name,
+      residents,
+      capacity,
+      freeStreets,
+      totalStreets,
+      dauAvg,
+      languageTag: 'en',
+      hasFriends,
+      recommended,
+    }
+  })
+}
+
+// ── Голосование переездов (Street Caravan / Town Merge, §3.2.1/§3.3.3) ────────────────
+
+/**
+ * Кворум голосования (население берётся из локальной симуляции, гипотезы спеки):
+ *  - `street_caravan`: 60% состава Стрита-инициатора (§3.2.1);
+ *  - `town_merge`: 50% активных жителей города-донора (§3.3.3, кворум угасающего города —
+ *    приёмная сторона не моделируется отдельным миром в local-симуляции);
+ *  - `moving_van` не голосуется (прямой `migrateFarm`) — кворум 1 (не используется).
+ */
+export function quorumFor(world: LocalWorld, kind: MigrationKind, streetId?: UUID): number {
+  if (kind === 'street_caravan') {
+    const street = world.streets.find((s) => s.id === streetId)
+    const size = (street?.memberCount ?? 0) + 1 // + сам инициатор
+    return Math.max(1, Math.ceil(size * 0.6))
+  }
+  if (kind === 'town_merge') {
+    const size = world.npcs.length + 1
+    return Math.max(1, Math.ceil(size * 0.5))
+  }
+  return 1
+}
+
+/**
+ * Симулирует голоса соседей на момент создания предложения (детерминировано от
+ * `proposalId` — та же логика, что и боты кооп/ивента: чистая функция от seed, не от
+ * wall-clock). Дружелюбный тон канона (P3) — соседи по умолчанию скорее «за» (70%).
+ */
+export function simulateBotVotes(
+  world: LocalWorld,
+  proposalId: string,
+  kind: MigrationKind,
+  streetId?: UUID,
+): { yes: number; no: number } {
+  const pool = kind === 'street_caravan' ? world.npcs.filter((n) => n.streetId === streetId) : world.npcs
+  const rng = seededRng(hashString(proposalId))
+  let yes = 0
+  let no = 0
+  for (let i = 0; i < pool.length; i++) {
+    if (rng.next() < 0.7) yes += 1
+    else no += 1
+  }
+  return { yes, no }
 }

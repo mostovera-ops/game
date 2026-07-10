@@ -33,6 +33,7 @@ import {
 } from './session'
 import { NOOP_SHIFT_SYSTEM } from './shiftSystemFallback'
 import { T, patienceColor, phaseColor } from './theme'
+import { useSound } from '@/ui/useSound'
 
 export interface ShiftResult {
   served: number
@@ -68,6 +69,9 @@ const PHASE_LABEL: Record<'warmup' | 'rush' | 'last_call', string> = {
 
 export function ShiftScreen({ initial, startedAt, now, onEnd, shiftSystem }: ShiftScreenProps) {
   const shift = shiftSystem ?? NOOP_SHIFT_SYSTEM
+  // audio-wiring: касса-«дзынь» на подачу + восходящий «дзынь×2» на серию без промаха
+  // (22-av §2.3 «серия без промаха — восходящий синтезаторный «дзынь×2» со свечением»).
+  const sound = useSound()
   const [run, setRun] = useState<RunState>(initial)
   const [nowSec, setNowSec] = useState(0)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -161,12 +165,19 @@ export function ShiftScreen({ initial, startedAt, now, onEnd, shiftSystem }: Shi
     if (!trayMatches(tray.map((d) => d.tier), active.dishTiers)) return
     const servedKeys = tray.map((d) => d.key)
     setRun((r) => resolveGuest(r, active.id, 'normal', servedKeys))
+    sound.play('sale')
     setTray([])
     setActiveId(null)
   }
 
   const canServe = !!active && trayMatches(tray.map((d) => d.tier), active.dishTiers)
   const bigCombo = combo >= 10
+
+  // Однократно на пересечении порога ×2 чаевых (не на каждый рендер, не на выход из серии).
+  useEffect(() => {
+    if (bigCombo) sound.play('tip_bonus')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bigCombo])
 
   return (
     <div

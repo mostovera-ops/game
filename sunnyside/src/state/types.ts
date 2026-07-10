@@ -18,6 +18,7 @@ import type { CoopSlice } from './coop'
 import type { FairSlice } from './fair'
 import type { EventSlice } from './event'
 import type { TownSlice } from './town'
+import type { ChatSlice } from './chat'
 import type { ProgressionSlice } from './progression'
 import type { CollectionsSlice } from './collections'
 import type { ShopSlice } from './shop'
@@ -36,6 +37,7 @@ export type StoreState = SessionSlice &
   FairSlice &
   EventSlice &
   TownSlice &
+  ChatSlice &
   ProgressionSlice &
   CollectionsSlice &
   ShopSlice &

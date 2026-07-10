@@ -27,6 +27,7 @@ import { createTownSlice } from './town'
 import { createProgressionSlice } from './progression'
 import { createCollectionsSlice } from './collections'
 import { createShopSlice } from './shop'
+import { createChatSlice } from './chat'
 import { createUiSlice } from './ui'
 import { createSceneSlice } from './scene'
 
@@ -51,6 +52,7 @@ export const useStore = create<StoreState>()(
       ...createProgressionSlice(...a),
       ...createCollectionsSlice(...a),
       ...createShopSlice(...a),
+      ...createChatSlice(...a),
       ...createUiSlice(...a),
       ...createSceneSlice(...a),
     })),
@@ -63,14 +65,26 @@ export const useStore = create<StoreState>()(
       // тип, а восстановление недостающего делает merge ниже.
       partialize: (s) =>
         ({
-          ui: { locale: s.ui.locale, activePanel: s.ui.activePanel, perf: { liteMode: s.ui.perf.liteMode } },
+          ui: {
+            locale: s.ui.locale,
+            activePanel: s.ui.activePanel,
+            perf: { liteMode: s.ui.perf.liteMode },
+            // Громкость шин (audio-wiring, 22-av §5) — небольшое пользовательское
+            // предпочтение, не игровая истина/валюта — безопасно для persist (AGENTS.md §0.5).
+            volume: s.ui.volume,
+          },
           scene: { active: s.scene.active },
         }) as unknown as StoreState,
       // Глубокий merge: восстановленный белый список накладывается на свежий стейт,
       // сохраняя рантайм-поля (toasts/debug/fps) и методы слайсов.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as {
-          ui?: { locale?: StoreState['ui']['locale']; activePanel?: StoreState['ui']['activePanel']; perf?: { liteMode?: boolean } }
+          ui?: {
+            locale?: StoreState['ui']['locale']
+            activePanel?: StoreState['ui']['activePanel']
+            perf?: { liteMode?: boolean }
+            volume?: Partial<StoreState['ui']['volume']>
+          }
           scene?: { active?: StoreState['scene']['active'] }
         }
         return {
@@ -80,6 +94,7 @@ export const useStore = create<StoreState>()(
             ...(p.ui?.locale ? { locale: p.ui.locale } : {}),
             ...(p.ui && 'activePanel' in p.ui ? { activePanel: p.ui.activePanel ?? null } : {}),
             perf: { ...current.ui.perf, ...(p.ui?.perf ?? {}) },
+            volume: { ...current.ui.volume, ...(p.ui?.volume ?? {}) },
           },
           scene: { ...current.scene, ...(p.scene?.active ? { active: p.scene.active } : {}) },
         }

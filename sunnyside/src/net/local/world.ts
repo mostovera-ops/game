@@ -46,11 +46,21 @@ import type {
   LedgerEntry,
   DemandBoard,
 } from '@/types'
+import type { MovingVanStatus, GrandReopeningState } from '@/types'
 import { EVENT_KEYS } from '@/types'
-import { weekNumberOf } from '@/engine/clock'
+import { weekNumberOf, DAY_MS } from '@/engine/clock'
 import { generateWeeklyDemand } from '@/engine/econ/demand'
 import { goal100 } from '@/engine/event/milestones'
 import { hashSeed, seededRng } from '@/engine/econ/rng'
+
+/** Мин. срок в текущем городе перед первым переездом (12-migration §3.1.2, гипотеза). */
+export const MIN_TOWN_TENURE_MS = 3 * DAY_MS
+
+/** Кулдаун личного Moving Van/каравана Стрита между переездами (12-migration §3.1.2, canon). */
+export const MOVING_VAN_COOLDOWN_MS = 14 * DAY_MS
+
+/** Длительность буффов Grand Reopening (12-migration §3.3.4/§4.3). */
+export const GRAND_REOPENING_MS = 7 * DAY_MS
 
 /**
  * Собрать `DemandBoard` (types/economy) из чистой недельной генерации спроса
@@ -68,8 +78,11 @@ export function makeDemandBoard(weekIndex: number, townId: UUID): DemandBoard {
   }
 }
 
-/** Схема-версия мира: bump при ломающем изменении формы → persist.ts сбросит кэш. */
-export const WORLD_SCHEMA_VERSION = 1
+/**
+ * Схема-версия мира: bump при ломающем изменении формы → persist.ts сбросит кэш.
+ * v2 (ui-migration): добавлены `movingVan`/`grandReopening` (12-migration).
+ */
+export const WORLD_SCHEMA_VERSION = 2
 
 /** Симулированный сосед города (для кооп/ивент-ботов и ростера town). */
 export interface LocalNpc {
@@ -135,6 +148,10 @@ export interface LocalWorld {
   streets: Street[]
   projects: Partial<Record<TownProjectKey, TownProject>>
   npcs: LocalNpc[]
+  /** Статус личного Moving Van (12-migration §3.1.2) — кулдаун между переездами. */
+  movingVan: MovingVanStatus
+  /** Grand Reopening (12-migration §3.3.4) — включается по успешному голосованию Town Merge. */
+  grandReopening: GrandReopeningState
 
   // ── Экспедиции/почта/фуражинг ──
   expeditions: Expedition[]
@@ -347,6 +364,11 @@ export function createInitialWorld(userId: UUID, townId: UUID, now: EpochMs): Lo
     streets,
     projects: {},
     npcs,
+    // Мин. срок в городе перед первым переездом (§3.1.2) — не 14-дневный кулдаун, а
+    // разовое "обвыкнуться" окно; после первого реального переезда migrateFarm
+    // перезапишет это полным MOVING_VAN_COOLDOWN_MS.
+    movingVan: { cooldownUntil: now + MIN_TOWN_TENURE_MS },
+    grandReopening: { active: false, endsAt: 0 },
 
     expeditions: [],
     mailOrders: [],

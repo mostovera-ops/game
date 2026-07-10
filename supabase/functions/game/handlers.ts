@@ -180,6 +180,7 @@ export async function shiftSubmit(
   const shiftsPerWindow = Number(caps["shift_per_fair_window"] ?? 3);
   const cooldownH = Number(caps["shift_cooldown_hours"] ?? 2);
   const ticketCap = Number(caps["ticket_cap_per_week"] ?? 5);
+  const tipsPct = Number(caps["shift_tips_pct"] ?? 0.1); // game_configs.caps (0011); 14-economy гипотеза
 
   // Окно ярмарки текущей недели.
   const { data: cal } = await admin
@@ -224,7 +225,7 @@ export async function shiftSubmit(
     revenue += Number(s.revenue ?? 0);
     fp += Number(s.fp ?? 0);
   }
-  const tips = Math.floor(revenue * 0.1); // гипотеза баланса (14-economy.md)
+  const tips = Math.floor(revenue * tipsPct); // ставка чаевых — game_configs.caps.shift_tips_pct (0011)
   const fairScore = revenue + fp;
 
   // Тикеты из смены с недельным кэпом (R10).
@@ -283,10 +284,11 @@ export async function expeditionStart(
   // Детерминированный payload (seed = farm:state:week) — гарантированный ≥1 ряд (P3).
   const drops = await cfg(admin, ctx.farm_id, "drops");
   const rows = Number(drops["expedition_guaranteed_rows"] ?? 1);
+  const crateQty = Number(drops["expedition_crate_base_qty"] ?? 1); // game_configs.drops (0011)
   const payload = Array.from({ length: rows }, (_, i) => ({
     item_key: `${p.state_key}_crate`,
     item_class: "crop",
-    qty: 1 + i,
+    qty: crateQty + i,
     quality: 1,
   }));
   const now = new Date();
@@ -415,7 +417,8 @@ export async function forageCollect(
     .maybeSingle();
   if (!pt) throw new Error("no_point");
 
-  const dailyCap = 8; // гипотеза; финализируется 08-mail-foraging.md
+  const caps = await cfg(admin, ctx.farm_id, "caps");
+  const dailyCap = Number(caps["forage_daily_cap"] ?? 8); // game_configs.caps (0011); 08-mail-foraging §3.2.3
   const gd = new Date().toISOString().slice(0, 10);
   const { data: fd } = await admin
     .from("forage_daily")

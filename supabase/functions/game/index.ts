@@ -30,20 +30,50 @@ const RPC_ACTIONS: Record<string, [string, (b: Record<string, unknown>) => Recor
   streak_check: ["streak_check", () => ({})],
   streak_insure: ["streak_insure", () => ({})],
   wallet_get: ["wallet_get", () => ({})],
+  // srv-social (0013): чат/переезды/отпуск/присмотр/менторство/косметика/онбординг.
+  chat_post: ["chat_post", (b) => ({ p_channel_kind: b.channel_kind ?? b.channel, p_body: b.body ?? null, p_sticker_key: b.sticker_key ?? null })],
+  migration_propose: ["migration_propose", (b) => ({ p_kind: b.kind ?? "street_caravan", p_target_town: b.target_town })],
+  migration_vote: ["migration_vote", (b) => ({ p_proposal: b.proposal_id, p_vote: b.vote })],
+  migration_move: ["migration_move", (b) => ({ p_target_town: b.target_town })],
+  vacation_start: ["vacation_start", (b) => ({ p_days: b.days ?? 14 })],
+  vacation_end: ["vacation_end", () => ({})],
+  neighbor_sit: ["neighbor_sit", (b) => ({ p_host: b.host_id })],
+  mentor_invite: ["mentor_invite", (b) => ({ p_mentee: b.mentee_id })],
+  mentor_complete: ["mentor_complete", (b) => ({ p_mentee: b.mentee_id, p_milestone: b.milestone })],
+  decor_set: ["decor_set", (b) => ({ p_decor_key: b.decor_key, p_slot: b.slot ?? null, p_placed: b.placed ?? true, p_layout: b.layout ?? null })],
+  neon_save: ["neon_save", (b) => ({ p_config: b.config })],
+  onboarding_step: ["onboarding_step", (b) => ({ p_step: b.step ?? null, p_flag: b.flag ?? null })],
+  // srv-gameplay (0012): прогрессия/ярмарка/смена/конкурсы/экспедиции/почта/фуражинг/секретки/питомцы.
+  building_upgrade: ["building_upgrade", (b) => ({ p_building_key: b.building_key })],
+  research_start: ["research_start", (b) => ({ p_node_key: b.node_key })],
+  staff_assign: ["staff_assign", (b) => ({ p_staff_key: b.staff_key, p_post: b.post })],
+  staff_upgrade: ["staff_upgrade", (b) => ({ p_staff_key: b.staff_key })],
+  fair_stall_set: ["fair_stall_set", (b) => ({ p_lots: b.lots ?? [] })],
+  fair_collect: ["fair_collect", () => ({})],
+  shift_submit: ["shift_submit", () => ({})],
+  contest_enter: ["contest_enter", (b) => ({ p_contest_key: b.contest_key, p_payload: b.payload ?? {} })],
+  contest_vote: ["contest_vote", (b) => ({ p_contest_id: b.contest_id, p_entry_id: b.entry_id })],
+  expedition_start: ["expedition_start", (b) => ({ p_state_key: b.state_key, p_route_slot: b.route_slot ?? 1 })],
+  expedition_collect: ["expedition_collect", (b) => ({ p_exp_ids: b.exp_ids })],
+  mail_order: ["mail_order", (b) => ({ p_item_key: b.item_key })],
+  mail_collect: ["mail_collect", (b) => ({ p_order_ids: b.order_ids })],
+  mail_claim: ["mail_collect", (b) => ({ p_order_ids: b.order_ids })], // алиас спеки → mail_collect
+  mail_speedup: ["mail_speedup", (b) => ({ p_order_id: b.order_id })],
+  forage_collect: ["forage_collect", (b) => ({ p_point_id: b.point_id })],
+  fish_cast: ["fish_cast", () => ({})],
+  recipe_experiment: ["recipe_experiment", (b) => ({ p_inputs: b.inputs ?? [] })],
+  rename_pet: ["rename_pet", (b) => ({ p_animal_id: b.animal_id, p_name: b.name })],
+  affection_gift: ["affection_gift", (b) => ({ p_animal_id: b.animal_id, p_gift_key: b.gift_key })],
 };
 
-// Действия, реализованные в Edge (service_role) — нет готового RPC.
+// Действия, реализованные в Edge (service_role). Открытие прилавка и выкладка
+// лотов остаются в Edge; остальной геймплей-домен перенесён в Postgres-RPC
+// (0012_server_gameplay.sql): shift_submit/expedition_*/mail_*/forage_collect/
+// fish_cast теперь — SECURITY DEFINER RPC (см. RPC_ACTIONS выше).
 type EdgeHandler = (admin: ReturnType<typeof adminClient>, uid: string, body: Record<string, unknown>) => Promise<unknown>;
 const EDGE_ACTIONS: Record<string, EdgeHandler> = {
   fair_open: (a, u, b) => H.fairOpen(a, u, b as { stall_id: string }),
   fair_list: (a, u, b) => H.fairList(a, u, b as { lots: [] }),
-  shift_submit: (a, u, b) => H.shiftSubmit(a, u, b),
-  expedition_start: (a, u, b) => H.expeditionStart(a, u, b as { state_key: string; route_slot?: number }),
-  expedition_collect: (a, u, b) => H.expeditionCollect(a, u, b as { exp_ids: string[] }),
-  mail_order: (a, u, b) => H.mailOrder(a, u, b as { item_key: string }),
-  mail_claim: (a, u, b) => H.mailClaim(a, u, b as { order_ids: string[] }),
-  forage_collect: (a, u, b) => H.forageCollect(a, u, b as { point_id: string }),
-  fish_cast: (a, u) => H.fishCast(a, u),
 };
 
 // Только-чтение (без идемпотентности).

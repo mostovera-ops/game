@@ -56,6 +56,7 @@ export function createStubAdapter(kind: BackendAdapterKind): BackendAdapter {
     getProgression: () => stubResult(),
     getCollections: () => stubResult(),
     getMailForaging: () => stubResult(),
+    listTowns: () => stubResult(),
 
     // realtime
     subscribe: (_channel, _handler: RealtimeHandler): Unsubscribe => noopUnsub,
@@ -117,7 +118,7 @@ export function createStubAdapter(kind: BackendAdapterKind): BackendAdapter {
     // edge
     migrationPropose: () => stubResult(),
     migrationVote: () => stubResult(),
-    migrateFarm: () => stubResult<void>(),
+    migrateFarm: () => stubResult(),
     iapVerify: () => stubResult(),
     photoUpload: () => stubResult(),
   }

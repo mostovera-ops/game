@@ -71,6 +71,44 @@ export interface MigrationProposal extends Versioned {
   votingWindow: { opensAt: EpochMs; closesAt: EpochMs }
   tally: { yes: number; no: number; quorum: number }
   myVote?: 'yes' | 'no'
+  /** Стрит-инициатор (только `street_caravan`, 12-migration §3.2.1) — кворум считается от него. */
+  streetId?: UUID
+}
+
+/**
+ * Карточка города в Town Browser (`ui_town_browser`, нейминг-кандидат — 12-migration §3.1.3).
+ * Только для навигации/выбора цели переезда — не путать с `TownSnapshot` (истина текущего
+ * города игрока). Список выдаёт `BackendAdapter.listTowns()`, не персистится.
+ */
+export interface TownListing {
+  townId: UUID
+  name: string
+  residents: number
+  capacity: number
+  freeStreets: number
+  totalStreets: number
+  /** 7-дневный средний DAU (12-migration §4.7 — зелёная/жёлтая/красная зона). */
+  dauAvg: number
+  languageTag?: string
+  /** Есть ли в этом городе кто-то из френд-листа игрока (фильтр «Где мои друзья», §3.1.3). */
+  hasFriends: boolean
+  /** Рекомендован алгоритмом (≥3 своб. улицы, активность выше среднего, §3.1.3). */
+  recommended: boolean
+}
+
+/**
+ * Статус личного Moving Van (`ui_moving_truck`, 12-migration §3.1.2). Аккаунт-широкий, но
+ * кэшируется вместе со снапшотом текущего города — тот же паттерн, что и roster/coopOrders.
+ */
+export interface MovingVanStatus {
+  /** До какого момента переезд недоступен (мин. 3 дня в городе ИЛИ 14 дней кулдауна после переезда). */
+  cooldownUntil: EpochMs
+}
+
+/** Баннер Grand Reopening (`ui_grand_reopening`, нейминг-кандидат — 12-migration §3.3.4/§4.3). */
+export interface GrandReopeningState {
+  active: boolean
+  endsAt: EpochMs
 }
 
 /** Снапшот города (town-слайс). Кэш; требует свежих серверных данных (не офлайн). */
@@ -83,4 +121,6 @@ export interface TownSnapshot {
   coopOrders: CoopOrder[]
   potluck?: Potluck
   migrations: MigrationProposal[]
+  movingVan: MovingVanStatus
+  grandReopening?: GrandReopeningState
 }

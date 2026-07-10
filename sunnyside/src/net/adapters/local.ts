@@ -94,7 +94,8 @@ import type {
   MigrationProposeReq, MigrationProposeRes,
   MigrationVoteReq, MigrationVoteRes,
   IapVerifyReq, IapVerifyRes,
-  MigrateFarmReq,
+  MigrateFarmReq, MigrateFarmRes,
+  TownListing,
   PhotoUploadReq, PhotoUploadRes,
   RealtimeChannelKind,
   WeekPhase,
@@ -147,6 +148,8 @@ import {
 import {
   createInitialWorld,
   nextId,
+  MOVING_VAN_COOLDOWN_MS,
+  GRAND_REOPENING_MS,
   type LocalWorld,
 } from '../local/world'
 import { createWorldStore, type WorldStore } from '../local/persist'
@@ -155,6 +158,9 @@ import {
   catchUpRollover,
   generateCoopOrders,
   generateContests,
+  generateTownListings,
+  quorumFor,
+  simulateBotVotes,
 } from '../local/town'
 
 // ── Константы локального сервера ────────────────────────────────────────────────────
@@ -317,6 +323,10 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
     processBuildingTimers(w, t)
     processFairSales(w, t)
     simulateTown(w, t)
+    // Grand Reopening (12-migration §3.3.4/§4.3) — буфф на 7 дней, снимается автоматически.
+    if (w.grandReopening.active && t >= w.grandReopening.endsAt) {
+      w.grandReopening = { active: false, endsAt: 0 }
+    }
     emitDomainEvents(w, t)
   }
 
@@ -516,6 +526,8 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
       coopOrders: w.coopOrders,
       potluck: w.potluck,
       migrations: w.migrations,
+      movingVan: w.movingVan,
+      grandReopening: w.grandReopening,
     }
   }
   function progressionSnapshot(w: LocalWorld): ProgressionSnapshot {
@@ -615,6 +627,10 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
     async getMailForaging() {
       const w = await ensureWorld(); sync(w)
       return ok<MailForagingSnapshot>({ orders: w.mailOrders, foragePoints: w.foragePoints })
+    },
+    async listTowns() {
+      const w = await ensureWorld()
+      return ok<TownListing[]>(generateTownListings(w))
     },
 
     // ── realtime (локально — эмитит по своим тикам, см. `emitDomainEvents`/`sync` выше) ──
@@ -1296,18 +1312,33 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
       return ok<PrizePullRes>(outcome)
     },
 
-    // ── edge functions ──
+    // ── edge functions (переезды, 12-migration) ──
     async migrationPropose(req: MigrationProposeReq) {
       const w = await ensureWorld(); sync(w)
+      // Одно активное предложение на цель за раз (edge case G9 — упрощённо: один на весь мир,
+      // локальная симуляция не моделирует параллельные города).
+      const already = w.migrations.find(
+        (m) => m.kind === req.kind && now() < m.votingWindow.closesAt && m.tally.yes < m.tally.quorum,
+      )
+      if (already) return err('conflict', 'уже есть активное голосование этого типа')
       const t = now()
       const proposalId = nextId(w, 'mig')
+      const quorum = quorumFor(w, req.kind, req.streetId)
+      // Соседи «молча» голосуют детерминированно к моменту создания предложения (как боты
+      // кооп/ивента, §симуляция) — игрок видит уже частично заполненный тэлли и добавляет
+      // свой голос (`migrationVote`) поверх.
+      const bots = simulateBotVotes(w, proposalId, req.kind, req.streetId)
+      // 72ч для каравана (§3.2.1, гипотеза), календарная неделя для town_merge упрощена до
+      // 7 дней от момента рассылки (§3.3.3 — точная привязка к Вс 23:59 UTC — зона clock).
+      const windowMs = req.kind === 'street_caravan' ? 3 * DAY_MS : 7 * DAY_MS
       w.migrations.push({
         version: 1,
         id: proposalId,
         kind: req.kind,
         targetTownId: req.targetTown,
-        votingWindow: { opensAt: t, closesAt: t + 2 * DAY_MS },
-        tally: { yes: 0, no: 0, quorum: 5 },
+        streetId: req.streetId,
+        votingWindow: { opensAt: t, closesAt: t + windowMs },
+        tally: { yes: bots.yes, no: bots.no, quorum },
       })
       await persist()
       return ok<MigrationProposeRes>({ proposalId })
@@ -1317,16 +1348,51 @@ export function createLocalAdapter(opts: LocalAdapterOptions = {}): BackendAdapt
       const prop = w.migrations.find((m) => m.id === req.proposalId)
       if (!prop) return err('not_found', 'нет предложения')
       if (prop.myVote) return err('conflict', 'уже проголосовано')
+      if (now() >= prop.votingWindow.closesAt) return err('window_closed', 'окно голосования закрылось')
       if (req.vote === 'yes') prop.tally.yes += 1
       else prop.tally.no += 1
       prop.myVote = req.vote
       prop.version += 1
+      // Town Merge: кворум набран → сразу запускаем Grand Reopening (§3.3.4) — local-упрощение,
+      // полноценный перенос стритов между городами вне зоны локальной симуляции одного мира.
+      if (prop.kind === 'town_merge' && prop.tally.yes >= prop.tally.quorum && !w.grandReopening.active) {
+        w.grandReopening = { active: true, endsAt: now() + GRAND_REOPENING_MS }
+      }
       await persist()
       return ok<MigrationVoteRes>({ yes: prop.tally.yes, no: prop.tally.no })
     },
-    async migrateFarm(_req: MigrateFarmReq) {
-      await ensureWorld()
-      return ok<void>(undefined)
+    async migrateFarm(req: MigrateFarmReq) {
+      const w = await ensureWorld(); sync(w)
+      const t = now()
+      if (t < w.movingVan.cooldownUntil) {
+        return err('not_ready', 'кулдаун переезда ещё не истёк')
+      }
+      if (req.targetTown === w.townId) {
+        return err('invalid_payload', 'нельзя переехать в свой же город')
+      }
+      // Конвертация личного вклада в Town Projects → 🎟 Tickets (§3.4/§4.4): курс 50:1, кэп
+      // 500/переезд; остаток не сгорает — переносится как carryover до следующего переезда.
+      const CONVERSION_RATE = 50
+      const CONVERSION_CAP_TICKETS = 500
+      const totalContribution = Object.values(w.projects).reduce(
+        (sum, p) => sum + (p?.myContribution ?? 0),
+        0,
+      )
+      const ticketsRaw = Math.floor(totalContribution / CONVERSION_RATE)
+      const ticketsAwarded = Math.min(ticketsRaw, CONVERSION_CAP_TICKETS)
+      const convertedBucks = ticketsAwarded * CONVERSION_RATE
+      const carryoverBucks = Math.max(0, totalContribution - convertedBucks)
+      if (ticketsAwarded > 0) credit(w, 'tickets', ticketsAwarded, 'migration_contribution_convert')
+      // Личный вклад обнуляется (уже конвертирован) — прогресс самого проекта не откатывается
+      // (§3.4: «уезжающий игрок просто больше не числится вкладчиком»).
+      for (const key of Object.keys(w.projects) as (keyof typeof w.projects)[]) {
+        const p = w.projects[key]
+        if (p) p.myContribution = 0
+      }
+      const cooldownUntil = t + MOVING_VAN_COOLDOWN_MS
+      w.movingVan = { cooldownUntil }
+      await persist()
+      return ok<MigrateFarmRes>({ ticketsAwarded, convertedBucks, carryoverBucks, cooldownUntil })
     },
     async iapVerify(_req: IapVerifyReq) {
       const w = await ensureWorld()

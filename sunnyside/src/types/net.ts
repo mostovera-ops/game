@@ -65,6 +65,7 @@ export type MutationKind =
   | 'prize_pull'
   | 'migration_propose'
   | 'migration_vote'
+  | 'migrate_farm'
 
 /** Автомат состояния мутации (21-client §3.5, §4.2). */
 export type MutationState =

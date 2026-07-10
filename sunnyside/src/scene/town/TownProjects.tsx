@@ -7,6 +7,7 @@
  * `scene/assets/registry.ts`, включая общую `tp_construction_site`, удалён).
  */
 
+import { memo } from 'react'
 import { Billboard, Text } from '@react-three/drei'
 import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
 import {
@@ -25,7 +26,13 @@ const PROJECT_LABEL: Record<TownProjectKey, string> = {
   tp_welcome_arch: 'Welcome Arch',
 }
 
-function ProjectMarker({ projectKey, project }: { projectKey: TownProjectKey; project: TownProject | undefined }) {
+const ProjectMarker = memo(function ProjectMarker({
+  projectKey,
+  project,
+}: {
+  projectKey: TownProjectKey
+  project: TownProject | undefined
+}) {
   const index = PROJECT_RING_ORDER.indexOf(projectKey)
   const position = projectRingPosition(index)
   const stage = projectStage(project)
@@ -41,9 +48,13 @@ function ProjectMarker({ projectKey, project }: { projectKey: TownProjectKey; pr
       </Billboard>
     </group>
   )
-}
+})
 
-export function TownProjects({ projects }: { projects: Partial<Record<TownProjectKey, TownProject>> }) {
+export const TownProjects = memo(function TownProjects({
+  projects,
+}: {
+  projects: Partial<Record<TownProjectKey, TownProject>>
+}) {
   return (
     <group>
       {PROJECT_RING_ORDER.map((key) => (
@@ -51,4 +62,4 @@ export function TownProjects({ projects }: { projects: Partial<Record<TownProjec
       ))}
     </group>
   )
-}
+})

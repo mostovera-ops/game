@@ -13,6 +13,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useStore } from '@/state'
 import type { UiScreenKey } from '@/types'
+import { useSound } from '@/ui/useSound'
 
 export interface ModalProps {
   /** Ключ панели (canon `ui_*`/`(нов.)`) — модалка видима, когда `ui.activePanel === panelKey`. */
@@ -33,6 +34,15 @@ export function Modal({ panelKey, title, children, variant = 'overlay' }: ModalP
   const active = useStore((s) => s.ui.activePanel === panelKey)
   const openPanel = useStore((s) => s.openPanel)
   const pushedHistory = useRef(false)
+  const sound = useSound()
+
+  // audio-wiring: единая точка «клик открыл панель» — Modal хостит ВСЕ canon-панели
+  // (`app/PanelHost.tsx`), так что один SFX здесь покрывает «клики UI» без правки
+  // полусотни кнопок (22-av §4.7 UI, AGENTS.md «не размазывай по 50 файлам»).
+  useEffect(() => {
+    if (active) sound.play('ui_click')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, panelKey])
 
   // Правило навигации #1: браузерная/аппаратная «Назад» закрывает верхний оверлей.
   useEffect(() => {

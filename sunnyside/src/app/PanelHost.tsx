@@ -17,9 +17,11 @@
  * истины по-прежнему один (`ui.activePanel === 'ui_shift'`), крестик/Escape/«Назад»/z-порядок
  * — из общего `Modal`, дип-линк `?panel=ui_shift` работает как у остальных панелей.
  *
- * Панели без готового компонента в текущем скоупе (`ui_daily_specials`/`ui_moving_truck`/
- * `ui_regulars_club`/`ui_expeditions`) пока не монтируются — их заведут профильные ui-агенты
- * (TODO(c3) в их зонах).
+ * Панели без готового компонента в текущем скоупе (`ui_daily_specials`/`ui_regulars_club`/
+ * `ui_expeditions`) пока не монтируются — их заведут профильные ui-агенты (TODO(c3) в их
+ * зонах). `ui_moving_truck` (Moving Van, 12-migration) смонтирован ниже (ui-migration) —
+ * хостит и Town Browser (§3.1.3), и Street Caravan/Town Merge статус как внутренние вкладки
+ * одного экрана (canon-ключ только у самого Moving Van, остальные — нейминг-кандидаты §5).
  *
  * FARM-UI-SEAMS: `ui_recipe_box` теперь хостит K1 Machine Queues + K2 Recipe Box
  * (`KitchenPanel` ниже) — раньше был смонтирован только K2, а K1 не был достижим из
@@ -51,6 +53,9 @@ import { CoopOrders, Potluck } from '@/ui/orders'
 import { ContributionLedger } from '@/ui/event'
 import { ShopHome, RoutePass, PrizeMachine } from '@/ui/shop'
 import { ToyShelf, RibbonWall, Postcards, NeonBuilder, PhotoMode } from '@/ui/collections'
+import { ChatPanel } from '@/ui/chat'
+import { MentorPanel, GoneFishinToggle, PetCard, ContestGallery } from '@/ui/social'
+import { MovingVan } from '@/ui/migration'
 import { getAdapter } from './backend'
 
 /** Заголовки панелей (letterboard-kicker, 19-ui-ux §3.0). RU/EN. */
@@ -69,6 +74,12 @@ const PANEL_TITLE: Partial<Record<UiScreenKey, Bilingual>> = {
   ui_ribbon_wall: { en: 'Ribbon Wall', ru: 'Стена лент' },
   ui_postcards: { en: 'Postcards', ru: 'Открытки' },
   ui_potluck: { en: 'Potluck', ru: 'Общий стол' },
+  ui_chat: { en: 'Chat', ru: 'Чат' },
+  ui_mentor: { en: 'Mentorship', ru: 'Менторство' },
+  ui_vacation_toggle: { en: 'Gone Fishin’', ru: 'Уехать' },
+  ui_pet_card: { en: 'Animal Care', ru: 'Уход за животными' },
+  ui_contest_gallery: { en: 'Contest Gallery', ru: 'Галерея конкурсов' },
+  ui_moving_truck: { en: 'Moving Van', ru: 'Фургон переезда' },
 }
 
 function title(key: UiScreenKey, locale: Locale): string {
@@ -200,6 +211,7 @@ export function PanelHost() {
       {panel('ui_demand_board', <DemandBoardScreen />)}
       {panel('ui_coop_orders', <CoopOrders />)}
       {panel('ui_potluck', <Potluck />)}
+      {panel('ui_chat', <ChatPanel />, 'sheet')}
       {panel('ui_recipe_box', <KitchenPanel />)}
       {panel('ui_fair_stall', <FairStall />)}
       {panel('ui_appetite_meter', <ContributionLedger />)}
@@ -209,6 +221,11 @@ export function PanelHost() {
       {panel('ui_toy_shelf', <ToyShelf onClose={close} />)}
       {panel('ui_ribbon_wall', <RibbonWall onClose={close} />)}
       {panel('ui_postcards', <Postcards onClose={close} />)}
+      {panel('ui_mentor', <MentorPanel />)}
+      {panel('ui_vacation_toggle', <GoneFishinToggle />)}
+      {panel('ui_pet_card', <PetCard />)}
+      {panel('ui_contest_gallery', <ContestGallery />)}
+      {panel('ui_moving_truck', <MovingVan />, 'sheet')}
       {panel(
         'ui_photo_mode',
         <PhotoMode

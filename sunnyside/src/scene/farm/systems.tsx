@@ -19,6 +19,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { useStore } from '@/state'
 import type { FarmSystem, AnimalSystem } from '@/engine'
 import type { UUID, ProductKey, FarmSnapshot, Toast } from '@/types'
+import { useSound } from '@/ui/useSound'
 import { DEMO_GROW_MS } from './demo'
 
 /** Набор действий, которые умеет сцена фермы. Диспатчер намерений игрока. */
@@ -101,6 +102,8 @@ export function FarmActionsProvider({
   systems?: InjectedSystems
   children: ReactNode
 }) {
+  // audio-wiring: сбор/полив/посев/кормление — SFX «Farm» (22-av §4.7), см. `ui/useSound.ts`.
+  const sound = useSound()
   const actions = useMemo<FarmActions>(() => {
     const s = useStore.getState
     return {
@@ -120,6 +123,7 @@ export function FarmActionsProvider({
           if (patch) s().patchFarm(patch)
         }
         s().pushToast(toast('success', 'Посеяно', now))
+        sound.play('sow')
         void systems?.farm.sow(slot, seedKey)
       },
 
@@ -130,6 +134,7 @@ export function FarmActionsProvider({
         const patch = patchPlots(farm, ids, (p) => ({ ...p, wateredUntil: now + DEMO_GROW_MS }))
         if (patch) s().patchFarm(patch)
         s().pushToast(toast('info', 'Полито — грядка скажет спасибо', now))
+        sound.play('water')
         void systems?.farm.water(plotIds)
       },
 
@@ -149,12 +154,14 @@ export function FarmActionsProvider({
         }))
         if (patch) s().patchFarm(patch)
         s().pushToast(toast('success', 'Собрано!', now))
+        sound.play('harvest')
         void systems?.farm.harvest(plotIds)
       },
 
       feed(animalIds) {
         const now = s().serverNow()
         s().pushToast(toast('success', 'Покормлено', now))
+        sound.play('feed')
         void systems?.animals.feed(animalIds)
       },
 
@@ -176,7 +183,7 @@ export function FarmActionsProvider({
         s().setStorageOpen(true)
       },
     }
-  }, [systems])
+  }, [systems, sound])
 
   return <FarmActionsContext.Provider value={actions}>{children}</FarmActionsContext.Provider>
 }

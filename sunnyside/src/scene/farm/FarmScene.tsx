@@ -18,14 +18,43 @@
  */
 
 import { Ground, CameraRig } from '../common/Rig'
+import { NeonSign } from '../common/NeonSign'
+import { WindowGlow } from '../common/WindowGlow'
+import { useDayNightIntensity } from '../common/useDayNightIntensity'
 import { PlaceholderMesh } from '@/assets/placeholders/PlaceholderMesh'
+import { useStore } from '@/state'
 import { DayNight } from './DayNightRig'
 import { PlotField } from './PlotField'
 import { Buildings } from './Buildings'
 import { Machines } from './Machines'
 import { Animals } from './Animals'
 import { FarmActionsProvider, type InjectedSystems } from './systems'
-import { ENV_BUSH_POSITIONS, ENV_TREE_POSITIONS } from './layout'
+import { ENV_BUSH_POSITIONS, ENV_TREE_POSITIONS, BUILDING_LAYOUT } from './layout'
+import { buildingWindowPositions } from './windowGlow'
+
+/** Вывеска дайнера — над крышей `bld_diner` (см. `layout.ts` BUILDING_LAYOUT), лицом к камере. */
+const NEON_SIGN_OFFSET: [number, number, number] = [0, 2.7, 0.4]
+
+/** Неон-вывеска игрока (Neon Builder, `collections.neonSign`) + окна-акценты фермы ночью
+ *  (22-audio-visual §3.6/§4.5) — читают день/ночь-долю независимо от недельного тона. */
+function NeonAndGlow() {
+  const neonSign = useStore((s) => s.collections?.neonSign)
+  const buildings = useStore((s) => s.farm?.buildings)
+  const dayNightIntensity = useDayNightIntensity()
+  const dinerPos = BUILDING_LAYOUT.bld_diner
+  const signPosition: [number, number, number] = dinerPos
+    ? [dinerPos[0] + NEON_SIGN_OFFSET[0], dinerPos[1] + NEON_SIGN_OFFSET[1], dinerPos[2] + NEON_SIGN_OFFSET[2]]
+    : NEON_SIGN_OFFSET
+
+  return (
+    <>
+      {buildings?.bld_diner && (
+        <NeonSign config={neonSign} dayNightIntensity={dayNightIntensity} position={signPosition} />
+      )}
+      <WindowGlow positions={buildingWindowPositions(buildings)} dayNightIntensity={dayNightIntensity} />
+    </>
+  )
+}
 
 /** Env-пропсы (деревья/кусты) по углам участка — инстансинг-кандидаты (§3.9). */
 function EnvProps() {
@@ -54,6 +83,7 @@ export function FarmScene({ systems }: { systems?: InjectedSystems } = {}) {
         <Machines />
         <Animals />
         <EnvProps />
+        <NeonAndGlow />
       </FarmActionsProvider>
     </>
   )

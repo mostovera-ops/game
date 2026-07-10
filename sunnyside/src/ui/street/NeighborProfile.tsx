@@ -31,7 +31,7 @@ export function NeighborProfile({ userId, onBack }: NeighborProfileProps) {
   const inventory = useStore((s) => s.inventory)
   const social = useSocialSystem()
 
-  const [busy, setBusy] = useState<'help' | 'gift' | null>(null)
+  const [busy, setBusy] = useState<'help' | 'gift' | 'sit' | null>(null)
   const [giftKey, setGiftKey] = useState<ProductKey>('')
 
   const neighbor = town?.roster.find((r) => r.userId === userId)
@@ -82,6 +82,32 @@ export function NeighborProfile({ userId, onBack }: NeighborProfileProps) {
     }
   }
 
+  /**
+   * Neighbor Sitter (neighbor_sit, 16-retention §4.4/§3.9): «посидеть с фермой соседа» во
+   * время его Gone Fishin'. Ростер (`TownSnapshot.roster`) пока не несёт per-соседа флаг
+   * отпуска (нет `vacationUntil` в `Street`/roster-записи, только на своей `FarmSnapshot`,
+   * `types/town.ts`) — кнопка доступна всегда, сервер сам решает уместность (`forbidden`/
+   * `not_found`, тёплый тост уже штатно кладёт `SystemContext.applyMutation`). TODO(town):
+   * прокинуть `vacationUntil` в roster, чтобы показывать кнопку только у гостящих в отпуске.
+   */
+  async function handleSit() {
+    setBusy('sit')
+    try {
+      const res = await social.sit(userId)
+      if (!res.ok) {
+        useStore.getState().pushToast({
+          id: `neighbor_sit_err_${Date.now()}`,
+          kind: 'info',
+          message: ru ? 'Сосед пока не в отпуске.' : 'This neighbor isn’t away right now.',
+          createdAt: Date.now(),
+          ttlMs: 5000,
+        })
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <section
       data-testid="ui-neighbor-profile"
@@ -124,6 +150,16 @@ export function NeighborProfile({ userId, onBack }: NeighborProfileProps) {
           style={{ background: DINER.cherry }}
         >
           {ru ? 'Полить' : 'Water'}
+        </button>
+        <button
+          type="button"
+          data-testid="neighbor-profile-sit-btn"
+          disabled={busy === 'sit'}
+          onClick={() => void handleSit()}
+          className="flex-1 rounded-lg px-3 py-2 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-40"
+          style={{ background: DINER.teal }}
+        >
+          {ru ? 'Присмотреть' : 'Sit'}
         </button>
       </div>
 

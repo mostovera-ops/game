@@ -8,21 +8,33 @@
  * Полные экраны/панели других контекстов (Farm/Kitchen/Fair/…) строят их
  * ui-агенты поверх того же `Modal` (`./Modal.tsx`) — см. `OverlayHost.tsx`.
  * `data-testid` — якоря для Playwright-смоуков (AGENTS.md §4).
+ *
+ * AUDIO-WIRING: звуковая шина (`app/soundBridge.ts` — музыка по сцене/фазе, эмбиент ночи,
+ * вехи ивента, крафт-готово, смена фазы недели, синк громкости) запускается здесь, один
+ * раз на монтирование HUD (единственный корень, живёт всё приложение) — не в `App.tsx`,
+ * чтобы не трогать композиционный файл вне зоны audio-wiring (AGENTS.md §2/§6).
  */
 
+import { useEffect } from 'react'
 import './tokens.css'
 import { useStore } from '@/state'
 import { CurrencyBar } from './CurrencyBar'
 import { DayPhaseBanner } from './DayPhaseBanner'
 import { NotificationBell } from './NotificationBell'
+import { SoundSettingsButton } from './SoundSettingsButton'
+import { SoundSettingsPanel } from './SoundSettingsPanel'
+import { ChatLauncher } from '@/ui/chat'
 import { NetPlaque } from './NetPlaque'
 import { BottomNav } from './BottomNav'
 import { ToastStack } from './ToastStack'
 import { OverlayHost } from './OverlayHost'
 import { DevTimeskip } from './DevTimeskip'
+import { initSoundBridge } from '@/app/soundBridge'
 
 export function HudRoot() {
   const scene = useStore((s) => s.scene.active)
+
+  useEffect(() => initSoundBridge(), [])
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3 sm:p-4">
@@ -40,7 +52,9 @@ export function HudRoot() {
         </div>
         <div className="flex items-center gap-2">
           <CurrencyBar />
+          <ChatLauncher />
           <NotificationBell />
+          <SoundSettingsButton />
           <NetPlaque />
           <DevTimeskip />
         </div>
@@ -52,6 +66,7 @@ export function HudRoot() {
       {/* Оверлеи: тосты (не блокируют) + модальный каркас (блокирует, поверх сцены). */}
       <ToastStack />
       <OverlayHost />
+      <SoundSettingsPanel />
 
       {/* Скрытый якорь для смоуков, читающих активную сцену без доступа к стору. */}
       <span data-testid="active-scene" className="hidden">
